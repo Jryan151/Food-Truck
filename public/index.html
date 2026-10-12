@@ -312,6 +312,30 @@ window.addEventListener('DOMContentLoaded', async () => {
             menu: []
         };
 
+function submitSlide1() {
+  systemData.ownerName = document.getElementById('owner-name').value;
+  systemData.ownerIG = document.getElementById('owner-ig').value;
+  
+  if (!systemData.ownerName) {
+    alert("Please enter a name to continue.");
+    return;
+  }
+  
+  goToSlide(2);
+}
+
+function submitSlide2() {
+  systemData.truckName = document.getElementById('truck-name').value;
+  
+  if (!systemData.truckName) {
+    alert("Please enter a vendor name to continue.");
+    return;
+  }
+  
+  goToSlide(3);
+}
+
+
         // Single streamlined item preset keeping all features intact
         const presets = {
             minimal: {
@@ -451,9 +475,6 @@ async function submitCustomMenu() {
                                 🚀 Go To My Live Page
                             </button>
                             
-                            <button onclick="window.location.href='https://${result.slug}.jasonryean.pro?tutorial=true'" style="background:#3f3f46; color:white; border:none; padding:18px; border-radius:12px; font-size:1.1rem; font-weight:bold; cursor:pointer;">
-                                📖 View Tutorial
-                            </button>
                         </div>
                     `;
                     
@@ -500,7 +521,6 @@ async function submitCustomMenu() {
 
             goToSlide(5);
             
-            localStorage.removeItem('wt_completed_customer');
             localStorage.removeItem('foodtruck_orders');
             localStorage.removeItem('foodtruck_history');
             localStorage.removeItem('foodtruck_store_status');
@@ -531,6 +551,41 @@ async function submitCustomMenu() {
         alert("Server connection error.");
     });
 }
+
+
+<!-- Slide-out Guide Panel -->
+<button id="guide-trigger-btn" class="guide-toggle">ℹ️</button>
+
+<div id="guide-panel" class="guide-panel-hidden">
+  <div class="guide-header">
+    <h3>Quick Start Guide</h3>
+    <button id="close-guide-btn" class="close-btn">×</button>
+  </div>
+  <div class="guide-content">
+    <h4>1. Browsing the Menu</h4>
+    <p>Click on any category to filter the available items.</p>
+    <h4>2. Using Presets</h4>
+    <p>Hit "Load Preset" to instantly populate a curated menu.</p>
+    <h4>3. Checkout Process</h4>
+    <p>Once you select your items, proceed to the cart to review your order.</p>
+  </div>
+</div>
+
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const triggerBtn = document.getElementById('guide-trigger-btn');
+    const closeBtn = document.getElementById('close-guide-btn');
+    const guidePanel = document.getElementById('guide-panel');
+
+    triggerBtn.addEventListener('click', () => {
+      guidePanel.classList.add('guide-panel-visible');
+    });
+
+    closeBtn.addEventListener('click', () => {
+      guidePanel.classList.remove('guide-panel-visible');
+    });
+  });
+
 
             
     </script>
