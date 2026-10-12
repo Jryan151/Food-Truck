@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Ordering Portal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Bulletproof Walkthrough CSS */
+        .wt-overlay {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(2px);
+            z-index: 9998; display: none; pointer-events: auto;
+        }
+        .wt-tooltip {
+            position: fixed; z-index: 10000; background: #FFFFFF; color: #181719;
+            padding: 1rem 1.25rem; border-radius: 12px; font-size: 0.9rem; font-weight: 500;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5); max-width: 280px; display: none;
+            flex-direction: column; gap: 0.5rem; pointer-events: auto; font-family: sans-serif;
+            border: 2px solid #52525b; 
+            transition: all 0.3s ease; left: 50%; transform: translateX(-50%);
+        }
+        .wt-tooltip-header { font-weight: 700; font-size: 1.05rem; color: #000; display: flex; justify-content: space-between; align-items: center;}
+        .wt-skip-btn { background: none; border: none; color: #999; font-size: 0.75rem; cursor: pointer; text-decoration: underline; }
+        .wt-tooltip-btn { 
+            background: #181719; color: #fff; border: none; padding: 0.6rem; 
+            border-radius: 6px; font-weight: 600; cursor: pointer; text-align: center; font-size: 0.8rem; margin-top: 0.5rem;
+        }
+        
+        .wt-spotlight { position: relative; z-index: 9999 !important; border-radius: inherit; pointer-events: auto !important; }
+        .wt-parent-override { z-index: 9999 !important; }
+        .wt-spotlight-pulse { animation: wtPulse 2s infinite; }
+        @keyframes wtPulse { 0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.5); } 70% { box-shadow: 0 0 0 10px rgba(255, 255, 255, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); } }
+    </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 font-sans min-h-screen flex flex-col justify-between overflow-x-hidden" id="appBody">
+    
+    <!-- Walkthrough Elements -->
+    <div class="wt-overlay" id="wtOverlay"></div>
+    <div class="wt-tooltip" id="wtTooltip">
+        <div class="wt-tooltip-header">
+            <span id="wtTitle">Welcome!</span>
+            <button class="wt-skip-btn" onclick="endWalkthrough()">Skip Guide</button>
+        </div>
+        <div id="wtText">Let's walk through your new system.</div>
+        <button class="wt-tooltip-btn" id="wtNextBtn">Got it</button>
+    </div>
+
+    <div class="max-w-md mx-auto w-full flex-grow relative pb-8">
+        <!-- Landing View -->
+        <div id="landingView" class="p-6 flex flex-col items-center justify-center min-h-[85vh] text-center">
+            
+            <!-- Grouped Brand Area for Walkthrough -->
+            <div id="brand-group" class="w-full flex flex-col items-center relative transition-all rounded-xl pb-1">
+                <div class="w-24 h-24 rounded-full border-2 border-zinc-700 p-1 mb-4 flex items-center justify-center shadow-lg bg-zinc-900 theme-border theme-shadow">
+                    <span class="text-4xl" id="dynamic-emoji">🌮</span>
+                </div>
+                <h1 id="dynamic-truck-name" class="text-3xl font-serif font-bold italic tracking-wide mb-1">Storefront</h1>
+                <p id="dynamic-subheader" class="text-zinc-400 text-sm mb-3">Fresh Local Eats</p>
+                <div class="mb-5 text-center" id="ig-container" style="display:none;">
+                    <a href="#" target="_blank" id="dynamic-ig-link" class="text-xs text-zinc-300 hover:text-white tracking-wider font-medium flex items-center justify-center gap-1.5 theme-text"><span>📷</span> @<span id="dynamic-ig-text">username</span></a>
+                </div>
+            </div>
+            
+            <!-- Grouped Status Area for Walkthrough -->
+            <div id="status-group" class="w-full relative rounded-xl transition-all">
+                <div class="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 mb-3 text-left shadow-md">
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="text-[11px] text-zinc-400 font-medium">📍 Active Location (Click to Map):</label>
+                    </div>
+                    <div id="activeLocationDisplay" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 text-xs text-zinc-300 font-medium">Downtown Main Street</div>
+                </div>
+
+                <div id="storeStatusBadge" class="bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-2 text-xs mb-3 text-emerald-400 flex items-center gap-2 w-full justify-center">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span id="storeStatusText">Open Now • Accepting Orders</span>
+                </div>
+
+                <div id="rushStatusContainer" class="w-full"></div>
+                <div id="saleBadgeContainer" class="w-full"></div>
+            </div>
+
+            <div class="w-full space-y-3 relative mt-3">
+                <button onclick="switchView('menu')" id="btn-start-order" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-3.5 rounded-xl transition shadow-lg theme-bg theme-shadow">Start Order</button>
+            </div>
+        </div>
+
+        <!-- Menu View -->
+        <div id="menuView" class="p-4 hidden">
+            <div class="flex items-center justify-between mb-4 sticky top-0 bg-zinc-950/90 backdrop-blur py-2 z-10 border-b border-zinc-900">
+                <button onclick="switchView('landing')" class="text-zinc-400 text-sm hover:text-white">← Back</button>
+                <h2 class="font-bold text-lg">Order Menu</h2>
+                <div class="w-10"></div>
+            </div>
+            
+            <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-3 mb-5 text-xs shadow-lg theme-border">
+                <div class="font-bold text-zinc-200 mb-1 flex items-center gap-1 theme-text"><span>⭐</span> Popular Item Highlights</div>
+                <div id="popularHighlightsContainer" class="grid grid-cols-1 gap-2 text-center mt-2"></div>
+            </div>
+
+            <div id="menuContainer" class="space-y-6 relative pb-20"></div>
+            
+            <div class="fixed bottom-4 left-4 right-4 max-w-md mx-auto z-40 relative">
+                <button onclick="openCartModal()" id="btn-view-cart" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-3 rounded-xl shadow-xl flex justify-between px-5 items-center transition-all theme-bg">
+                    <span id="cartCountBadge" class="bg-zinc-800 text-zinc-100 px-2 py-0.5 rounded-md text-xs font-bold theme-bg-dark">0 items</span>
+                    <span>View Cart</span>
+                    <span id="cartTotalBadge">$0.00</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Tracker View -->
+        <div id="trackerView" class="p-4 hidden relative z-10 pb-32">
+            <h2 class="font-bold text-lg mb-4 text-center border-b border-zinc-900 pb-2">Order Tracker</h2>
+            <div class="space-y-3" id="activeOrdersList"></div>
+            
+            <div class="fixed bottom-12 left-4 right-4 max-w-md mx-auto z-40">
+                <button onclick="window.location.href='owner.html'" id="btn-route-owner" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-3.5 rounded-xl transition shadow-lg hidden theme-bg">Enter Owner Backend →</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Persistent Admin Footer -->
+    <div class="w-full text-center py-5 mt-auto bg-zinc-950 relative z-0 border-t border-zinc-900/50">
+        <a href="owner.html" class="text-[10px] text-zinc-600 hover:text-zinc-400 font-medium tracking-wide uppercase">Admin Portal Login</a>
+    </div>
+
+    <!-- Item Modal -->
+    <div id="itemModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-2xl p-5 space-y-4 relative" id="modal-content-box">
+            <div class="flex justify-between items-center"><h3 id="itemModalTitle" class="font-bold text-lg text-zinc-100 theme-text">Add to Order</h3><button onclick="closeItemModal()" class="text-zinc-400 hover:text-white text-sm">✕</button></div>
+            
+            <div id="itemModalMeatSection" class="hidden">
+                <label class="block text-xs text-zinc-400 mb-1 font-medium">Select Modification/Protein</label>
+                <select id="itemMeatSelect" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200"></select>
+            </div>
+
+            <div id="itemModalDrinkSection" class="hidden">
+                <label class="block text-xs text-zinc-400 mb-1 font-medium">Select Flavor Option</label>
+                <select id="itemDrinkSelect" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200"></select>
+            </div>
+
+            <div>
+                <label class="block text-xs text-zinc-400 mb-1 font-medium">Quantity</label>
+                <div class="flex items-center gap-3">
+                    <button onclick="adjustModalQty(-1)" class="w-10 h-10 bg-zinc-800 hover:bg-zinc-700 rounded-xl text-base font-bold flex items-center justify-center">-</button>
+                    <span id="itemModalQty" class="text-lg font-mono font-bold flex-1 text-center">1</span>
+                    <button onclick="adjustModalQty(1)" class="w-10 h-10 bg-zinc-800 hover:bg-zinc-700 rounded-xl text-base font-bold flex items-center justify-center">+</button>
+                </div>
+            </div>
+            <button onclick="confirmAddToCart()" id="btn-confirm-add" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-3 rounded-xl transition shadow-lg theme-bg">Confirm & Add to Cart</button>
+        </div>
+    </div>
+
+    <!-- Cart Modal -->
+    <div id="cartModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto" id="cart-content-box">
+            <div class="flex justify-between items-center border-b border-zinc-800 pb-3"><h3 class="font-bold text-lg">Your Order</h3><button onclick="closeCartModal()" class="text-zinc-400 hover:text-white text-sm">✕</button></div>
+            
+            <div id="cartWaitTimeContainer" class="bg-amber-500/10 border border-amber-500/30 rounded-lg p-2.5 flex items-center justify-between text-xs">
+                <span class="text-amber-400 font-medium">⏱️ Wait Time:</span>
+                <span id="cartEstimatedWait" class="font-bold text-amber-400 font-mono">0 mins</span>
+            </div>
+
+            <div id="cartItemsList" class="space-y-3 border-b border-zinc-800 pb-3"></div>
+            
+            <div class="space-y-3 pt-1">
+                <div>
+                    <label class="block text-xs text-zinc-400 mb-1">Special Instructions (Optional)</label>
+                    <textarea id="customerNotes" placeholder="Any requests for the kitchen?" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200 resize-none h-16"></textarea>
+                </div>
+                <div>
+                    <label class="block text-xs text-zinc-400 mb-1">Your Name</label>
+                    <input type="text" id="customerName" placeholder="Enter name for order" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200">
+                </div>
+            </div>
+            <button onclick="submitOrder()" id="btn-place-order" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-3 rounded-xl transition theme-bg">Place Test Order</button>
+        </div>
+    </div>
+
+    <!-- Success Modal -->
+    <div id="successModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-2xl p-6 text-center space-y-4 relative" id="success-content-box">
+            <div class="w-16 h-16 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-full flex items-center justify-center mx-auto text-2xl">✓</div>
+            <h3 class="font-bold text-lg text-zinc-100">Order Placed!</h3>
+            <div class="bg-zinc-950 p-4 rounded-xl border border-zinc-800 space-y-1">
+                <div class="text-xs text-zinc-400">Assigned Ticket Number:</div>
+                <div id="successTicketNum" class="text-2xl font-mono font-bold text-zinc-100 theme-text">#000</div>
+            </div>
+            <button onclick="closeSuccessModal()" id="btn-view-tracker" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-3 rounded-xl text-sm transition theme-bg">View Tracker & Continue</button>
+        </div>
+    </div>
+
+    <script>
+        const app = {
+            cart: [], orders: [], menu: [], config: null, wtActive: false, wtStep: 0, firstItemId: 1
+        };
+
+        // CORE ENGINE SETUP
+        const presets = {
+            minimal: {
+                subheader: "Signature House Item", emoji: "🌮",
+                items: [
+                    { 
+                        name: "Signature Street Taco", 
+                        price: 3.50, 
+                        salePrice: 2.75, 
+                        desc: "Freshly made with house ingredients.", 
+                        prep: 2, 
+                        hasMeat: true, 
+                        meats: "Asada, Pollo, Veggie", 
+                        premiumUpcharge: 1.00, 
+                        soldOut: false 
+                    }
+                ]
+            }
+        };
+
+        function applyDemoConfig() {
+    // 1. Fetch live database data synchronously to prevent UI crashes
+
+        let data = null;
+        const urlParams = new URLSearchParams(window.location.search);
+        
+        if (urlParams.get('demo') === 'true') {
+            // Bypass server and load local preview data
+            const savedMenu = sessionStorage.getItem('demoMenu');
+            const savedName = sessionStorage.getItem('demoTruckName');
+            data = {
+                businessName: savedName || "My Custom Menu",
+                menu: savedMenu ? JSON.parse(savedMenu) : []
+            };
+        } else {
+            // Normal behavior: fetch live database data
+            try {
+                const xhr = new XMLHttpRequest();
+                xhr.open('GET', '/api/vendor-data', false);
+                xhr.send(null);
+                if (xhr.status === 200) data = JSON.parse(xhr.responseText);
+            } catch(e) {}
+        }
+
+
+    if (!data || data.error) return false;
+
+    // 2. Map database response to your app variables
+    app.config = {
+        truckName: data.businessName,
+        menu: data.menu && data.menu.length > 0 ? data.menu : [
+            {
+                name: "Signature Street Taco", price: 3.50, salePrice: 2.75,
+                desc: "Freshly made with house ingredients.", prep: 2, hasMeat: true,
+                meats: "Asada, Pollo, Veggie", premiumUpcharge: 1.00, soldOut: false
+            }
+        ],
+        cuisineSubheader: "Signature House Item",
+        cuisineEmoji: "🌮",
+        ownerIG: ""
+    };
+    const c = app.config;
+
+            if (c.truckName) { document.getElementById('dynamic-truck-name').innerText = c.truckName; document.title = c.truckName + " - Order"; }
+            if (c.cuisineSubheader) document.getElementById('dynamic-subheader').innerText = c.cuisineSubheader;
+            if (c.cuisineEmoji) document.getElementById('dynamic-emoji').innerText = c.cuisineEmoji;
+            if (c.ownerIG && c.ownerIG !== "") {
+                document.getElementById('ig-container').style.display = 'block';
+                document.getElementById('dynamic-ig-text').innerText = c.ownerIG;
+                document.getElementById('dynamic-ig-link').href = `https://instagram.com/${c.ownerIG}`;
+            }
+
+            if (c.menu && c.menu.length > 0) {
+                app.menu = c.menu.map((item, index) => {
+                    item.id = index + 1;
+                    item.category = "⭐ " + (c.truckName || "Signature") + " Menu";
+                    if(item.salePrice && parseFloat(item.salePrice) > 0) item.salePrice = parseFloat(item.salePrice);
+                    return item;
+                });
+                app.firstItemId = app.menu[0].id;
+            } else {
+                app.menu = presets.minimal.items.map((item, index) => {
+                    item.id = index + 1;
+                    item.category = "⭐ Signature Menu";
+                    return item;
+                });
+                app.firstItemId = app.menu[0].id;
+            }
+
+            // Status & Location Sync
+            const loc = localStorage.getItem('foodtruck_active_location') || "Downtown Main Street (Live View)";
+            document.getElementById('activeLocationDisplay').innerText = loc;
+
+            const storeStatus = localStorage.getItem('foodtruck_store_status') || 'open';
+            const startBtn = document.getElementById('btn-start-order');
+            const statusText = document.getElementById('storeStatusText');
+            const statusBadge = document.getElementById('storeStatusBadge');
+            
+            if(storeStatus === 'closed') {
+                startBtn.disabled = true; startBtn.innerText = "Currently Closed";
+                startBtn.classList.replace('bg-zinc-100', 'bg-zinc-800'); startBtn.classList.remove('theme-bg', 'theme-shadow');
+                statusText.innerText = "Closed Right Now";
+                statusBadge.classList.replace('bg-emerald-500/10', 'bg-rose-500/10'); statusBadge.classList.replace('text-emerald-400', 'text-rose-400'); statusBadge.classList.replace('border-emerald-500/30', 'border-rose-500/30');
+                statusText.previousElementSibling.classList.replace('bg-emerald-500', 'bg-rose-500'); 
+            }
+
+            // Rush Mode Setup
+            let rushModeStr = localStorage.getItem('foodtruck_rush_mode');
+            let rushMode = 0;
+            if (!rushModeStr) {
+                rushMode = 15;
+                localStorage.setItem('foodtruck_rush_mode', '15');
+            } else {
+                rushMode = parseInt(rushModeStr) || 0;
+            }
+
+            const rushContainer = document.getElementById('rushStatusContainer');
+            if(rushMode === 15 && storeStatus !== 'closed') {
+                rushContainer.innerHTML = `<div class="bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-2 text-xs mb-3 text-amber-500 flex items-center justify-center font-bold shadow-lg shadow-amber-500/5">⚠️ Busy: +15 min wait times</div>`;
+            } else if(rushMode === 30 && storeStatus !== 'closed') {
+                rushContainer.innerHTML = `<div class="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-2 text-xs mb-3 text-red-500 flex items-center justify-center font-bold shadow-lg shadow-red-500/5">🚨 Very Busy: +30 min wait times</div>`;
+            } else { rushContainer.innerHTML = ''; }
+
+            // Sale Sync
+            const saleContainer = document.getElementById('saleBadgeContainer');
+            const hasSale = app.menu.some(m => m.salePrice && m.salePrice > 0);
+            if (hasSale && storeStatus !== 'closed') {
+                saleContainer.innerHTML = `<div class="bg-red-600/10 border border-red-600/50 rounded-xl px-4 py-2 text-xs mb-3 text-red-500 flex items-center justify-center font-bold shadow-lg shadow-red-500/10 animate-pulse">🏷️ Sale</div>`;
+            }
+
+            // CSS Override
+            if (c.themeClass) document.body.classList.add(c.themeClass);
+            if (c.themeColor || c.themeClass) {
+                const brandColor = c.themeColor || "#27272a"; 
+                let extraCSS = `.theme-bg { background-color: ${brandColor} !important; color: #fff !important; } .theme-bg-dark { background-color: ${brandColor} !important; filter: brightness(0.8) !important; color: #fff !important; } .theme-text { color: ${brandColor} !important; } .theme-border { border-color: ${brandColor} !important; } .theme-shadow { box-shadow: 0 4px 15px ${brandColor}40 !important; }`;
+                if (c.themeClass === 'theme-cleanslate') extraCSS += `.theme-bg, .theme-bg-dark { background-color: #111 !important; color: #fff !important; } .theme-text { color: #111 !important; } .theme-border { border-color: #333 !important; }`;
+                else if (c.themeClass === 'theme-obsidian') extraCSS += `.theme-bg, .theme-bg-dark { background-color: #fff !important; color: #000 !important; } .theme-text { color: #ddd !important; } .theme-border { border-color: #ddd !important; }`;
+                const style = document.createElement('style'); style.innerHTML = extraCSS; document.head.appendChild(style);
+                document.getElementById('wtTooltip').style.borderColor = c.themeClass === 'theme-cleanslate' ? '#000' : brandColor;
+            }
+            return true;
+        }
+
+        // FULL 11-STEP CUSTOMER WALKTHROUGH ENGINE
+        const walkthroughSteps = [
+            { trigger: () => { const name = app.config?.ownerName || "Partner"; wtShow(`Welcome, ${name}!`, "Your digital storefront is live. Let's place a test order to see the automation.", null, true, 'auto', false, "Next"); } },
+            { trigger: () => { wtShow("Brand Identity", "Your logo, vendor name, subheader, and social links are front-and-center to drive customer engagement.", "brand-group", true, 'extreme-bottom', false, "Next"); } },
+            { trigger: () => { wtShow("Real-Time Sync", "Your active location, open status, and rush-hour wait times update instantly from your kitchen display.", "status-group", true, 'bottom', false, "Next"); } },
+            { trigger: () => { wtShow("The Front Door", "Click the Start Order button to enter your menu.", "btn-start-order", false, 'extreme-bottom'); } },
+            { trigger: () => { 
+                wtShow("Live Menu Control", "Notice the 'Sale' tag and the single streamlined item? You control all of this instantly from the backend.", null, true, 'top', true, "Next"); 
+            }},
+            { trigger: () => {
+                const firstAddBtn = document.querySelector('.btn-add-item:not([disabled])');
+                if(firstAddBtn) { firstAddBtn.id = 'wt-target-add-btn'; wtShow("Smart Menu Structure", "Notice prep times. The system uses these to calculate live wait times. Click 'Add'.", "wt-target-add-btn", false, 'auto', true); } 
+                else { wtNextStep(); }
+            }},
+            { trigger: () => {
+                const meatSelect = document.getElementById('itemMeatSelect');
+                if(meatSelect && meatSelect.options.length > 1) meatSelect.selectedIndex = 1; 
+                wtShow("Upcharges & Logic", "If an item has modifications, the system automatically adjusts the price. Confirm and add this item.", "btn-confirm-add", false, 'top');
+            }},
+            { trigger: () => { wtShow("Dynamic Cart", "The cart icon now tracks your total. Let's check out.", "btn-view-cart", false, 'auto', true); } },
+            { trigger: () => {
+                document.getElementById('customerName').value = app.config?.ownerName || "Test Customer";
+                wtShow("Wait Time Calculation", "Look at the top. The system calculated an exact wait estimate based on prep times. Click Place Order.", "btn-place-order", false, 'extreme-bottom');
+            }},
+            { trigger: () => { wtShow("Ticket Generation", "Success! The system captured your customer's preorder instantly. View the customer tracker.", "btn-view-tracker", false, 'top'); } },
+            { trigger: () => {
+                document.getElementById('btn-route-owner').classList.remove('hidden');
+                wtShow("Backend Handoff", "The customer waits here. Now, let's jump to your Kitchen Display to fulfill this order.", "btn-route-owner", false, 'center', true);
+            }}
+        ];
+
+        function wtShow(title, text, targetId, showNextBtn = false, positionHint = 'auto', hideOverlay = false, customBtnText = "Got it") {
+            app.wtActive = true;
+            document.getElementById('wtOverlay').style.display = hideOverlay ? 'none' : 'block';
+            
+            const tooltip = document.getElementById('wtTooltip');
+            document.getElementById('wtTitle').innerText = title;
+            document.getElementById('wtText').innerText = text;
+            
+            const nextBtn = document.getElementById('wtNextBtn');
+            nextBtn.style.display = showNextBtn ? 'block' : 'none';
+            nextBtn.innerText = customBtnText;
+            nextBtn.onclick = () => { wtNextStep(); };
+            
+            document.querySelectorAll('.wt-spotlight').forEach(el => el.classList.remove('wt-spotlight', 'wt-spotlight-pulse'));
+            document.querySelectorAll('.wt-parent-override').forEach(el => el.classList.remove('wt-parent-override'));
+
+            if (targetId) {
+                const target = document.getElementById(targetId);
+                if (target) {
+                    target.classList.add('wt-spotlight', 'wt-spotlight-pulse');
+                    let current = target.parentElement;
+                    while(current && current.tagName !== 'BODY') {
+                        const style = window.getComputedStyle(current);
+                        if (style.zIndex !== 'auto' && style.zIndex !== '') current.classList.add('wt-parent-override');
+                        current = current.parentElement;
+                    }
+
+                    tooltip.style.display = 'flex';
+                    if (positionHint === 'top') { tooltip.style.bottom = 'auto'; tooltip.style.top = '5%'; tooltip.style.transform = 'translateX(-50%)'; } 
+                    else if (positionHint === 'bottom') { tooltip.style.top = 'auto'; tooltip.style.bottom = '5%'; tooltip.style.transform = 'translateX(-50%)'; } 
+                    else if (positionHint === 'extreme-bottom') { tooltip.style.top = 'auto'; tooltip.style.bottom = '2%'; tooltip.style.transform = 'translateX(-50%)'; } 
+                    else if (positionHint === 'center') { tooltip.style.top = '50%'; tooltip.style.bottom = 'auto'; tooltip.style.transform = 'translate(-50%, -50%)'; }
+                    else {
+                        const rect = target.getBoundingClientRect();
+                        if (rect.top < window.innerHeight / 2) { tooltip.style.top = 'auto'; tooltip.style.bottom = '10%'; tooltip.style.transform = 'translateX(-50%)';} 
+                        else { tooltip.style.bottom = 'auto'; tooltip.style.top = '10%'; tooltip.style.transform = 'translateX(-50%)';}
+                    }
+                }
+            } else {
+                tooltip.style.display = 'flex'; 
+                if (positionHint === 'top') { tooltip.style.bottom = 'auto'; tooltip.style.top = '15%'; tooltip.style.transform = 'translateX(-50%)'; }
+                else { tooltip.style.bottom = 'auto'; tooltip.style.top = '40%'; tooltip.style.transform = 'translateX(-50%)'; }
+            }
+        }
+
+        function wtNextStep() {
+            if (!app.wtActive) return;
+            app.wtStep++; document.getElementById('wtTooltip').style.display = 'none';
+            if (app.wtStep < walkthroughSteps.length) setTimeout(() => { walkthroughSteps[app.wtStep].trigger(); }, 300);
+            else endWalkthrough();
+        }
+
+        function endWalkthrough() {
+            app.wtActive = false; document.getElementById('wtOverlay').style.display = 'none'; document.getElementById('wtTooltip').style.display = 'none';
+            document.querySelectorAll('.wt-spotlight').forEach(el => el.classList.remove('wt-spotlight', 'wt-spotlight-pulse'));
+            document.querySelectorAll('.wt-parent-override').forEach(el => el.classList.remove('wt-parent-override'));
+        }
+
+function startWalkthrough() {
+    app.cart = []; updateCartBadges(); app.wtStep = 0;
+if (!localStorage.getItem('hasSeenTour')) {
+    localStorage.setItem('hasSeenTour', 'true');
+    setTimeout(() => { walkthroughSteps[0].trigger(); }, 500);
+}
+
+}
+
+        function switchView(view) {
+            if(app.wtActive && view !== 'menu' && view !== 'tracker') return; 
+            ['landingView', 'menuView', 'trackerView'].forEach(v => {
+                const el = document.getElementById(v); if (el) el.style.display = 'none';
+            });
+            if (view === 'landing') document.getElementById('landingView').style.display = 'flex';
+            if (view === 'menu') { document.getElementById('menuView').style.display = 'block'; renderMenu(); if(app.wtActive && app.wtStep === 3) wtNextStep(); }
+            if (view === 'tracker') { document.getElementById('trackerView').style.display = 'block'; renderTracker(); }
+        }
+
+        function renderMenu() {
+            const container = document.getElementById('menuContainer');
+            const highlights = document.getElementById('popularHighlightsContainer');
+            if (!container || app.menu.length === 0) return;
+
+            if (highlights) {
+                highlights.innerHTML = app.menu.slice(0,1).map((item) => `
+                    <div onclick="openItemModal(${item.id})" class="bg-zinc-950/60 p-2.5 rounded-lg border border-zinc-800 cursor-pointer transition theme-border">
+                        <span class="text-[9px] text-zinc-400 block font-semibold">FEATURED ITEM</span>
+                        <span class="font-bold text-zinc-200 text-xs truncate block theme-text">${item.name}</span>
+                    </div>
+                `).join('');
+            }
+
+            const categories = [...new Set(app.menu.map(i => i.category))];
+            container.innerHTML = categories.map(cat => `
+                <div>
+                    <h3 class="font-bold mb-3 text-sm theme-text">${cat}</h3>
+                    <div class="space-y-3">
+                        ${app.menu.filter(i => i.category === cat).map(item => {
+                            let priceHTML = `<span class="text-sm font-semibold menu-item-price theme-text">$${item.price.toFixed(2)}</span>`;
+                            if(item.salePrice && item.salePrice > 0) {
+                                priceHTML = `<span class="text-sm font-semibold line-through text-zinc-500 mr-1">$${item.price.toFixed(2)}</span><span class="text-sm font-bold text-red-500">$${item.salePrice.toFixed(2)}</span>`;
+                            }
+                            
+                            const isSoldOut = item.soldOut;
+                            const opacityClass = isSoldOut ? 'opacity-50 grayscale pointer-events-none' : '';
+                            const btnHtml = isSoldOut 
+                                ? `<button disabled class="text-zinc-500 bg-zinc-800 px-3 py-1.5 rounded-lg text-xs font-bold h-8 min-w-[55px]">Sold Out</button>`
+                                : `<button onclick="openItemModal(${item.id})" class="btn-add-item text-zinc-950 px-3 py-1.5 rounded-lg text-xs font-semibold h-8 min-w-[55px] shadow bg-zinc-100 hover:bg-white theme-bg">Add +</button>`;
+                            
+                            return `
+                            <div class="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex justify-between items-center ${opacityClass}">
+                                <div>
+                                    <h4 class="font-bold text-sm">${item.name}</h4>
+                                    <p class="text-xs text-zinc-400 mt-0.5">${item.desc}</p>
+                                    <div class="flex items-center gap-3 mt-2">
+                                        ${priceHTML}
+                                        <span class="text-[10px] text-zinc-500">(~${item.prep} mins)</span>
+                                    </div>
+                                </div>
+                                ${btnHtml}
+                            </div>
+                        `}).join('')}
+                    </div>
+                </div>
+            `).join('');
+            updateCartBadges();
+        }
+
+        let currentModalItem = null;
+        let currentModalQtyVal = 1;
+
+        function openItemModal(id) {
+            if(app.wtActive && id !== app.firstItemId) return; 
+            
+            const item = app.menu.find(m => m.id === id);
+            currentModalItem = item;
+            currentModalQtyVal = 1;
+            document.getElementById('itemModalQty').innerText = currentModalQtyVal;
+            document.getElementById('itemModalTitle').innerText = `Add ${item.name}`;
+
+            const meatSec = document.getElementById('itemModalMeatSection');
+            const drinkSec = document.getElementById('itemModalDrinkSection');
+
+            meatSec.classList.add('hidden'); drinkSec.classList.add('hidden');
+
+            if (item.meats) {
+                meatSec.classList.remove('hidden');
+                const meatOptions = item.meats.split(',').map(m => m.trim());
+                document.getElementById('itemMeatSelect').innerHTML = meatOptions.map((m, index) => {
+                    let isUpcharge = '';
+                    if (index > 0 && item.premiumUpcharge) isUpcharge = ` (+$${item.premiumUpcharge.toFixed(2)})`;
+                    return `<option value="${m}">${m}${isUpcharge}</option>`;
+                }).join('');
+            }
+            if (item.options) {
+                drinkSec.classList.remove('hidden');
+                document.getElementById('itemDrinkSelect').innerHTML = item.options.map(o => `<option value="${o}">${o}</option>`).join('');
+            }
+
+            document.getElementById('itemModal').style.display = 'flex';
+            if(app.wtActive && app.wtStep === 5) wtNextStep(); 
+        }
+
+        function closeItemModal() {
+            if(app.wtActive) return; 
+            document.getElementById('itemModal').style.display = 'none';
+        }
+
+        function adjustModalQty(delta) {
+            currentModalQtyVal += delta;
+            if (currentModalQtyVal < 1) currentModalQtyVal = 1;
+            document.getElementById('itemModalQty').innerText = currentModalQtyVal;
+        }
+
+        function confirmAddToCart() {
+            if (!currentModalItem) return;
+            let itemName = currentModalItem.name;
+            let itemUpcharge = 0;
+
+            if (currentModalItem.meats) {
+                const meatSelect = document.getElementById('itemMeatSelect');
+                if (meatSelect.selectedIndex > 0 && currentModalItem.premiumUpcharge) itemUpcharge += currentModalItem.premiumUpcharge;
+            }
+
+            const basePrice = (currentModalItem.salePrice && currentModalItem.salePrice > 0) ? currentModalItem.salePrice : currentModalItem.price;
+            const effectivePrice = basePrice + itemUpcharge;
+            const prepMins = parseInt(currentModalItem.prep) || 3; 
+
+            app.cart.push({ name: itemName, price: effectivePrice, quantity: currentModalQtyVal, prep: prepMins });
+            document.getElementById('itemModal').style.display = 'none';
+            updateCartBadges();
+            if(app.wtActive && app.wtStep === 6) wtNextStep(); 
+        }
+
+        function updateCartBadges() {
+            const count = app.cart.reduce((sum, item) => sum + item.quantity, 0);
+            const total = app.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            document.getElementById('cartCountBadge').innerText = `${count} items`;
+            document.getElementById('cartTotalBadge').innerText = `$${total.toFixed(2)}`;
+        }
+
+        function openCartModal() {
+            if (app.cart.length === 0 && !app.wtActive) return;
+            
+            const rushMode = parseInt(localStorage.getItem('foodtruck_rush_mode')) || 0;
+            const itemsWaitTime = app.cart.reduce((sum, item) => sum + (item.prep * item.quantity), 0);
+            const totalWaitTime = itemsWaitTime + rushMode;
+            
+            document.getElementById('cartEstimatedWait').innerText = `~${totalWaitTime} mins`;
+
+            document.getElementById('cartItemsList').innerHTML = app.cart.map((item) => `
+                <div class="flex justify-between items-center bg-zinc-950 p-3 rounded-xl border border-zinc-800 text-sm">
+                    <div>
+                        <div class="font-bold">${item.name}</div>
+                        <div class="text-xs font-semibold theme-text">$${(item.price * item.quantity).toFixed(2)}</div>
+                    </div>
+                    <span class="text-xs font-mono whitespace-nowrap">Qty: ${item.quantity}</span>
+                </div>
+            `).join('');
+            
+            document.getElementById('cartModal').style.display = 'flex';
+            if(app.wtActive && app.wtStep === 7) wtNextStep(); 
+        }
+
+        function closeCartModal() { 
+            if(app.wtActive) return; 
+            document.getElementById('cartModal').style.display = 'none'; 
+        }
+
+        function submitOrder() {
+            let nextId = parseInt(localStorage.getItem('foodtruck_next_order_id')) || 101;
+            const ticketId = nextId.toString();
+            localStorage.setItem('foodtruck_next_order_id', nextId + 1);
+
+            let nameInput = document.getElementById('customerName').value.trim() || "Guest";
+            let notesInput = document.getElementById('customerNotes').value.trim();
+            let notesString = notesInput ? `\nNote: ${notesInput}` : '';
+            
+            const summary = app.cart.map(i => `${i.quantity}x ${i.name}`).join(', ') + notesString;
+            const total = app.cart.reduce((sum, i) => sum + (i.price * i.quantity), 0);
+            
+            const newOrder = { id: ticketId, name: nameInput, items: summary, status: "Preparing", total, timestamp: Date.now() };
+
+            let sharedOrders = JSON.parse(localStorage.getItem('foodtruck_orders')) || [];
+            sharedOrders.unshift(newOrder);
+            localStorage.setItem('foodtruck_orders', JSON.stringify(sharedOrders));
+            
+            app.orders.unshift(newOrder);
+            app.cart = []; 
+            document.getElementById('cartModal').style.display = 'none'; 
+            document.getElementById('customerNotes').value = ''; 
+            updateCartBadges(); 
+
+            document.getElementById('successTicketNum').innerText = `#${newOrder.id}`;
+            document.getElementById('successModal').style.display = 'flex';
+            
+            document.getElementById('btn-route-owner').classList.remove('hidden');
+            localStorage.setItem('wt_incoming_demo', 'true');
+            if(app.wtActive && app.wtStep === 8) wtNextStep(); 
+        }
+
+        function closeSuccessModal() {
+            document.getElementById('successModal').style.display = 'none';
+            switchView('tracker');
+            if(app.wtActive && app.wtStep === 9) wtNextStep(); 
+        }
+
+        function renderTracker() {
+            const container = document.getElementById('activeOrdersList');
+            container.innerHTML = app.orders.map(o => `
+                <div class="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex justify-between items-center">
+                    <div>
+                        <span class="text-xs font-mono font-bold theme-text">Ticket #${o.id} • ${o.name}</span>
+                        <div class="text-[11px] text-zinc-400 mt-0.5">Kitchen received order.</div>
+                        <span class="inline-block mt-2 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20">${o.status}</span>
+                    </div>
+                </div>
+            `).join('');
+            
+            if(app.orders.length > 0) document.getElementById('btn-route-owner').classList.remove('hidden');
+        }
+
+window.onload = () => { applyDemoConfig(); startWalkthrough(); };
+
+    // --- REALTIME SSE LISTENER ---
+    (function initRealtimeSync() {
+      const evtSource = new EventSource('/api/live-stream?v=1');
+
+      evtSource.onmessage = function(e) {
+        try {
+          const { type, payload } = JSON.parse(e.data);
+          
+          if (type === 'STORE_STATUS') {
+            const isClosed = payload.status === 'closed';
+            const startBtn = document.getElementById('btn-start-order');
+            const statusText = document.getElementById('storeStatusText');
+            if (startBtn) startBtn.disabled = isClosed;
+            if (statusText) statusText.innerText = isClosed ? "Closed Right Now" : "Open Now";
+          }
+
+          if (type === 'LOCATION_UPDATE') {
+            const locEl = document.getElementById('activeLocationDisplay');
+            if (locEl && payload.location) locEl.innerText = payload.location;
+          }
+
+          if (type === 'RUSH_MODE') {
+            const extra = parseInt(payload.minutes) || 0;
+            const waitEl = document.getElementById('cartEstimatedWait');
+            if (waitEl) waitEl.innerText = `~${10 + extra} mins`;
+          }
+
+          if (type === 'SOLD_OUT') {
+            const itemEl = document.querySelector(`[data-item-id="${payload.itemId}"]`);
+            if (itemEl) itemEl.classList.toggle('opacity-50', payload.soldOut);
+          }
+        } catch(err) {
+          console.error("Live sync parse error:", err);
+        }
+      };
+
+      evtSource.onerror = function() {
+        console.warn("Live stream disconnected, retrying automatically...");
+      };
+    })();
+
+
+
+    </script>
+</body>
+</html>
