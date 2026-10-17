@@ -543,8 +543,10 @@ router.post('/login', limitLogin, async (req, res) => {
     const code = await core.createToken(vendor.id, 'handoff', 5 * 60 * 1000);
     return res.json({ ok: true, redirect: vendorUrl(vendor.slug, `/api/auth/handoff?code=${code}`) });
   }
-  if (!t.vendor || t.vendor.id !== vendor.id) return res.status(403).json({ error: 'That account does not belong to this page.' });
-  await startSession(req, res, vendor.id, 'owner');
+  // An owner with more than one truck: the same login opens every truck in the fleet.
+  const fleetTruck = t.vendor && t.vendor.id !== vendor.id && (await require('./fleet').sameFleet(vendor, t.vendor));
+  if (!t.vendor || (t.vendor.id !== vendor.id && !fleetTruck)) return res.status(403).json({ error: 'That account does not belong to this page.' });
+  await startSession(req, res, t.vendor.id, 'owner');
   res.json({ ok: true, role: 'owner' });
 });
 

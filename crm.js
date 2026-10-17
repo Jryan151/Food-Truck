@@ -316,6 +316,20 @@ async function reachList(v) {
           `It's been a while`, `Hi ${first(c)},\n\nIt's been a while since ${fmtDay(st.lastServed)}. If you have something coming up, I'd love to feed your crew again${st.fav ? ' (' + st.fav + ' is still on the menu)' : ''}.\n\n${auth.vendorUrl(v.slug, '/catering')}${sig}`);
       }
     }
+    // 6. A punch-card regular (who asked for news) who hasn't been by in five weeks.
+    const cardEv = c.email_ok && st.events.filter((e) => e.type === 'card').pop();
+    if (cardEv) {
+      const card = await get('SELECT stamps, rewards_used, last_stamp_at FROM reward_cards WHERE id = ? AND vendor_id = ?', [parse(cardEv.data, {}).cardId, v.id]);
+      const rw = require('./rewards').settings(v);
+      const visits = card ? card.stamps + card.rewards_used * rw.every : 0;
+      const away = card && card.last_stamp_at ? now - card.last_stamp_at : 0;
+      if (visits >= 3 && away > 35 * DAY && away < 365 * DAY) {
+        const left = Math.max(0, rw.every - card.stamps);
+        const weeks = Math.round(away / (7 * DAY));
+        push(`winback:${c.id}:${Math.floor(now / (60 * DAY))}`, 5, `A regular (${visits} visits on the ${rw.name.toLowerCase()}) who hasn't been by in ${weeks} weeks.`,
+          `We miss you at ${v.business_name}`, `Hi ${first(c)},\n\nIt's been a few weeks! ${card.stamps >= rw.every ? 'Your free item is waiting on your ' + rw.name.toLowerCase() + '.' : 'You have ' + card.stamps + ' of ' + rw.every + ' stamps on your ' + rw.name.toLowerCase() + ', ' + left + ' more to a free one.'} Here's where we are this week: ${auth.vendorUrl(v.slug, '/')}${sig}`);
+      }
+    }
     // 5. Partner spots trending down: a check-in backed by numbers.
     if (c.kind === 'partner' && c.location) {
       const p = Insights.parts(now, tz);

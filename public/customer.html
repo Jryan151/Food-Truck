@@ -258,7 +258,7 @@
                 catering_cta: 'Planning an event? Get a catering quote',
                 sched_next: 'Next: {when} · {where}', sched_link: 'Where we’ll be this week', sched_full: 'Full schedule', sched_today: 'Today',
                 card_progress: '{n} of {every}', card_more: 'Free item (up to {cap}) after {left} more', card_ready: '🎁 Your free item is ready. Use it at checkout.',
-                card_keep: 'Keep my card on another phone', card_email_ph: 'you@email.com', card_send: 'Send', card_use: 'Use my free item (up to {cap})', card_line: 'Free item',
+                card_keep: 'Keep my card on another phone', card_news: 'Also email me now and then (a nudge if it’s been a while). Unsubscribe any time.', card_email_ph: 'you@email.com', card_send: 'Send', card_use: 'Use my free item (up to {cap})', card_line: 'Free item',
                 card_stamp_soon: '+1 stamp on your {name} when your order is ready', card_gone: 'Your free item isn’t ready yet.',
                 when: 'When', when_now: 'As soon as possible', when_later: 'Later today', slot_full: 'Full', no_slots: 'No times left today.', pick_time: 'Pick a pickup time.', pickup_at: 'Pickup at {t}',
                 only_left: 'Only {n} left', paced: 'Kitchen’s catching up · ordering opens at {t}',
@@ -315,7 +315,7 @@
                 catering_cta: '¿Un evento? Cotiza el catering',
                 sched_next: 'Próxima parada: {when} · {where}', sched_link: 'Dónde estaremos esta semana', sched_full: 'Ver horario', sched_today: 'Hoy',
                 card_progress: '{n} de {every}', card_more: 'Producto gratis (hasta {cap}) en {left} más', card_ready: '🎁 Tu producto gratis está listo. Úsalo al pagar.',
-                card_keep: 'Guardar mi tarjeta en otro teléfono', card_email_ph: 'tu@correo.com', card_send: 'Enviar', card_use: 'Usar mi producto gratis (hasta {cap})', card_line: 'Producto gratis',
+                card_keep: 'Guardar mi tarjeta en otro teléfono', card_news: 'También envíenme un correo de vez en cuando (un recordatorio si hace tiempo que no vengo). Puedo darme de baja cuando quiera.', card_email_ph: 'tu@correo.com', card_send: 'Enviar', card_use: 'Usar mi producto gratis (hasta {cap})', card_line: 'Producto gratis',
                 card_stamp_soon: '+1 sello en tu tarjeta cuando tu pedido esté listo', card_gone: 'Tu producto gratis aún no está listo.',
                 when: 'Cuándo', when_now: 'Lo antes posible', when_later: 'Más tarde hoy', slot_full: 'Lleno', no_slots: 'No quedan horarios hoy.', pick_time: 'Elige una hora para recoger.', pickup_at: 'Para recoger a las {t}',
                 only_left: 'Quedan {n}', paced: 'La cocina se está poniendo al día · pedidos a las {t}',
@@ -1195,12 +1195,12 @@
             box.style.display = 'block';
             box.innerHTML = '<div class="punch-card' + (c.ready ? ' ready' : '') + '"><div class="flex items-center justify-between gap-3"><span class="text-[11px] font-semibold text-zinc-400">' + esc(c.name) + '</span><span class="punch-dots" aria-hidden="true">' + dots + '</span></div>' +
                 '<div class="text-sm text-zinc-100 mt-1">' + esc(line) + '</div>' +
-                (c.canSave && c.known ? (app.cardSaving ? '<form id="cardSave" class="flex gap-2 mt-2"><input id="cardEmail" type="email" autocomplete="email" class="flex-1 min-w-0 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-sm text-zinc-200" placeholder="' + esc(t('card_email_ph')) + '"><button class="bg-zinc-100 text-zinc-950 font-semibold text-xs px-3 rounded-lg">' + esc(t('card_send')) + '</button></form><div id="cardMsg" class="text-[11px] text-zinc-400 mt-1"></div>'
+                (c.canSave && c.known ? (app.cardSaving ? '<form id="cardSave" class="flex gap-2 mt-2"><input id="cardEmail" type="email" autocomplete="email" class="flex-1 min-w-0 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-sm text-zinc-200" placeholder="' + esc(t('card_email_ph')) + '"><button class="bg-zinc-100 text-zinc-950 font-semibold text-xs px-3 rounded-lg">' + esc(t('card_send')) + '</button></form><label class="flex items-start gap-2 mt-2 text-[11px] text-zinc-400"><input type="checkbox" id="cardNews" class="mt-0.5" style="width:16px;height:16px;flex:none"> <span>' + esc(t('card_news')) + '</span></label><div id="cardMsg" class="text-[11px] text-zinc-400 mt-1"></div>'
                     : '<button data-action="card-keep" class="text-[11px] text-zinc-400 underline mt-2">' + esc(t('card_keep')) + '</button>') : '') + '</div>';
             var f = $('cardSave');
             if (f) f.onsubmit = function (e) {
                 e.preventDefault();
-                fetch('/api/rewards/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ card: cardToken(), email: $('cardEmail').value.trim() }) })
+                fetch('/api/rewards/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ card: cardToken(), email: $('cardEmail').value.trim(), news: !!($('cardNews') && $('cardNews').checked) }) })
                     .then(function (r) { return r.json().catch(function () { return {}; }); })
                     .then(function (b) { $('cardMsg').textContent = b.message || b.error || ''; });
             };

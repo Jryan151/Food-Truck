@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Business</title>
+    <meta name="robots" content="noindex">
+    <meta name="theme-color" content="#0a0a0b">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+    <script src="/theme.js"></script>
+    <link rel="stylesheet" href="/theme.css">
+    <link rel="stylesheet" href="/ok.css">
+    <style>
+        .bz { max-width: 760px; }
+        .bz-tabs { display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: var(--z900); border: 1px solid var(--z800); overflow-x: auto; scrollbar-width: none; }
+        .bz-tabs::-webkit-scrollbar { display: none; }
+        .bz-tabs button { flex: none; height: 38px; padding: 0 14px; border-radius: 9px; border: 0; background: transparent; color: var(--z500); font-weight: 700; font-size: 14px; cursor: pointer; font-family: inherit; white-space: nowrap; }
+        .bz-tabs button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
+        .bz-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+        .bz-stat { background: var(--z900); border: 1px solid var(--z800); border-radius: 14px; padding: 12px 14px; }
+        .bz-stat b { display: block; font-size: 22px; color: var(--z100); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+        .bz-stat span { font-size: 12px; color: var(--z500); font-weight: 600; }
+        .bz-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 14px; }
+        .bz-row + .bz-row { border-top: 1px solid var(--z800); }
+        .bz-row b { color: var(--z100); font-size: 15px; }
+        .bz-row .sub { font-size: 12px; color: var(--z500); line-height: 1.5; }
+        .bz-row .num { font-weight: 800; font-variant-numeric: tabular-nums; color: var(--z100); text-align: right; white-space: nowrap; }
+        .bz-row .num small { display: block; font-size: 11px; font-weight: 600; color: var(--z500); }
+        .bz-acts { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+        .bz-acts button, .bz-acts a { height: 34px; padding: 0 12px; border-radius: 9px; border: 1px solid var(--z700); background: var(--z950); color: var(--z100); font-weight: 700; font-size: 12px; cursor: pointer; font-family: inherit; text-decoration: none; display: inline-flex; align-items: center; }
+        .bz-acts .solid { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+        .bz-acts .danger { color: var(--bad); }
+        .bz-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+        .bz-form .full { grid-column: 1 / -1; }
+        .bz-form label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; font-weight: 700; color: var(--z500); }
+        .bz-in { width: 100%; height: 44px; background: var(--z950); border: 1px solid var(--z800); border-radius: 10px; padding: 0 12px; color: var(--z100); font-size: 15px; font-family: inherit; outline: none; }
+        textarea.bz-in { height: auto; min-height: 70px; padding: 10px 12px; resize: vertical; }
+        .bz-in:focus { border-color: var(--z100); }
+        .bz-flag { border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); background: color-mix(in srgb, var(--warn) 9%, transparent); border-radius: 14px; padding: 12px 14px; font-size: 14px; color: var(--z100); line-height: 1.5; }
+        .bz-flag b { color: var(--warn); }
+        .bz-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+        .bz-table th { text-align: left; font-size: 11px; color: var(--z500); font-weight: 700; padding: 6px 8px; border-bottom: 1px solid var(--z800); }
+        .bz-table td { padding: 8px; border-bottom: 1px solid var(--z900); color: var(--z200); }
+        .bz-table td.r, .bz-table th.r { text-align: right; }
+        .bz-scroll { overflow-x: auto; }
+        .rec { display: grid; grid-template-columns: minmax(0, 1fr) 90px 34px; gap: 6px; align-items: center; }
+        .rec .x, .bz-x { background: none; border: 0; color: var(--z500); font-size: 18px; cursor: pointer; padding: 4px 6px; font-family: inherit; }
+        @media (max-width: 560px) { .bz-form { grid-template-columns: 1fr; } .bz-row.wide { flex-wrap: wrap; } .bz-row.wide > div:first-child { flex: 1 1 100% !important; } .bz-row.wide > .bz-acts { width: 100%; } .bz-row.wide > .bz-acts .bz-in { flex: 1; } #ingF #iName { flex: 1 1 100% !important; } #ingF #iPrice { flex: 1; } }
+    </style>
+</head>
+<body>
+<main class="ok-wrap bz">
+    <div class="ok-top">
+        <a class="ok-truck" href="/owner.html" style="text-decoration:none">
+            <div class="ok-mono" id="mono" aria-hidden="true">&nbsp;</div>
+            <div style="display:flex;flex-direction:column"><span class="ok-truck-name" id="truckName">Business</span><span class="ok-sub">← Back to your kitchen portal</span></div>
+        </a>
+    </div>
+
+    <div id="loading" class="ok-lede">Loading…</div>
+    <div id="needLogin" hidden><h1 class="ok-h1">Log in first</h1><p class="ok-lede">These tools are for the owner. <a href="/owner.html" style="color:var(--z100)">Log in from your kitchen portal</a>, then come back.</p></div>
+    <div id="locked" hidden><h1 class="ok-h1">Part of the Business plan</h1><p class="ok-lede">Events, costs, taxes, documents, time clock, upkeep, books and more than one truck.</p></div>
+
+    <div id="appView" hidden style="display:flex;flex-direction:column;gap:18px">
+        <nav class="bz-tabs" aria-label="Business tools">
+            <button data-tab="trucks" aria-pressed="true">Trucks</button>
+            <button data-tab="events" aria-pressed="false">Events</button>
+            <button data-tab="costs" aria-pressed="false">Costs</button>
+            <button data-tab="taxes" aria-pressed="false">Taxes</button>
+            <button data-tab="docs" aria-pressed="false">Documents</button>
+            <button data-tab="team" aria-pressed="false">Team hours</button>
+            <button data-tab="upkeep" aria-pressed="false">Upkeep</button>
+            <button data-tab="books" aria-pressed="false">Books</button>
+        </nav>
+        <section id="panel" class="ok-section" style="gap:16px" aria-live="polite"></section>
+    </div>
+</main>
+<script>
+(function () {
+    'use strict';
+    var $ = function (id) { return document.getElementById(id); };
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function api(method, url, body, raw) {
+        var o = { method: method, headers: {}, cache: 'no-store' };
+        if (raw) { o.headers['Content-Type'] = raw.type; o.body = raw.data; } else if (body) { o.headers['Content-Type'] = 'application/json'; o.body = JSON.stringify(body); }
+        return fetch(url, o).then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, status: r.status, d: d }; }); })
+            .catch(function () { return { ok: false, status: 0, d: { error: 'No connection. Try again.' } }; });
+    }
+    function toast(msg) { document.querySelectorAll('.ok-toast').forEach(function (x) { x.remove(); }); var t = document.createElement('div'); t.className = 'ok-toast'; t.textContent = msg; document.body.appendChild(t); setTimeout(function () { t.remove(); }, 2600); }
+    var money = function (c) { return c === null || c === undefined ? '—' : (c < 0 ? '−' : '') + '$' + (Math.abs(c) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+    var money0 = function (c) { return '$' + Math.round((c || 0) / 100).toLocaleString('en-US'); };
+    function day(d) { if (!d) return ''; try { return new Date(d + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }); } catch (e) { return d; } }
+    function iso(d) { return d.toISOString().slice(0, 10); }
+    function monthStart(off) { var d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + (off || 0)); return iso(d); }
+    function monthEnd(off) { var d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + (off || 0) + 1); d.setDate(0); return iso(d); }
+    var st = { tab: 'trucks', me: null, locations: [] };
+    var P = function () { return $('panel'); };
+    function err(id, msg) { var e = $(id); if (e) e.textContent = msg || ''; }
+
+    /* ---------------- Trucks ---------------- */
+    function trucks() {
+        return api('GET', '/api/biz/fleet').then(function (r) {
+            if (!r.ok) return fail(r);
+            var d = r.d;
+            P().innerHTML = '<div><h1 class="ok-h1">Your trucks</h1><p class="ok-lede">Each truck runs on its own: its page, menu, kitchen and crew. Here’s all of them at once.</p></div>' +
+                '<div class="bz-stats"><div class="bz-stat"><b>' + money0(d.totals.today.cents) + '</b><span>today · ' + d.totals.today.orders + ' orders</span></div><div class="bz-stat"><b>' + money0(d.totals.week.cents) + '</b><span>last 7 days · ' + d.totals.week.orders + ' orders</span></div></div>' +
+                '<div class="ok-card">' + d.trucks.map(function (t) {
+                    return '<div class="bz-row"><div style="min-width:0"><b>' + esc(t.name) + '</b><div class="sub">' + (t.open ? 'Open' + (t.location ? ' at ' + esc(t.location) : '') + (t.line ? ' · ' + t.line + ' in the line' : '') : 'Closed') + ' · this week ' + money0(t.week.cents) + '</div></div>' +
+                        '<div class="bz-acts">' + (t.current ? '<span class="ok-pill">You’re here</span>' : '<button data-open="' + t.id + '" class="solid">Open</button>') + '</div></div>';
+                }).join('') + '</div>' +
+                (d.trucks.length < d.max ? '<form id="addTruck" class="ok-card pad" style="display:flex;flex-direction:column;gap:10px"><b>Add a truck</b><span class="ok-note">It gets its own web address, kitchen PIN and crew, and starts with a copy of this truck’s menu and hours. Your login opens it too.</span>' +
+                    '<div class="bz-form"><label>Name<input class="bz-in" id="tName" placeholder="Birria Boyz Two" required></label><label>Web address<input class="bz-in" id="tSlug" placeholder="birria-boyz-two" autocapitalize="off" required></label>' +
+                    '<label class="full" style="flex-direction:row;align-items:center;gap:10px;font-weight:600;color:var(--z300)"><input type="checkbox" id="tCopy" checked style="width:20px;height:20px"> Start with this truck’s menu</label></div>' +
+                    '<button class="ok-btn small" type="submit" style="align-self:flex-start">Add truck</button><div class="ok-err" id="tErr" role="alert"></div><div id="tDone"></div></form>' : '');
+            var f = $('addTruck');
+            if (f) f.onsubmit = function (e) {
+                e.preventDefault(); err('tErr', '');
+                api('POST', '/api/biz/fleet/trucks', { businessName: $('tName').value, slug: $('tSlug').value.trim().toLowerCase(), copyMenu: $('tCopy').checked }).then(function (r) {
+                    if (!r.ok) return err('tErr', r.d.error || 'Couldn’t add it.');
+                    $('tDone').innerHTML = '<div class="bz-flag" style="border-color:var(--z700);background:var(--z950)"><b style="color:var(--z100)">Added.</b> Its kitchen PIN is <b style="color:var(--z100);letter-spacing:.1em">' + esc(r.d.staffPin) + '</b> (write it down; you can change it in its Settings). It starts closed.</div>';
+                    trucks().then(function () { $('tDone') && ($('tDone').innerHTML = ''); toast('Truck added. Kitchen PIN: ' + r.d.staffPin); });
+                });
+            };
+            P().querySelectorAll('[data-open]').forEach(function (b) {
+                b.onclick = function () { api('POST', '/api/biz/fleet/open/' + b.getAttribute('data-open')).then(function (r) { if (r.ok) location.href = r.d.url; else toast(r.d.error || 'Couldn’t open it.'); }); };
+            });
+        });
+    }
+
+    /* ---------------- Events ---------------- */
+    var STATUS = { idea: 'Thinking about it', applied: 'Applied', accepted: 'Accepted', declined: 'Declined', done: 'Done' };
+    function events() {
+        return api('GET', '/api/biz/events').then(function (r) {
+            if (!r.ok) return fail(r);
+            var d = r.d;
+            st.events = d.events;
+            P().innerHTML = '<div><h1 class="ok-h1">Events</h1><p class="ok-lede">Applications, fees and deadlines, then what each event earned against its fee: your online orders at that spot on those days, plus the walk-up sales you add.</p></div>' +
+                d.due.map(function (x) { return '<div class="bz-flag"><b>Due ' + (x.inDays === 0 ? 'today' : x.inDays === 1 ? 'tomorrow' : 'in ' + x.inDays + ' days') + ':</b> the application for ' + esc(x.name) + ' (' + day(x.deadlineDay) + ').</div>'; }).join('') +
+                (d.totals.events ? '<div class="bz-stats"><div class="bz-stat"><b>' + money0(d.totals.revenueCents) + '</b><span>earned at ' + d.totals.events + ' event' + (d.totals.events === 1 ? '' : 's') + '</span></div><div class="bz-stat"><b>' + money0(d.totals.feeCents) + '</b><span>in fees</span></div><div class="bz-stat"><b>' + money0(d.totals.profitCents) + '</b><span>after fees and food</span></div></div>' : '') +
+                '<div class="bz-acts"><button class="solid" id="evAdd">Add an event</button></div><div id="evForm"></div>' +
+                (d.events.length ? '<div class="ok-card">' + d.events.map(function (e) {
+                    var res = e.result;
+                    return '<div class="bz-row" style="align-items:flex-start"><div style="min-width:0"><b>' + esc(e.name) + '</b> <span class="ok-pill' + (e.status === 'accepted' || e.status === 'done' ? ' solid' : '') + '" style="font-size:10px;padding:2px 8px">' + STATUS[e.status] + '</span>' +
+                        '<div class="sub">' + [e.startDay ? day(e.startDay) + (e.endDay && e.endDay !== e.startDay ? ' – ' + day(e.endDay) : '') : '', e.location, e.organizer, e.feeCents ? 'fee ' + money(e.feeCents) : '', e.deadlineDay && e.status === 'idea' ? 'apply by ' + day(e.deadlineDay) : ''].filter(Boolean).map(esc).join(' · ') + '</div>' +
+                        (res ? '<div class="sub" style="color:var(--z200);margin-top:4px">Earned <b>' + money(res.revenueCents) + '</b> (' + res.orders + ' online' + (res.walkupCents ? ' + ' + money(res.walkupCents) + ' walk-up' : '') + ') · after fee' + (res.foodCents !== null ? ' and food' : '') + ' <b>' + money(res.profitCents) + '</b>' + (res.perDollarFee ? ' · ' + money(Math.round(res.perDollarFee * 100)) + ' back per $1 of fee' : '') + '</div>' : '') +
+                        '</div><div class="bz-acts"><button data-ev="' + e.id + '">Edit</button></div></div>';
+                }).join('') + '</div>' : '<p class="ok-note">No events yet. Add the ones you’re thinking about too, so their deadlines don’t slip by.</p>');
+            $('evAdd').onclick = function () { evForm(null); };
+            P().querySelectorAll('[data-ev]').forEach(function (b) { b.onclick = function () { evForm(st.events.filter(function (x) { return String(x.id) === b.getAttribute('data-ev'); })[0]); }; });
+        });
+    }
+    function evForm(e) {
+        e = e || { status: 'idea' };
+        var opts = Object.keys(STATUS).map(function (k) { return '<option value="' + k + '"' + (e.status === k ? ' selected' : '') + '>' + STATUS[k] + '</option>'; }).join('');
+        $('evForm').innerHTML = '<form id="evF" class="ok-card pad" style="display:flex;flex-direction:column;gap:12px"><b>' + (e.id ? 'Edit ' + esc(e.name) : 'Add an event') + '</b><div class="bz-form">' +
+            '<label class="full">Name<input class="bz-in" id="eName" value="' + esc(e.name || '') + '" required></label>' +
+            '<label>Status<select class="bz-in" id="eStatus">' + opts + '</select></label>' +
+            '<label>Where (the spot you’ll set on the kitchen screen)<input class="bz-in" id="eLoc" list="locList" value="' + esc(e.location || '') + '"></label>' +
+            '<label>Starts<input class="bz-in" type="date" id="eStart" value="' + esc(e.startDay || '') + '"></label><label>Ends<input class="bz-in" type="date" id="eEnd" value="' + esc(e.endDay || '') + '"></label>' +
+            '<label>Apply by<input class="bz-in" type="date" id="eDeadline" value="' + esc(e.deadlineDay || '') + '"></label><label>Fee ($)<input class="bz-in" inputmode="decimal" id="eFee" value="' + (e.feeCents ? (e.feeCents / 100).toFixed(2) : '') + '"></label>' +
+            '<label>Organizer<input class="bz-in" id="eOrg" value="' + esc(e.organizer || '') + '"></label><label>Contact (email or phone)<input class="bz-in" id="eContact" value="' + esc(e.contact || '') + '"></label>' +
+            '<label>Walk-up sales at the window ($)<input class="bz-in" inputmode="decimal" id="eWalk" value="' + (e.walkupCents ? (e.walkupCents / 100).toFixed(2) : '') + '"></label><label>Link<input class="bz-in" id="eUrl" value="' + esc(e.url || '') + '"></label>' +
+            '<label class="full">Notes<textarea class="bz-in" id="eNotes">' + esc(e.notes || '') + '</textarea></label></div>' +
+            '<datalist id="locList">' + st.locations.map(function (l) { return '<option value="' + esc(l) + '">'; }).join('') + '</datalist>' +
+            '<div class="bz-acts"><button class="solid" type="submit">Save</button><button type="button" id="eCancel">Cancel</button>' + (e.id ? '<button type="button" class="danger" id="eDel">Delete</button>' : '') + '</div><div class="ok-err" id="eErr" role="alert"></div></form>';
+        $('eCancel').onclick = function () { $('evForm').innerHTML = ''; };
+        if ($('eDel')) $('eDel').onclick = function () { if (confirm('Delete ' + e.name + '?')) api('DELETE', '/api/biz/events/' + e.id).then(events); };
+        $('evF').onsubmit = function (ev) {
+            ev.preventDefault();
+            var body = { name: $('eName').value, status: $('eStatus').value, location: $('eLoc').value, startDay: $('eStart').value, endDay: $('eEnd').value, deadlineDay: $('eDeadline').value, fee: $('eFee').value, walkup: $('eWalk').value, organizer: $('eOrg').value, contact: $('eContact').value, url: $('eUrl').value, notes: $('eNotes').value };
+            api(e.id ? 'PUT' : 'POST', '/api/biz/events' + (e.id ? '/' + e.id : ''), body).then(function (r) { if (!r.ok) return err('eErr', r.d.error); toast('Saved.'); events(); });
+        };
+        $('eName').focus();
+    }
+
+    /* ---------------- Costs ---------------- */
+    var UNITS = ['lb', 'oz', 'kg', 'g', 'each', 'dozen', 'gal', 'qt', 'l', 'case', 'bag', 'pack'];
+    function costs(flagged) {
+        return api('GET', '/api/biz/costs').then(function (r) {
+            if (!r.ok) return fail(r);
+            var d = r.d; st.costs = d;
+            var flags = (flagged || d.items.filter(function (i) { return i.flag; }));
+            P().innerHTML = '<div><h1 class="ok-h1">Costs</h1><p class="ok-lede">Enter what you pay for your main ingredients, and how much of each a plate uses. When a supplier raises a price, update it here (receipt in hand): every plate cost follows, and anything that stops paying is flagged with a new price.</p></div>' +
+                flags.map(function (i) { return '<div class="bz-flag"><b>' + esc(i.name) + '</b> now makes ' + Math.round(i.flag.toMargin) + '% (was ' + Math.round(i.flag.fromMargin) + '%). Plate costs ' + money(i.plateCents) + '. To keep ' + Math.round(i.flag.fromMargin) + '%, charge <b>' + money(i.flag.suggestedCents) + '</b>' + (i.flag.targetCents ? '; to make ' + d.targetMargin + '%, <b>' + money(i.flag.targetCents) + '</b>' : '') + '. (Now ' + money(i.priceCents) + '; change it on the Menu tab of your kitchen portal.)</div>'; }).join('') +
+                '<h2 class="ok-h2">What you pay</h2>' +
+                (d.ingredients.length ? '<div class="ok-card">' + d.ingredients.map(function (i) {
+                    return '<div class="bz-row wide"><div style="min-width:0"><b>' + esc(i.name) + '</b><div class="sub">' + money(i.priceCents) + ' per ' + esc(i.unit) + (i.changePct ? ' · <span style="color:' + (i.changePct > 0 ? 'var(--warn)' : 'var(--ok)') + '">' + (i.changePct > 0 ? '+' : '') + i.changePct + '%</span> since ' + money(i.prevCents) : '') + ' · ' + new Date(i.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + '</div></div>' +
+                        '<div class="bz-acts"><input class="bz-in" style="width:96px;height:34px" inputmode="decimal" placeholder="New $" aria-label="New price for ' + esc(i.name) + '" data-price="' + i.id + '"><button data-setprice="' + i.id + '">Update</button><button class="bz-x" data-delingr="' + i.id + '" aria-label="Remove ' + esc(i.name) + '">✕</button></div></div>';
+                }).join('') + '</div>' : '<p class="ok-note">Start with the three or four things that cost you the most, like meat, tortillas and cheese.</p>') +
+                '<form id="ingF" class="bz-acts"><input class="bz-in" style="flex:1;min-width:140px" id="iName" placeholder="Ingredient, like Beef chuck" aria-label="Ingredient name"><select class="bz-in" style="width:90px" id="iUnit" aria-label="Sold by">' + UNITS.map(function (u) { return '<option>' + u + '</option>'; }).join('') + '</select><input class="bz-in" style="width:96px" id="iPrice" inputmode="decimal" placeholder="$ per" aria-label="Price per unit"><button class="solid" type="submit">Add</button></form><div class="ok-err" id="iErr" role="alert"></div>' +
+                '<h2 class="ok-h2">What a plate costs</h2>' +
+                '<div class="ok-card">' + d.items.map(function (i) {
+                    return '<div class="bz-row" style="align-items:flex-start"><div style="min-width:0;flex:1"><b>' + esc(i.name) + '</b><div class="sub">' + (i.plateCents !== null ? 'Plate ' + money(i.plateCents) + ' · sells for ' + money(i.priceCents) + ' · <span style="color:' + (i.low ? 'var(--warn)' : 'inherit') + '">' + Math.round(i.marginPct) + '% margin</span>' : 'No recipe yet') + '</div>' +
+                        '<div id="rec' + i.id + '"></div></div><div class="bz-acts"><button data-recipe="' + i.id + '">' + (i.recipe.length ? 'Recipe' : 'Add recipe') + '</button></div></div>';
+                }).join('') + '</div>';
+            $('ingF').onsubmit = function (e) {
+                e.preventDefault(); err('iErr', '');
+                api('POST', '/api/biz/ingredients', { name: $('iName').value, unit: $('iUnit').value, price: $('iPrice').value }).then(function (r) { if (!r.ok) return err('iErr', r.d.error); costs(); });
+            };
+            P().querySelectorAll('[data-setprice]').forEach(function (b) {
+                b.onclick = function () {
+                    var id = b.getAttribute('data-setprice'), v = P().querySelector('[data-price="' + id + '"]').value;
+                    api('PUT', '/api/biz/ingredients/' + id, { price: v }).then(function (r) {
+                        if (!r.ok) return toast(r.d.error || 'Couldn’t save.');
+                        toast(r.d.flagged && r.d.flagged.length ? r.d.flagged.length + ' item' + (r.d.flagged.length === 1 ? '' : 's') + ' to look at' : 'Price saved; plate costs updated.');
+                        costs(r.d.flagged);
+                    });
+                };
+            });
+            P().querySelectorAll('[data-delingr]').forEach(function (b) { b.onclick = function () { api('DELETE', '/api/biz/ingredients/' + b.getAttribute('data-delingr')).then(function (r) { if (!r.ok) toast(r.d.error); else costs(); }); }; });
+            P().querySelectorAll('[data-recipe]').forEach(function (b) { b.onclick = function () { recipeForm(+b.getAttribute('data-recipe')); }; });
+        });
+    }
+    function recipeForm(itemId) {
+        var item = st.costs.items.filter(function (i) { return i.id === itemId; })[0], ings = st.costs.ingredients;
+        if (!ings.length) { toast('Add what you pay for ingredients first.'); return; }
+        var rows = item.recipe.length ? item.recipe.slice() : [{ ingredientId: ings[0].id, qty: '' }];
+        function draw() {
+            $('rec' + itemId).innerHTML = '<div class="ok-section" style="gap:6px;margin-top:10px">' + rows.map(function (r, k) {
+                var ing = ings.filter(function (i) { return i.id === r.ingredientId; })[0];
+                return '<div class="rec"><select class="bz-in" style="height:38px" data-rk="' + k + '" aria-label="Ingredient">' + ings.map(function (i) { return '<option value="' + i.id + '"' + (i.id === r.ingredientId ? ' selected' : '') + '>' + esc(i.name) + ' (' + esc(i.unit) + ')</option>'; }).join('') + '</select>' +
+                    '<input class="bz-in" style="height:38px" inputmode="decimal" data-rq="' + k + '" value="' + esc(r.qty) + '" placeholder="' + (ing ? esc(ing.unit) : 'qty') + '" aria-label="How much per plate"><button class="x" data-rx="' + k + '" aria-label="Remove">✕</button></div>';
+            }).join('') + '<div class="bz-acts"><button data-radd>+ Ingredient</button><button class="solid" data-rsave>Save recipe</button></div><span class="ok-note">Per plate, in the unit you buy it: a quarter pound is 0.25 lb, two tortillas from a dozen is 0.17.</span></div>';
+            var box = $('rec' + itemId);
+            box.querySelectorAll('[data-rk]').forEach(function (s) { s.onchange = function () { rows[+s.getAttribute('data-rk')].ingredientId = +s.value; }; });
+            box.querySelectorAll('[data-rq]').forEach(function (s) { s.oninput = function () { rows[+s.getAttribute('data-rq')].qty = s.value; }; });
+            box.querySelectorAll('[data-rx]').forEach(function (s) { s.onclick = function () { rows.splice(+s.getAttribute('data-rx'), 1); draw(); }; });
+            box.querySelector('[data-radd]').onclick = function () { rows.push({ ingredientId: ings[0].id, qty: '' }); draw(); };
+            box.querySelector('[data-rsave]').onclick = function () {
+                api('PUT', '/api/biz/recipes/' + itemId, { recipe: rows.map(function (r) { return { ingredientId: r.ingredientId, qty: Number(r.qty) }; }) }).then(function (r) { if (!r.ok) return toast(r.d.error); toast('Recipe saved. Food cost updated.'); costs(); });
+            };
+        }
+        draw();
+    }
+
+    /* ---------------- Taxes ---------------- */
+    function taxes(from, to) {
+        st.taxFrom = from || st.taxFrom || monthStart(-1); st.taxTo = to || st.taxTo || monthEnd(-1);
+        return api('GET', '/api/biz/tax?from=' + st.taxFrom + '&to=' + st.taxTo).then(function (r) {
+            if (!r.ok) return fail(r);
+            var d = r.d;
+            P().innerHTML = '<div><h1 class="ok-h1">Sales tax</h1><p class="ok-lede">Sales and tax by city for any period, ready for filing. Set each spot’s city and rate once.</p></div>' +
+                periodPicker('tax') +
+                (d.missing.length ? '<div class="bz-flag"><b>No rate set</b> for ' + d.missing.map(esc).join(', ') + '. Add it below so the tax is counted.</div>' : '') +
+                '<div class="ok-card bz-scroll"><table class="bz-table"><thead><tr><th>City or place</th><th class="r">Orders</th><th class="r">Gross</th><th class="r">Rate</th><th class="r">Tax</th></tr></thead><tbody>' +
+                d.lines.map(function (l) { return '<tr><td>' + esc(l.place) + (l.locations.length ? '<div class="sub" style="font-size:11px;color:var(--z500)">' + l.locations.map(esc).join(', ') + '</div>' : '') + '</td><td class="r">' + l.orders + '</td><td class="r">' + money(l.grossCents) + '</td><td class="r">' + (l.ratePct === null ? (l.place === 'Catering' ? 'per quote' : '—') : l.ratePct + '%' + (l.included ? ' incl.' : '')) + '</td><td class="r">' + money(l.taxCents) + '</td></tr>'; }).join('') +
+                '<tr><td><b>Total</b></td><td></td><td class="r"><b>' + money(d.totals.grossCents) + '</b></td><td></td><td class="r"><b>' + money(d.totals.taxCents) + '</b></td></tr></tbody></table></div>' +
+                '<div class="bz-acts"><a href="/api/biz/tax.csv?from=' + d.from + '&to=' + d.to + '">Download for filing (spreadsheet)</a></div>' +
+                '<h2 class="ok-h2">Your spots</h2><p class="ok-note">“Prices include tax” means the menu price already has tax in it (most trucks). Otherwise tax is added at the window.</p>' +
+                '<div class="ok-card">' + d.locationsSetup.map(function (l) {
+                    return '<div class="bz-row wide" style="flex-wrap:wrap"><div style="flex:1 1 140px"><b>' + esc(l.name) + '</b></div><div class="bz-acts"><input class="bz-in" style="width:130px;height:34px" placeholder="City" aria-label="City for ' + esc(l.name) + '" data-city="' + l.id + '" value="' + esc(l.city) + '">' +
+                        '<input class="bz-in" style="width:76px;height:34px" inputmode="decimal" placeholder="Rate %" aria-label="Tax rate for ' + esc(l.name) + '" data-rate="' + l.id + '" value="' + (l.ratePct === null ? '' : l.ratePct) + '">' +
+                        '<label style="display:flex;gap:6px;align-items:center;font-size:12px;color:var(--z300)"><input type="checkbox" data-incl="' + l.id + '"' + (l.included ? ' checked' : '') + '> incl.</label><button data-savetax="' + l.id + '">Save</button></div></div>';
+                }).join('') + '</div>';
+            hookPeriod('tax', taxes);
+            P().querySelectorAll('[data-savetax]').forEach(function (b) {
+                b.onclick = function () {
+                    var id = b.getAttribute('data-savetax');
+                    api('PUT', '/api/biz/tax/locations/' + id, { city: P().querySelector('[data-city="' + id + '"]').value, ratePct: P().querySelector('[data-rate="' + id + '"]').value, included: P().querySelector('[data-incl="' + id + '"]').checked })
+                        .then(function (r) { if (!r.ok) return toast(r.d.error); toast('Saved.'); taxes(); });
+                };
+            });
+        });
+    }
+    function periodPicker(k) {
+        var f = st[k + 'From'], t = st[k + 'To'];
+        return '<div class="bz-acts"><button data-q="' + k + ':this">This month</button><button data-q="' + k + ':last">Last month</button><button data-q="' + k + ':qtr">Last 3 months</button>' +
+            '<input class="bz-in" type="date" style="width:150px;height:34px" id="' + k + 'From" value="' + f + '" aria-label="From"><input class="bz-in" type="date" style="width:150px;height:34px" id="' + k + 'To" value="' + t + '" aria-label="To"></div>';
+    }
+    function hookPeriod(k, fn) {
+        P().querySelectorAll('[data-q^="' + k + ':"]').forEach(function (b) {
+            b.onclick = function () { var q = b.getAttribute('data-q').split(':')[1]; if (q === 'this') fn(monthStart(0), iso(new Date())); else if (q === 'last') fn(monthStart(-1), monthEnd(-1)); else fn(monthStart(-3), monthEnd(-1)); };
+        });
+        [k + 'From', k + 'To'].forEach(function (id) { $(id).onchange = function () { fn($(k + 'From').value, $(k + 'To').value); }; });
+    }
+
+    /* ---------------- Documents ---------------- */
+    var KINDS = { permit: 'Permit', inspection: 'Inspection', insurance: 'Insurance', license: 'License', other: 'Other' };
+    function docs() {
+        return api('GET', '/api/biz/vault').then(function (r) {
+            if (!r.ok) return fail(r);
+            var d = r.d;
+            P().innerHTML = '<div><h1 class="ok-h1">Documents</h1><p class="ok-lede">Permits, inspections and insurance in one place. You’ll get an email 30 and 7 days before anything expires. Organizers get one link to your current vendor packet.</p></div>' +
+                '<div class="ok-card pad" style="display:flex;flex-direction:column;gap:8px"><b>Vendor packet link</b><span class="ok-note">Send this to event organizers. It always shows your current documents marked “in packet”. Make a new link any time; the old one stops working.</span>' +
+                '<div class="bz-acts"><input class="bz-in" readonly id="packetUrl" value="' + esc(d.packetUrl) + '" aria-label="Vendor packet link" style="flex:1;min-width:200px;height:36px;font-size:13px"><button id="copyPacket" class="solid">Copy</button><a href="' + esc(d.packetUrl) + '" target="_blank" rel="noopener">Preview</a><button id="newPacket">New link</button></div></div>' +
+                (d.docs.length ? '<div class="ok-card">' + d.docs.map(function (x) {
+                    var pill = x.status === 'expired' ? '<span class="ok-pill bad">Expired</span>' : x.status === 'soon' ? '<span class="ok-pill warn">' + x.daysLeft + ' days left</span>' : x.expiresDay ? '<span class="ok-pill">Until ' + day(x.expiresDay) + '</span>' : '';
+                    return '<div class="bz-row wide"><div style="min-width:0"><b>' + esc(x.title) + '</b><div class="sub">' + KINDS[x.kind] + ' · ' + (x.inPacket ? 'in packet' : 'private') + ' · ' + Math.round(x.size / 1024) + ' KB</div></div>' +
+                        '<div class="bz-acts">' + pill + '<a href="/api/biz/vault/' + x.id + '/file" target="_blank" rel="noopener">View</a><button data-renew="' + x.id + '">Expiry</button><button data-pack="' + x.id + '" data-v="' + (x.inPacket ? 0 : 1) + '">' + (x.inPacket ? 'Make private' : 'Add to packet') + '</button><button class="bz-x" data-deldoc="' + x.id + '" aria-label="Delete ' + esc(x.title) + '">✕</button></div></div>';
+                }).join('') + '</div>' : '') +
+                '<form id="docF" class="ok-card pad" style="display:flex;flex-direction:column;gap:10px"><b>Upload a document</b><div class="bz-form">' +
+                '<label class="full">File (PDF or photo, up to 8 MB)<input class="bz-in" type="file" id="dFile" accept="application/pdf,image/jpeg,image/png" style="padding:8px"></label>' +
+                '<label>What it is<input class="bz-in" id="dTitle" placeholder="Health permit 2027"></label><label>Kind<select class="bz-in" id="dKind">' + Object.keys(KINDS).map(function (k) { return '<option value="' + k + '">' + KINDS[k] + '</option>'; }).join('') + '</select></label>' +
+                '<label>Expires<input class="bz-in" type="date" id="dExp"></label><label style="flex-direction:row;align-items:center;gap:8px;font-weight:600;color:var(--z300)"><input type="checkbox" id="dPack" checked style="width:20px;height:20px"> In the vendor packet</label>' +
+                '</div><button class="ok-btn small" type="submit" style="align-self:flex-start">Upload</button><div class="ok-err" id="dErr" role="alert"></div></form>';
+            $('copyPacket').onclick = function () { try { navigator.clipboard.writeText(d.packetUrl).then(function () { toast('Link copied.'); }); } catch (e) { $('packetUrl').select(); } };
+            $('newPacket').onclick = function () { if (confirm('Make a new packet link? The old one stops working right away.')) api('POST', '/api/biz/vault/packet/new').then(docs); };
+            $('docF').onsubmit = function (e) {
+                e.preventDefault(); err('dErr', '');
+                var f = $('dFile').files[0];
+                if (!f) return err('dErr', 'Pick the file first.');
+                if (f.size > 8 * 1024 * 1024) return err('dErr', 'Files can be up to 8 MB.');
+                var q = '?title=' + encodeURIComponent($('dTitle').value || f.name.replace(/\.[^.]+$/, '')) + '&kind=' + $('dKind').value + '&expires=' + ($('dExp').value || '') + '&packet=' + ($('dPack').checked ? 1 : 0);
+                api('POST', '/api/biz/vault' + q, null, { type: f.type, data: f }).then(function (r) { if (!r.ok) return err('dErr', r.d.error || 'Couldn’t upload that.'); toast('Uploaded.'); docs(); });
+            };
+            P().querySelectorAll('[data-deldoc]').forEach(function (b) { b.onclick = function () { if (confirm('Delete this document?')) api('DELETE', '/api/biz/vault/' + b.getAttribute('data-deldoc')).then(docs); }; });
+            P().querySelectorAll('[data-pack]').forEach(function (b) { b.onclick = function () { api('PUT', '/api/biz/vault/' + b.getAttribute('data-pack'), { inPacket: b.getAttribute('data-v') === '1' }).then(docs); }; });
+            P().querySelectorAll('[data-renew]').forEach(function (b) {
+                b.onclick = function () { var v = prompt('New expiry date (YYYY-MM-DD), or empty for none:'); if (v !== null) api('PUT', '/api/biz/vault/' + b.getAttribute('data-renew'), { expiresDay: v.trim() }).then(function (r) { if (!r.ok) toast(r.d.error); docs(); }); };
+            });
+        });
+    }
+
+    /* ---------------- Team hours ---------------- */
+    function team(week) {
+        return api('GET', '/api/biz/clock/week' + (week ? '?week=' + week : '')).then(function (r) {
+            if (!r.ok) return fail(r);
+            var d = r.d; st.week = d.week;
+            var prev = iso(new Date(new Date(d.week + 'T12:00:00Z').getTime() - 7 * 864e5)), next = iso(new Date(new Date(d.week + 'T12:00:00Z').getTime() + 7 * 864e5));
+            P().innerHTML = '<div><h1 class="ok-h1">Team hours</h1><p class="ok-lede">Crew clock in and out on the kitchen tablet with their own PIN. Set each person’s hourly pay once; overtime past 40 hours a week is counted at time and a half.</p></div>' +
+                '<div class="bz-acts"><button id="wkPrev" aria-label="Previous week">‹</button><b style="padding:0 6px">Week of ' + day(d.week) + '</b><button id="wkNext" aria-label="Next week">›</button><a href="/api/biz/clock/payroll.csv?week=' + d.week + '">Hours for payroll (spreadsheet)</a></div>' +
+                '<div class="bz-stats"><div class="bz-stat"><b>' + d.totals.hours + '</b><span>hours this week</span></div><div class="bz-stat"><b>' + money0(d.totals.payCents) + '</b><span>labor cost</span></div></div>' +
+                (d.people.length ? '<div class="ok-card">' + d.people.map(function (p) {
+                    return '<div class="bz-row wide" style="align-items:flex-start;flex-wrap:wrap"><div style="min-width:0;flex:1 1 220px"><b>' + esc(p.name) + '</b>' + (p.open ? ' <span class="ok-pill ok" style="font-size:10px;padding:2px 8px">On the clock</span>' : '') + (p.long ? ' <span class="ok-pill warn" style="font-size:10px;padding:2px 8px">12+ hours: forgot to clock out?</span>' : '') +
+                        '<div class="sub">' + p.hours + ' h' + (p.overtime ? ' (' + p.overtime + ' overtime)' : '') + (p.payCents !== null ? ' · ' + money(p.payCents) : '') + '</div>' +
+                        '<div class="sub">' + p.shifts.map(function (s) { return day(s.day) + ' ' + s.start + '–' + s.end + ' <button class="bz-x" style="font-size:13px" data-delshift="' + s.id + '" aria-label="Remove shift">✕</button>'; }).join(' · ') + '</div>' +
+                        '<div class="sub">' + p.entries.map(function (e) { var t = function (ms) { return new Date(ms).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }); }; return day(e.day) + ' ' + t(e.inAt) + '–' + (e.outAt ? t(e.outAt) : p.long ? '<button class="ok-link" data-fixout="' + e.id + '" data-in="' + e.inAt + '">set clock-out</button>' : 'now'); }).join(' · ') + '</div></div>' +
+                        '<div class="bz-acts"><input class="bz-in" style="width:90px;height:34px" inputmode="decimal" placeholder="$/hr" aria-label="Hourly pay for ' + esc(p.name) + '" data-wage="' + p.id + '" value="' + (p.wageCents === null ? '' : (p.wageCents / 100).toFixed(2)) + '"><button data-savewage="' + p.id + '">Save pay</button></div></div>';
+                }).join('') + '</div>' : '<p class="ok-note">Add your crew (Settings → Crew in the kitchen portal) and give each their own PIN first.</p>') +
+                (d.people.length ? '<form id="shiftF" class="ok-card pad" style="display:flex;flex-direction:column;gap:10px"><b>Add a shift</b><div class="bz-form"><label>Who<select class="bz-in" id="sWho">' + d.people.map(function (p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join('') + '</select></label>' +
+                    '<label>Day<select class="bz-in" id="sDay">' + d.days.map(function (x) { return '<option value="' + x + '">' + day(x) + '</option>'; }).join('') + '</select></label><label>Start<input class="bz-in" type="time" id="sStart" value="11:00"></label><label>End<input class="bz-in" type="time" id="sEnd" value="15:00"></label></div>' +
+                    '<button class="ok-btn small" type="submit" style="align-self:flex-start">Add shift</button><div class="ok-err" id="sErr" role="alert"></div></form>' : '');
+            $('wkPrev').onclick = function () { team(prev); }; $('wkNext').onclick = function () { team(next); };
+            P().querySelectorAll('[data-savewage]').forEach(function (b) { b.onclick = function () { var id = b.getAttribute('data-savewage'); api('PUT', '/api/biz/clock/wage/' + id, { wage: P().querySelector('[data-wage="' + id + '"]').value }).then(function (r) { if (!r.ok) return toast(r.d.error); toast('Pay saved.'); team(st.week); }); }; });
+            P().querySelectorAll('[data-delshift]').forEach(function (b) { b.onclick = function () { api('DELETE', '/api/biz/clock/shifts/' + b.getAttribute('data-delshift')).then(function () { team(st.week); }); }; });
+            P().querySelectorAll('[data-fixout]').forEach(function (b) {
+                b.onclick = function () {
+                    var inAt = +b.getAttribute('data-in'), v = prompt('Clock-out time (like 3:30 PM):'); if (!v) return;
+                    var m = /^(\d{1,2})(?::(\d\d))?\s*(am|pm)?$/i.exec(v.trim()); if (!m) return toast('Like 3:30 PM');
+                    var h = +m[1] % 12 + (/pm/i.test(m[3] || '') ? 12 : 0), d0 = new Date(inAt); d0.setHours(h, +(m[2] || 0), 0, 0);
+                    api('PUT', '/api/biz/clock/entries/' + b.getAttribute('data-fixout'), { outAt: d0.getTime() }).then(function (r) { if (!r.ok) toast(r.d.error); team(st.week); });
+                };
+            });
+            if ($('shiftF')) $('shiftF').onsubmit = function (e) { e.preventDefault(); api('POST', '/api/biz/clock/shifts', { staffId: $('sWho').value, day: $('sDay').value, start: $('sStart').value, end: $('sEnd').value }).then(function (r) { if (!r.ok) return err('sErr', r.d.error); team(st.week); }); };
+        });
+    }
+
+    /* ---------------- Upkeep ---------------- */
+    function upkeep() {
+        return api('GET', '/api/biz/maint').then(function (r) {
+            if (!r.ok) return fail(r);
+            var d = r.d;
+            P().innerHTML = '<div><h1 class="ok-h1">Upkeep</h1><p class="ok-lede">Generator hours, oil changes, propane and inspections. Enter the meter now and then; you’ll see what’s coming due on the kitchen screen in the morning.</p></div>' +
+                (d.items.length ? '<div class="ok-card">' + d.items.map(function (m) {
+                    var pill = m.status === 'overdue' ? '<span class="ok-pill bad">Overdue ' + Math.abs(m.left) + ' ' + m.unit + '</span>' : m.status === 'soon' ? '<span class="ok-pill warn">Due in ' + m.left + ' ' + m.unit + '</span>' : m.status === 'ok' ? '<span class="ok-pill">In ' + m.left + ' ' + m.unit + '</span>' : '<span class="ok-pill">Add a reading</span>';
+                    return '<div class="bz-row wide" style="flex-wrap:wrap"><div style="min-width:0;flex:1 1 200px"><b>' + esc(m.name) + '</b><div class="sub">Every ' + m.every + ' ' + m.unit + (m.unit !== 'days' && m.readingNow !== null ? ' · meter ' + m.readingNow : '') + (m.lastDay ? ' · last done ' + day(m.lastDay) : '') + '</div></div>' +
+                        '<div class="bz-acts">' + pill + (m.unit !== 'days' ? '<input class="bz-in" style="width:90px;height:34px" inputmode="numeric" placeholder="Meter" aria-label="Meter reading for ' + esc(m.name) + '" data-read="' + m.id + '"><button data-saveread="' + m.id + '">Save</button>' : '') +
+                        '<button class="solid" data-done="' + m.id + '">Done today</button><button class="bz-x" data-delm="' + m.id + '" aria-label="Remove ' + esc(m.name) + '">✕</button></div></div>';
+                }).join('') + '</div>' : '') +
+                '<form id="mF" class="ok-card pad" style="display:flex;flex-direction:column;gap:10px"><b>Add something to look after</b><div class="bz-form"><label class="full">What<input class="bz-in" id="mName" placeholder="Generator oil change"></label>' +
+                '<label>Every<input class="bz-in" id="mEvery" inputmode="numeric" placeholder="100"></label><label>Unit<select class="bz-in" id="mUnit"><option value="hours">hours (meter)</option><option value="miles">miles</option><option value="days">days</option></select></label>' +
+                '<label>Last done at (meter)<input class="bz-in" id="mLast" inputmode="numeric" placeholder="optional"></label><label>Last done on<input class="bz-in" type="date" id="mDay"></label></div>' +
+                '<button class="ok-btn small" type="submit" style="align-self:flex-start">Add</button><div class="ok-err" id="mErr" role="alert"></div></form>' +
+                (d.logs.length ? '<h2 class="ok-h2">Log</h2><div class="ok-card">' + d.logs.map(function (l) { return '<div class="bz-row"><div><b>' + esc(l.name) + '</b><div class="sub">' + day(l.day) + (l.reading !== null ? ' · at ' + l.reading : '') + (l.note ? ' · ' + esc(l.note) : '') + '</div></div><div class="num">' + (l.costCents ? money(l.costCents) : '') + '</div></div>'; }).join('') + '</div><p class="ok-note">Spent on upkeep this year: ' + money(d.spentCents) + '</p>' : '');
+            $('mF').onsubmit = function (e) { e.preventDefault(); api('POST', '/api/biz/maint', { name: $('mName').value, every: $('mEvery').value, unit: $('mUnit').value, lastReading: $('mLast').value, lastDay: $('mDay').value }).then(function (r) { if (!r.ok) return err('mErr', r.d.error); upkeep(); }); };
+            P().querySelectorAll('[data-saveread]').forEach(function (b) { b.onclick = function () { var id = b.getAttribute('data-saveread'); api('POST', '/api/biz/maint/' + id + '/log', { reading: P().querySelector('[data-read="' + id + '"]').value }).then(function (r) { if (!r.ok) return toast(r.d.error); upkeep(); }); }; });
+            P().querySelectorAll('[data-done]').forEach(function (b) {
+                b.onclick = function () {
+                    var id = b.getAttribute('data-done'), rd = P().querySelector('[data-read="' + id + '"]'), cost = prompt('What did it cost? (optional, in dollars)'); if (cost === null) return;
+                    var note = prompt('Any note? (optional, like the oil you used)') || '';
+                    api('POST', '/api/biz/maint/' + id + '/log', { done: true, reading: rd ? rd.value : '', cost: cost, note: note }).then(function (r) { if (!r.ok) return toast(r.d.error); toast('Logged.'); upkeep(); });
+                };
+            });
+            P().querySelectorAll('[data-delm]').forEach(function (b) { b.onclick = function () { if (confirm('Remove this and its log?')) api('DELETE', '/api/biz/maint/' + b.getAttribute('data-delm')).then(upkeep); }; });
+        });
+    }
+
+    /* ---------------- Books ---------------- */
+    function books(from, to) {
+        st.booksFrom = from || st.booksFrom || monthStart(-1); st.booksTo = to || st.booksTo || monthEnd(-1);
+        return api('GET', '/api/biz/books?from=' + st.booksFrom + '&to=' + st.booksTo).then(function (r) {
+            if (!r.ok) return fail(r);
+            var d = r.d, sum = function (k) { return d.days.reduce(function (n, x) { return n + x[k]; }, 0); };
+            P().innerHTML = '<div><h1 class="ok-h1">Books</h1><p class="ok-lede">Daily sales, fees and tax for your bookkeeper: a spreadsheet, and journal entries QuickBooks (and most bookkeeping apps) can import. Card fees are an estimate until your payout statement.</p></div>' +
+                periodPicker('books') +
+                '<div class="bz-stats"><div class="bz-stat"><b>' + money0(sum('grossCents')) + '</b><span>gross sales</span></div><div class="bz-stat"><b>' + money0(sum('taxCents')) + '</b><span>sales tax</span></div><div class="bz-stat"><b>' + money0(sum('feeCents')) + '</b><span>card fees (est.)</span></div></div>' +
+                '<div class="bz-acts"><a class="solid" href="/api/biz/books.csv?from=' + d.from + '&to=' + d.to + '">Daily summary (spreadsheet)</a><a href="/api/biz/journal.csv?from=' + d.from + '&to=' + d.to + '">Journal entries for QuickBooks</a></div>' +
+                '<div class="ok-card bz-scroll"><table class="bz-table"><thead><tr><th>Day</th><th class="r">Orders</th><th class="r">Gross</th><th class="r">Tax</th><th class="r">Window</th><th class="r">Online</th><th class="r">Fees</th></tr></thead><tbody>' +
+                (d.days.length ? d.days.map(function (x) { return '<tr><td>' + day(x.day) + '</td><td class="r">' + x.orders + '</td><td class="r">' + money(x.grossCents) + '</td><td class="r">' + money(x.taxCents) + '</td><td class="r">' + money(x.windowCents) + '</td><td class="r">' + money(x.onlineCents) + '</td><td class="r">' + money(x.feeCents) + '</td></tr>'; }).join('') : '<tr><td colspan="7" style="color:var(--z500)">No sales in these dates.</td></tr>') +
+                '</tbody></table></div>';
+            hookPeriod('books', books);
+        });
+    }
+
+    /* ---------------- shell ---------------- */
+    var TABS = { trucks: trucks, events: events, costs: costs, taxes: taxes, docs: docs, team: team, upkeep: upkeep, books: books };
+    function fail(r) {
+        if (r.status === 401) { $('appView').hidden = true; $('needLogin').hidden = false; return; }
+        if (r.status === 402) { $('appView').hidden = true; $('locked').hidden = false; return; }
+        P().innerHTML = '<div class="ok-err">' + esc(r.d.error || 'Something went wrong. Try again.') + '</div>';
+    }
+    function show(tab) {
+        st.tab = TABS[tab] ? tab : 'trucks';
+        document.querySelectorAll('.bz-tabs button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-tab') === st.tab)); });
+        try { history.replaceState(null, '', '#' + st.tab); } catch (e) {}
+        P().innerHTML = '<p class="ok-note">Loading…</p>';
+        TABS[st.tab]();
+    }
+    window.addEventListener('hashchange', function () { var h = (location.hash || '').slice(1); if (st.me && TABS[h] && h !== st.tab) show(h); });
+    document.querySelector('.bz-tabs').addEventListener('click', function (e) { var b = e.target.closest('button[data-tab]'); if (b) show(b.getAttribute('data-tab')); });
+    api('GET', '/api/auth/me').then(function (r) {
+        $('loading').hidden = true;
+        if (!r.ok || r.d.role !== 'owner') { $('needLogin').hidden = false; return; }
+        st.me = r.d;
+        var n = r.d.vendor.businessName;
+        $('truckName').textContent = n; $('mono').textContent = n.trim().split(/\s+/).map(function (w) { return w[0]; }).join('').slice(0, 2).toUpperCase();
+        document.title = n + ' · Business';
+        $('appView').hidden = false;
+        api('GET', '/api/owner/locations').then(function (l) { if (l.ok) st.locations = (l.d.active || []).map(function (x) { return x.name; }); });
+        show((location.hash || '').slice(1) || 'trucks');
+    });
+})();
+</script>
+</body>
+</html>

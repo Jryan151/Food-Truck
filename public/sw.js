@@ -2,7 +2,7 @@
    Pages and their css/js are fetched from the network first, every time; a copy is kept only as a
    spare for when the network fails. Menus, orders and every /api call are never cached here: the
    pages keep their own last copy and say plainly when they are showing it. */
-const CACHE = 'ft-offline-v15';
+const CACHE = 'ft-offline-v16';
 const OFFLINE = '/offline.html';
 // Pages worth a spare copy. Links carrying a private token (bookings, unsubscribe) are never kept.
 const PAGES = new Set(['/', '/customer', '/customer.html', '/owner', '/owner.html', '/now', '/schedule', '/catering/manage', '/clients']);

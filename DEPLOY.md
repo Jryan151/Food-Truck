@@ -495,3 +495,39 @@ The tables are added on start (database change 3, with a copy saved first).
   the page language follows English/Spanish, a visible focus ring for keyboards, faint text raised to 4.5:1 contrast,
   and no animation for people who turn motion off.
 - **Calm dead ends:** not-found, resting (suspended) and error pages use the same quiet page instead of bare text.
+
+## Business tier: events, costs, taxes, documents, crew hours, upkeep, books, more trucks
+
+Everything is in one place for the owner: **Settings → Running the business → Open business tools** (`/business`).
+Free for every truck while the beta is open, the same as Clients.
+
+- **Trucks:** add a second (up to 10) truck. It gets its own web address, kitchen PIN and crew, and starts with a copy
+  of this truck's menu, hours and brand. The owner's email and password open every truck; "Open" moves between them
+  already signed in. The summary shows today and the last 7 days for all trucks at once.
+- **Events:** applications, fees, deadlines and organizers. After an event: online orders at that spot on those days,
+  plus the walk-up sales the owner types in, against the fee and food cost. Deadlines inside a week show on the
+  morning card.
+- **Costs:** what the truck pays for its main ingredients and how much of each a plate uses. Updating a price
+  updates every plate's food cost (the same cost Insights uses) and flags anything whose margin dropped, with the
+  price to charge to keep it.
+- **Sales tax:** set each spot's city and rate once (prices including tax, or tax added). Sales and tax by city for
+  any dates, as a spreadsheet for filing.
+- **Documents:** permits, inspections, insurance (PDF or photo, up to 8 MB). Emails the owner 30 and 7 days before
+  something expires. One "vendor packet" link for organizers shows the current documents; a new link retires the old.
+  Files are stored in `DOC_DIR` (default `./documents`, never under `public/`) and backed up nightly by
+  `scripts/backup.sh` as `documents-*.tgz`. Nothing to set unless you want them elsewhere:
+  ```
+  mkdir -p /var/www/foodtruck/documents && chmod 700 /var/www/foodtruck/documents
+  ```
+- **Crew hours:** crew who sign in with their own PIN get a Clock in / Clock out bar on the kitchen screen. The owner
+  sets each person's hourly pay, adds shifts, fixes a forgotten clock-out, and downloads hours for payroll
+  (overtime past 40 a week at time and a half). Insights shows crew pay next to sales.
+- **Upkeep:** generator hours, oil, propane, inspections: every so many hours, miles or days. Due and overdue items show
+  on the morning card.
+- **Books:** daily sales, tax, window vs. online, and estimated card fees, as a spreadsheet and as journal entries
+  QuickBooks can import.
+- **Punch-card regulars:** when a customer saves their card by email they can tick "also email me now and then".
+  If they then haven't been by in five weeks, they show up on Clients → "Reach out this week" with a draft that
+  mentions their stamps. Nothing is sent unless the owner sends it.
+
+The database changes itself on the first start (schema change 4) and takes a backup first.

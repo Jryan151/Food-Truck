@@ -4,6 +4,7 @@ node_modules/
 *.sqlite-shm
 *.sqlite-wal
 uploads/
+documents/
 uploads.before-reset-*/
 public_old/
 new/

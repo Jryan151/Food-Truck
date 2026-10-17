@@ -161,6 +161,7 @@
                 </div>
                 <div id="awakeNote" class="text-[10px] text-zinc-500 -mt-2" data-quiet style="display:none;">☀️ Screen will stay on while this page is open.</div>
                 <div id="whoNote" class="text-[10px] text-zinc-500" data-quiet style="display:none;"></div>
+                <div id="clockBar" class="clock-bar" role="status" style="display:none"></div>
                 <div id="undoBar" class="undo-bar" role="status" style="display:none"></div>
                 <div id="order-filter-tabs" class="flex gap-2 mb-3 bg-zinc-950 p-1.5 rounded-xl border border-zinc-800/50 w-max">
                     <button data-action="filter" data-filter="Active" id="filterActive" class="px-4 py-1.5 rounded-lg text-[11px] font-bold bg-zinc-100 text-zinc-950 shadow transition">Active</button>
@@ -332,6 +333,14 @@
                     <a href="/catering/manage" class="block w-full text-center bg-zinc-100 hover:bg-white text-zinc-950 py-2.5 rounded-lg text-xs font-bold">Open catering</a>
                     <a href="/clients" class="mt-2 block w-full text-center border border-zinc-700 text-zinc-200 py-2.5 rounded-lg text-xs font-bold">Clients · who to reach out to this week</a>
                     <p class="text-[10px] text-zinc-500 mt-1">Your client list fills itself from catering requests, bookings and followers. Business, free during the beta.</p>
+                </div>
+
+                <!-- Running the business: events, costs, taxes, documents, crew hours, upkeep, books, more trucks -->
+                <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" data-owner id="businessBox">
+                    <h3 class="font-bold text-sm text-zinc-100 mb-1 border-b border-zinc-800 pb-2">Running the business</h3>
+                    <p class="text-[11px] text-zinc-400 mt-3 mb-3">Events and their fees, what each plate costs you, sales tax by city, permits and insurance, crew hours and pay, generator upkeep, and books for your bookkeeper. Add a second truck here too.</p>
+                    <a href="/business" class="block w-full text-center bg-zinc-100 hover:bg-white text-zinc-950 py-2.5 rounded-lg text-xs font-bold">Open business tools</a>
+                    <p class="text-[10px] text-zinc-500 mt-1">Business, free during the beta.</p>
                 </div>
 
                 <!-- Appearance: day / night (this device only; staff can set the kitchen tablet too) -->
@@ -663,7 +672,7 @@
         </div>
     </div>
 
-    <div id="toast" class="fixed left-1/2 bottom-6 z-50 px-4 py-3 rounded-xl text-sm font-semibold shadow-lg" style="display:none;transform:translateX(-50%);background:var(--ink);color:var(--on-ink);max-width:92vw" role="status" aria-live="polite"></div>
+    <div id="toast" class="fixed left-1/2 bottom-6 z-50 px-4 py-3 rounded-xl text-sm font-semibold shadow-lg" style="display:none;position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));z-index:60;transform:translateX(-50%);background:var(--ink);color:var(--on-ink);max-width:92vw" role="status" aria-live="polite"></div>
 
     <div id="editItemModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" style="display:none;">
         <div class="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-2xl p-5 space-y-3 relative overflow-y-auto max-h-[90vh]">
@@ -1019,6 +1028,7 @@
             switchTab('Orders');
             Promise.all([loadOrders(), loadMenu(), loadState(), isOwner() ? loadLocations() : null]).then(function () { renderSettings(); renderSetup(); });
             loadBrief();
+            loadClock();
             startLive();
         }
 
@@ -1571,7 +1581,13 @@
             putState({ waitLock: Math.max(1, Math.min(90, base + by)) });
         }
 
-        if (window.__FT_DEMO) { var nl = document.getElementById('nowLink'); if (nl) nl.href = '/demo/now'; }
+        if (window.__FT_DEMO) {
+            var nl = document.getElementById('nowLink'); if (nl) nl.href = '/demo/now';
+            // Pages that live on a real truck's address: explain instead of opening a dead end.
+            [['#businessBox a', 'In your own portal this opens events, plate costs, sales tax, documents, crew hours, upkeep and books.'], ['#cateringBox a[href="/clients"]', 'In your own portal this opens your client list.']].forEach(function (p) {
+                var a = document.querySelector(p[0]); if (a) a.addEventListener('click', function (e) { e.preventDefault(); toast(p[1]); });
+            });
+        }
 
         /* ---------- closing (early or for the day) ---------- */
         var CLOSE_NOTES = ['Sold out for today. Thank you!', 'Closed early today. Back tomorrow!', 'Closed for weather. Stay safe!', 'At a private event today.'];
@@ -2004,6 +2020,10 @@
                 parts.push('<div class="brief-nudge"><span>' + esc(n.text) + '</span><button data-action="brief-stock" data-id="' + n.itemId + '">Set a count</button></div>');
             });
             if (b.weather) parts.push('<div class="brief-wx brief-' + esc(b.weather.kind) + '">' + esc(b.weather.text) + '</div>');
+            (b.reminders || []).forEach(function (m) {
+                var tab = m.kind === 'event' ? 'events' : m.kind === 'maint' ? 'upkeep' : 'docs';
+                parts.push('<div class="brief-nudge"><span>' + esc(m.text) + '</span><a href="/business#' + tab + '" style="text-decoration:none">Open</a></div>');
+            });
             if (!parts.length) { card.style.display = 'none'; return; }
             card.innerHTML = parts.join('') + (b.summary && b.summary.orders && seen !== b.today ? '<button data-action="brief-done" class="brief-done">Got it</button>' : '');
             card.style.display = 'block';
@@ -2028,6 +2048,28 @@
                 app.day = r.data; renderDay();
                 say('dayMsg', extra && extra.weather !== undefined ? (r.data.weather ? 'Weather for ' + r.data.weather.name + '.' : 'Weather heads-up off.') : 'Saved.', true);
                 loadBrief();
+            });
+        }
+        /* ---------- time clock: crew with their own PIN clock in and out here ---------- */
+        function loadClock() {
+            if (!app.me || !app.me.staffId) { $('clockBar').style.display = 'none'; return; }
+            api('GET', '/api/biz/clock/me').then(function (r) { app.clock = r.ok && r.data.person ? r.data : null; renderClock(); });
+        }
+        function renderClock() {
+            var c = app.clock, el = $('clockBar'); if (!c) { el.style.display = 'none'; return; }
+            var t = function (ms) { return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); };
+            var hm = function (x) { var p = x.split(':'), h = +p[0]; return (h % 12 || 12) + (p[1] !== '00' ? ':' + p[1] : '') + (h < 12 ? ' AM' : ' PM'); };
+            var shift = c.shift ? 'Your shift today: ' + hm(c.shift.start) + '–' + hm(c.shift.end) : '';
+            el.innerHTML = '<span>' + (c.inSince ? '<b>On the clock</b> since ' + t(c.inSince) : '<b>Not clocked in</b>') + (shift ? ' · ' + esc(shift) : '') + '</span>' +
+                '<button data-action="clock-punch" data-v="' + (c.inSince ? 'out' : 'in') + '" class="' + (c.inSince ? '' : 'solid') + '">' + (c.inSince ? 'Clock out' : 'Clock in') + '</button>';
+            el.style.display = 'flex';
+        }
+        function punch(action) {
+            if (action === 'out' && !confirm('Clock out now?')) return;
+            api('POST', '/api/biz/clock/punch', { action: action }).then(function (r) {
+                if (!r.ok) { toast(r.data.error || 'Couldn’t do that.'); loadClock(); return; }
+                app.clock.inSince = r.data.inSince; renderClock();
+                toast(action === 'in' ? 'Clocked in.' : 'Clocked out' + (r.data.worked ? ' · ' + r.data.worked + ' hours' : '') + '.');
             });
         }
         /* ---------- saved menus ---------- */
@@ -2118,6 +2160,7 @@
             if (t.costCoverage > 0) {
                 $('insStats').innerHTML += statCard('Profit after food cost', cents(t.profitCents), undefined, (t.marginPct !== null ? t.marginPct + '% margin' : '') + (t.costCoverage < 100 ? ' · costs set for ' + t.costCoverage + '% of sales' : ''));
             }
+            loadLabor(d, st);
             renderHourly(d);
             renderDaily(d);
             renderMargins(d);
@@ -2128,6 +2171,16 @@
                 return '<div class="ins-row"><span class="ins-name">' + esc(x.name) + '</span><span class="ins-meter"><i style="width:' + Math.max(4, Math.round(x.qty / maxQ * 100)) + '%"></i></span>' +
                     '<span class="ins-num">' + x.qty + ' sold</span><span class="ins-num">' + cents(x.cents) + '</span></div>';
             }).join('') : '<div class="ins-empty">No sales in this period.</div>';
+        }
+        // Crew hours × pay for the same days (Business: crew clock in on the kitchen screen). Whole truck only.
+        function loadLabor(d, st) {
+            var days = d.period.days || [], seq = app.insSeq;
+            if (st.location !== '*' || !days.length) return;
+            api('GET', '/api/biz/clock/labor?from=' + days[0] + '&to=' + days[days.length - 1]).then(function (r) {
+                if (seq !== app.insSeq || !r.ok || !r.data.hours) return;
+                var l = r.data, pct = d.totals.cents ? Math.round(l.cents / d.totals.cents * 100) : null;
+                $('insStats').insertAdjacentHTML('beforeend', statCard('Crew pay', cents(l.cents), undefined, l.hours + ' hours' + (pct !== null && l.cents ? ' · ' + pct + '% of sales' : '') + (l.missingPay ? ' · some pay not set' : '')));
+            });
         }
         function renderMargins(d) {
             var list = (d.margins || []).slice(0, 10), any = list.some(function (x) { return x.profitCents !== null; });
@@ -2859,6 +2912,7 @@
                 case 'rw-save': if (app.rw) saveRewards(); break;
                 case 'quiet-toggle': if (app.day) { app.day.quiet.on = !app.day.quiet.on; renderDay(); saveDay(); } break;
                 case 'day-save': saveDay({ weather: $('wxPlace').value.trim() }); break;
+                case 'clock-punch': punch(el.getAttribute('data-v')); break;
                 case 'brief-done': try { localStorage.setItem(briefKey(), app.brief.today); } catch (er) {} renderBrief(); break;
                 case 'brief-stock': switchTab('Menu'); setTimeout(function () { var row = document.querySelector('[data-stock="' + el.getAttribute('data-id') + '"]'); if (row) { row.scrollIntoView({ block: 'center' }); row.focus(); } }, 400); break;
                 case 'fb-days': app.fbDays = +el.getAttribute('data-days'); loadFeedback(); break;

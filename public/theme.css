@@ -149,6 +149,7 @@ input::placeholder, textarea::placeholder { color: var(--z500); opacity: 1; }
 .border-zinc-800\/50{border-color:color-mix(in srgb, var(--z800) 50%, transparent)}
 .border-zinc-800\/80{border-color:color-mix(in srgb, var(--z800) 80%, transparent)}
 .border-zinc-900{border-color:var(--z900)}
+.border-zinc-300{border-color:var(--z300)}
 .border-zinc-900\/50{border-color:color-mix(in srgb, var(--z900) 50%, transparent)}
 .focus\:border-red-500:focus{border-color:var(--bad)}
 .hover\:bg-blue-500:hover{background-color:var(--ink)}
@@ -321,7 +322,7 @@ input::placeholder, textarea::placeholder { color: var(--z500); opacity: 1; }
 .brief-l { font-size: 12px; color: var(--z300); margin-top: 2px; }
 .brief-nudge { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--z200); border-top: 1px solid var(--z800); padding-top: 10px; }
 .brief-nudge span { flex: 1; }
-.brief-nudge button { flex: none; border: 1px solid var(--z700); border-radius: 9px; padding: 7px 10px; font-size: 11px; font-weight: 700; color: var(--z100); }
+.brief-nudge button, .brief-nudge a { flex: none; border: 1px solid var(--z700); border-radius: 9px; padding: 7px 10px; font-size: 11px; font-weight: 700; color: var(--z100); }
 .brief-wx { font-size: 12px; color: var(--z100); border-top: 1px solid var(--z800); padding-top: 10px; }
 .brief-wx.brief-rain::before, .brief-wx.brief-wind::before { content: '☔ '; }
 .brief-wx.brief-heat::before { content: '☀️ '; }
@@ -392,3 +393,14 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 }
 .fc-have { font-style: normal; color: var(--z500); font-size: 11px; }
 body.cartbar #pageFooter { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+
+/* time clock bar on the kitchen screen (crew with their own PIN) */
+.clock-bar { align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--z300); background: var(--z900); border: 1px solid var(--z800); border-radius: 12px; padding: 8px 8px 8px 12px; margin-bottom: 10px; }
+.clock-bar b { color: var(--z100); }
+.clock-bar button { flex: none; height: 36px; padding: 0 14px; border-radius: 9px; border: 1px solid var(--z700); font-size: 12px; font-weight: 700; color: var(--z100); background: var(--z950); }
+.clock-bar button.solid { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+
+/* Utilities the pages use that the prebuilt app.css was missing (until the next npm run build:css). */
+.bottom-6{bottom:1.5rem}.left-1\/2{left:50%}.h-12{height:3rem}.h-32{height:8rem}.mb-0\.5{margin-bottom:.125rem}.mb-1\.5{margin-bottom:.375rem}
+.ml-auto{margin-left:auto}.inline-flex{display:inline-flex}.items-baseline{align-items:baseline}.items-end{align-items:flex-end}
+.font-extrabold{font-weight:800}.opacity-70{opacity:.7}.border-t-0{border-top-width:0}.rounded-b-xl{border-bottom-right-radius:.75rem;border-bottom-left-radius:.75rem}

@@ -32,6 +32,10 @@ const watch = require('./watch');
 const daily = require('./daily');
 const feedback = require('./feedback');
 const group = require('./group');
+const business = require('./business');
+const vault = require('./vault');
+const timeclock = require('./timeclock');
+const fleet = require('./fleet');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -84,6 +88,10 @@ app.use('/api/crm', crm.router);
 app.use('/api/day', daily.router);
 app.use('/api/feedback', feedback.router);
 app.use('/api/group', group.router);
+app.use('/api/biz/vault', vault.router);
+app.use('/api/biz/clock', timeclock.router);
+app.use('/api/biz/fleet', fleet.router);
+app.use('/api/biz', business.router);
 app.use('/api', api.router);
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 
@@ -151,6 +159,9 @@ app.get(['/crm/u', '/crm/f'], vendorPage('crm-public.html', 'owner'));
 // Where the truck will be: list, add-to-calendar, calendar feed, follow by email.
 app.get(['/schedule', '/schedule/'], vendorPage('schedule.html', 'schedule'));
 app.get(['/now', '/now/'], vendorPage('now.html', 'now'));
+// Business tools for the owner, and the vendor packet an event organizer opens.
+app.get(['/business', '/business/'], vendorPage('business.html', 'owner'));
+app.get('/packet/:token', vendorPage('packet.html', 'owner'));
 app.get('/schedule.ics', (req, res) => res.redirect(301, '/api/schedule/feed.ics'));
 app.get(['/signup', '/signup.html'], rootPage('signup.html'));
 app.get(['/login', '/login.html'], (req, res) =>
@@ -289,6 +300,7 @@ async function dailyChecks() {
     const r = await core.applyRetention();
     if (r.ordersCleared || r.eventsRemoved) console.log('Retention:', r);
     await watch.daily(auth.mailLater);
+    await vault.sweep(daily.ownerMail); // permits and insurance: 30 and 7 days before they expire
   } catch (e) { console.error('Daily checks failed:', e.message); }
 }
 

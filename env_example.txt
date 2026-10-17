@@ -53,3 +53,7 @@ LINK_SECRET=
 
 # Optional: where owners' "Send feedback" goes (defaults to ADMIN_EMAIL). Replies go straight to the owner.
 FEEDBACK_EMAIL=
+
+# Optional: where Business tier documents (permits, insurance) are stored. Private, never served publicly.
+# Defaults to ./documents next to server.js. Back it up (scripts/backup.sh does).
+DOC_DIR=

@@ -30,7 +30,7 @@ healthy() {
 # 1. The spare tire: the code that's running now, and the database as it is now.
 STAMP="$(date +%F-%H%M%S)"
 SNAP="$SNAP_DIR/code-$STAMP.tgz"
-tar czf "$SNAP" --exclude=node_modules --exclude=uploads --exclude=limp --exclude=backups \
+tar czf "$SNAP" --exclude=node_modules --exclude=uploads --exclude=documents --exclude=limp --exclude=backups \
   --exclude='*.sqlite' --exclude='*.sqlite-*' --exclude=.env --exclude=.git .
 if command -v sqlite3 >/dev/null 2>&1 && [ -f database.sqlite ]; then
   sqlite3 database.sqlite ".backup '$SNAP_DIR/db-$STAMP.sqlite'"

@@ -51,13 +51,15 @@ function quietUntil(v, now = Date.now()) { return Day.quietUntil(settings(v), no
  * useless by then (a "nobody is watching the kitchen" alert).
  */
 async function ownerMail(v, msg, { dropIfQuiet = false, staleAfterMs } = {}) {
-  if (!v || !v.email) return false;
+  // A second truck in a fleet has no email of its own: its owner's mail goes to the first truck's email.
+  const to = v && (await require('./fleet').ownerEmail(v));
+  if (!to) return false;
   const until = quietUntil(v);
   if (until) {
     if (dropIfQuiet) return false;
-    return mailLater(Object.assign({ to: v.email }, msg), { notBefore: until });
+    return mailLater(Object.assign({}, msg, { to }), { notBefore: until });
   }
-  return mailLater(Object.assign({ to: v.email }, msg), { staleAfterMs });
+  return mailLater(Object.assign({}, msg, { to }), { staleAfterMs });
 }
 
 /* ---------- sold-out history ----------
@@ -206,9 +208,10 @@ async function sendSummary(v, key) {
   const s = await buildSummary(v, key);
   const r = await run('INSERT OR IGNORE INTO day_summaries (vendor_id, day, body) VALUES (?, ?, ?)', [v.id, key, JSON.stringify(s)]);
   if (!r.changes) return false;
-  if (!s.orders || !v.email) return false;
+  const to = await require('./fleet').ownerEmail(v);
+  if (!s.orders || !to) return false;
   const m = summaryEmail(v, s);
-  await mailLater(Object.assign({ to: v.email, idempotencyKey: `sum-${v.id}-${key}` }, m));
+  await mailLater(Object.assign({ to, idempotencyKey: `sum-${v.id}-${key}` }, m));
   await run('UPDATE day_summaries SET sent_at = ? WHERE vendor_id = ? AND day = ?', [Date.now(), v.id, key]);
   return true;
 }
@@ -284,12 +287,16 @@ router.get('/owner/brief', ownerOnly, async (req, res) => {
     summary.lines = Day.summaryLines(summary);
   }
   const tomorrow = addDays(today, 1);
+  // Business reminders: an application deadline, maintenance coming due, a permit about to expire.
+  const reminders = (await require('./business').reminders(v).catch(() => []))
+    .concat((await require('./vault').expiring(v).catch(() => [])).map((d) => ({ kind: 'doc', text: d.daysLeft < 0 ? `${d.title} has expired.` : `${d.title} expires in ${d.daysLeft} day${d.daysLeft === 1 ? '' : 's'}.` })));
   res.json({
     today,
     summary,
     nudges: await nudgesFor(v, today),
     weather: (await weatherFor(v, today, 'today')) || (await weatherFor(v, tomorrow, 'tomorrow')),
     place: place(v),
+    reminders: reminders.slice(0, 4),
   });
 });
 

@@ -32,6 +32,14 @@ if [ -d "$UPLOADS" ]; then
   command -v rclone >/dev/null 2>&1 && rclone copy "$BACKUP_DIR/uploads-$STAMP.tgz" "$REMOTE" || true
 fi
 
+# Business tier documents (permits, inspections, insurance). Private: never in public/.
+DOCS="${DOC_DIR:-$APP_DIR/documents}"
+if [ -d "$DOCS" ]; then
+  tar czf "$BACKUP_DIR/documents-$STAMP.tgz" -C "$(dirname "$DOCS")" "$(basename "$DOCS")"
+  chmod 600 "$BACKUP_DIR/documents-$STAMP.tgz"
+  command -v rclone >/dev/null 2>&1 && rclone copy "$BACKUP_DIR/documents-$STAMP.tgz" "$REMOTE" || true
+fi
+
 if command -v rclone >/dev/null 2>&1; then
   rclone copy "$OUT.gz" "$REMOTE" && echo "$(date) uploaded $OUT.gz"
   rclone delete --min-age "${KEEP_DAYS}d" "$REMOTE" || true
@@ -39,5 +47,5 @@ else
   echo "$(date) WARNING: rclone not installed — backup is only on this server"
 fi
 
-find "$BACKUP_DIR" \( -name 'db-*.sqlite.gz' -o -name 'uploads-*.tgz' \) -mtime +"$KEEP_DAYS" -delete
+find "$BACKUP_DIR" \( -name 'db-*.sqlite.gz' -o -name 'uploads-*.tgz' -o -name 'documents-*.tgz' \) -mtime +"$KEEP_DAYS" -delete
 echo "$(date) backup ok: $OUT.gz"

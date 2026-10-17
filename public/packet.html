@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Vendor packet</title>
+    <meta name="robots" content="noindex">
+    <meta name="referrer" content="no-referrer">
+    <meta name="theme-color" content="#0a0a0b">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+    <script src="/theme.js"></script>
+    <link rel="stylesheet" href="/theme.css">
+    <link rel="stylesheet" href="/ok.css">
+    <style>
+        [hidden] { display: none !important; }
+        .pk-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 16px; color: inherit; text-decoration: none; }
+        .pk-row + .pk-row { border-top: 1px solid var(--z800); }
+        .pk-row b { color: var(--z100); font-size: 15px; display: block; }
+        .pk-row span.sub { font-size: 12px; color: var(--z500); }
+        .pk-row:hover b { text-decoration: underline; text-underline-offset: 3px; }
+        .pk-bar { height: 4px; border-radius: 4px; background: var(--brand, var(--z700)); width: 56px; }
+        @media print { .ok-btn, .pk-print { display: none !important; } }
+    </style>
+</head>
+<body>
+<!-- The page an event organizer opens: the truck's current permits, inspections and insurance, one link. -->
+<main class="ok-wrap">
+    <div>
+        <div class="pk-bar" id="bar" aria-hidden="true"></div>
+        <div class="ok-step" style="margin-top:14px">Vendor packet</div>
+        <h1 class="ok-h1" id="head" style="margin-top:4px">One moment…</h1>
+        <p class="ok-lede" id="lede"></p>
+    </div>
+    <div class="ok-card" id="list" hidden></div>
+    <p class="ok-note" id="contact" hidden></p>
+    <button type="button" class="ok-btn quiet pk-print" id="printBtn" hidden>Print this list</button>
+    <div class="ok-err" id="err" role="alert"></div>
+</main>
+<script>
+(function () {
+    'use strict';
+    var $ = function (id) { return document.getElementById(id); };
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    var KINDS = { permit: 'Permit', inspection: 'Inspection', insurance: 'Insurance', license: 'License', other: 'Document' };
+    function day(d) { try { return new Date(d + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' }); } catch (e) { return d; } }
+    var token = location.pathname.split('/')[2] || '';
+    fetch('/api/biz/vault/public/' + encodeURIComponent(token), { cache: 'no-store' })
+        .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, d: d }; }); })
+        .catch(function () { return { ok: false, d: { error: 'No connection. Try again.' } }; })
+        .then(function (r) {
+            if (!r.ok) { $('head').textContent = 'This link isn’t current'; $('lede').textContent = r.d.error || 'Ask the truck for its current packet link.'; return; }
+            var d = r.d;
+            document.title = d.truck + ' · Vendor packet';
+            if (d.brand && d.brand.color) document.documentElement.style.setProperty('--brand', d.brand.color);
+            $('head').textContent = d.truck;
+            $('lede').textContent = d.docs.length ? 'Current permits, inspections and insurance. This page always shows the latest copies.' : 'Nothing has been shared here yet.';
+            if (d.docs.length) {
+                $('list').hidden = false;
+                $('list').innerHTML = d.docs.map(function (x) {
+                    var when = x.expiresDay ? (x.status === 'expired' ? '<span class="ok-pill bad">Expired ' + day(x.expiresDay) + '</span>' : '<span class="ok-pill' + (x.status === 'soon' ? ' warn' : '') + '">Valid through ' + day(x.expiresDay) + '</span>') : '';
+                    return '<a class="pk-row" href="/api/biz/vault/public/' + encodeURIComponent(token) + '/' + x.id + '" target="_blank" rel="noopener noreferrer"><div style="min-width:0"><b>' + esc(x.title) + '</b><span class="sub">' + KINDS[x.kind] + ' · ' + (x.mime === 'application/pdf' ? 'PDF' : 'Photo') + '</span></div>' + when + '</a>';
+                }).join('');
+                $('printBtn').hidden = false;
+                $('printBtn').onclick = function () { window.print(); };
+            }
+            if (d.contact) { $('contact').hidden = false; $('contact').innerHTML = 'Questions? <a style="color:var(--z100)" href="mailto:' + esc(d.contact) + '">' + esc(d.contact) + '</a>'; }
+        });
+})();
+</script>
+</body>
+</html>
