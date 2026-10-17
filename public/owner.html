@@ -62,7 +62,7 @@
                 <button type="submit" id="btn-unlock" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-3 rounded-xl transition shadow-lg">Log In</button>
                 <div class="flex justify-between text-[11px]">
                     <button type="button" data-action="forgot" class="text-zinc-400 hover:text-white underline">Forgot password?</button>
-                    <button type="button" data-action="show-pin" class="text-zinc-400 hover:text-white underline">Staff? Use PIN</button>
+                    <button type="button" data-action="show-pin" class="text-zinc-400 hover:text-white underline">Crew? Use your PIN</button>
                 </div>
             </form>
 
@@ -134,6 +134,7 @@
                     </div>
                 </div>
                 <div id="awakeNote" class="text-[10px] text-zinc-500 -mt-2" style="display:none;">☀️ Screen will stay on while this page is open.</div>
+                <div id="whoNote" class="text-[10px] text-zinc-500" style="display:none;"></div>
                 <div id="order-filter-tabs" class="flex gap-2 mb-3 bg-zinc-950 p-1.5 rounded-xl border border-zinc-800/50 w-max">
                     <button data-action="filter" data-filter="Active" id="filterActive" class="px-4 py-1.5 rounded-lg text-[11px] font-bold bg-zinc-100 text-zinc-950 shadow transition">Active</button>
                     <button data-action="filter" data-filter="Fulfilled" id="filterFulfilled" class="px-4 py-1.5 rounded-lg text-[11px] font-bold text-zinc-400 hover:text-zinc-200 transition">Fulfilled</button>
@@ -347,14 +348,30 @@
                     </div>
                 </div>
 
+                <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" data-owner id="crewBox">
+                    <h3 class="font-bold text-sm text-zinc-100 mb-2 border-b border-zinc-800 pb-2">Crew</h3>
+                    <p class="text-[11px] text-zinc-500 mb-3">Give each person their own PIN for the kitchen screen. What they do is recorded with their name. Removing someone signs them out right away.</p>
+                    <div id="crewList" class="space-y-2"></div>
+                    <div class="flex gap-2 mt-3">
+                        <input type="text" id="crewName" maxlength="30" placeholder="Name" autocomplete="off" class="flex-1 min-w-0 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200">
+                        <input type="text" id="crewPin" maxlength="8" inputmode="numeric" placeholder="PIN" autocomplete="off" class="w-20 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200 text-center tracking-widest font-mono">
+                        <button data-action="crew-add" class="bg-zinc-100 text-zinc-950 px-3 rounded-lg text-xs font-bold">Add</button>
+                    </div>
+                    <div id="crewMsg" class="text-[11px] mt-2" role="status"></div>
+                    <div class="mt-4 pt-3 border-t border-zinc-800">
+                        <div class="flex items-center justify-between gap-2">
+                            <div><div class="text-xs font-bold text-zinc-200">Shared kitchen PIN</div><div id="sharedPinState" class="text-[10px] text-zinc-500"></div></div>
+                            <button data-action="shared-pin-off" id="sharedPinOff" class="text-[11px] text-zinc-400 underline" style="display:none">Turn off</button>
+                        </div>
+                        <div class="flex gap-2 mt-2">
+                            <input type="text" id="newStaffPin" maxlength="8" placeholder="New shared PIN" class="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200 text-center tracking-widest font-mono">
+                            <button data-action="save-pin" class="bg-zinc-800 text-zinc-100 px-4 rounded-lg text-xs font-bold">Save</button>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" data-owner id="securityBox">
                     <h3 class="font-bold text-sm text-zinc-100 mb-3 border-b border-zinc-800 pb-2">Security Settings</h3>
-                    <label class="block text-xs text-zinc-400 mb-1">Staff PIN (4-8 letters or numbers)</label>
-                    <p class="text-[10px] text-zinc-500 mb-2">Staff use this to open the kitchen screen only. Changing it signs staff out.</p>
-                    <div class="flex gap-2 mb-4">
-                        <input type="text" id="newStaffPin" maxlength="8" placeholder="New staff PIN" class="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200 text-center tracking-widest font-mono">
-                        <button data-action="save-pin" class="bg-zinc-100 hover:bg-white text-zinc-950 px-4 rounded-lg text-xs font-bold">Save</button>
-                    </div>
                     <label class="block text-xs text-zinc-400 mb-1">Change password</label>
                     <div class="space-y-2">
                         <input type="email" id="pwEmail" placeholder="Email (needed once for older accounts)" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200" style="display:none;">
@@ -654,7 +671,7 @@
             var pinOnly = app.pub && app.pub.pinOnly;
             $('emailForm').style.display = pinOnly ? 'none' : 'block';
             $('pinForm').style.display = pinOnly ? 'block' : 'none';
-            $('pinLabel').textContent = pinOnly ? 'Owner PIN' : 'Staff PIN';
+            $('pinLabel').textContent = pinOnly ? 'Owner PIN' : 'Your crew PIN';
             $('btn-back-email').style.display = pinOnly ? 'none' : 'inline';
         }
         function sessionEnded(msg) { showLogin(msg); }
@@ -704,6 +721,8 @@
             return api('GET', '/api/auth/me').then(function (r) {
                 if (!r.ok) return false;
                 app.me = r.data; app.role = r.data.role;
+                var who = $('whoNote');
+                if (who) { who.style.display = r.data.staffName ? 'block' : 'none'; who.textContent = r.data.staffName ? 'Signed in as ' + r.data.staffName + ' · everything you tap is recorded with your name' : ''; }
                 return true;
             });
         }
@@ -763,7 +782,7 @@
             });
             if (name === 'Orders') { app.newCount = 0; renderBadge(); loadOrders(); }
             if (name === 'Menu') { loadMenu(); setFlag('menu'); if (isOwner()) loadDeals(); }
-            if (name === 'Settings') { renderSettings(); if (isOwner()) { loadLocations().then(function () { renderSettings(); loadSchedule(); }); loadFollowers(); loadRewards(); loadPayments(); loadSms(); } }
+            if (name === 'Settings') { renderSettings(); if (isOwner()) { loadLocations().then(function () { renderSettings(); loadSchedule(); }); loadFollowers(); loadRewards(); loadCrew(); loadPayments(); loadSms(); } }
             if (name === 'Analytics') loadAnalytics();
             if (name === 'Guide') renderGuide();
         }
@@ -804,7 +823,7 @@
                 ['Export orders', 'Download your orders for any date range as a spreadsheet file (CSV) for your bookkeeping or taxes.', 'Analytics', 'exportBox']
             ]],
             ['Staff & account', [
-                ['Staff PIN', 'Give staff a PIN so they can run the kitchen screen without seeing your settings, payments or sales. Changing it signs all staff out.', 'Settings', 'securityBox'],
+                ['Crew', 'Give each person their own PIN for the kitchen screen. What they do is recorded with their name, and removing someone signs them out right away. They never see your settings, payments or sales.', 'Settings', 'crewBox'],
                 ['Password', 'Change your password here. Forgot it? Use “Forgot password?” on the log in page.', 'Settings', 'securityBox'],
                 ['Install as an app', 'Add the kitchen portal to your home screen so it opens like an app. Look for the Install button at the top, or use your browser’s “Add to Home Screen”.', 'Orders', 'installBtn'],
                 ['Account', 'Change your login email, or delete your account and all its data.', 'Settings', 'accountBox']
@@ -1310,6 +1329,27 @@
             });
         }
 
+        /* ---------- crew ---------- */
+        function crewSay(msg, good) { var m = $('crewMsg'); m.className = 'text-[11px] mt-2 ' + (good ? 'text-zinc-400' : 'text-rose-400'); m.textContent = msg; }
+        function loadCrew() { return api('GET', '/api/owner/crew').then(function (r) { if (r.ok) { app.crew = r.data; renderCrew(); } }); }
+        function ago(ms) {
+            if (!ms) return 'Hasn’t signed in yet';
+            var d = Math.round((Date.now() - ms) / 86400000);
+            return 'Last signed in ' + (d <= 0 ? 'today' : d === 1 ? 'yesterday' : d + ' days ago');
+        }
+        function renderCrew() {
+            var c = app.crew; if (!c) return;
+            $('crewList').innerHTML = c.crew.length ? c.crew.map(function (m) {
+                return '<div class="flex items-center justify-between gap-2 bg-zinc-950 border border-zinc-800 rounded-lg p-2.5"><div class="min-w-0"><div class="text-xs font-bold text-zinc-200 truncate">' + esc(m.name) + '</div>' +
+                    '<div class="text-[10px] text-zinc-500">' + (m.screens ? 'Signed in on ' + m.screens + ' screen' + (m.screens === 1 ? '' : 's') : esc(ago(m.lastLoginAt))) + '</div></div>' +
+                    '<div class="flex gap-2 shrink-0"><button data-action="crew-pin" data-id="' + m.id + '" class="text-[10px] text-zinc-300 border border-zinc-800 px-2 py-1.5 rounded">New PIN</button>' +
+                    '<button data-action="crew-del" data-id="' + m.id + '" class="text-[10px] text-zinc-400 border border-zinc-800 px-2 py-1.5 rounded">Remove</button></div></div>';
+            }).join('') : '<div class="text-xs text-zinc-600">No one yet. Add your crew below; each gets their own PIN.</div>';
+            $('sharedPinState').textContent = c.sharedPin ? 'On' + (c.sharedScreens ? ' · ' + c.sharedScreens + ' screen' + (c.sharedScreens === 1 ? '' : 's') + ' using it' : '') + '. No name is recorded with it.' : 'Off. Only named PINs open the kitchen screen.';
+            $('sharedPinOff').style.display = c.sharedPin ? '' : 'none';
+            if (!$('crewPin').value) $('crewPin').value = String(1000 + Math.floor(Math.random() * 9000));
+        }
+
         var toastTimer = null;
         function toast(msg) {
             var el = $('toast'); el.textContent = msg; el.style.display = 'block';
@@ -1560,6 +1600,7 @@
                         break;
                     case 'WAIT': app.state.wait = p; renderSettings(); break;
                     case 'STATE': app.state = { status: p.status, rush: p.rush, location: p.location || '', paused: !!p.paused, wait: p.wait, crewNote: app.state.crewNote, crewNoteAt: app.state.crewNoteAt }; renderSettings(); break;
+                    case 'SESSION_ENDED': stopLive(); sessionEnded('You were signed out. Ask the owner for your PIN.'); break;
                     case 'CREW_NOTE': app.state.crewNote = p.note || ''; app.state.crewNoteAt = p.at || 0; renderCrewNote(); if (p.note) beep(); break;
                     case 'PAUSED': app.state.paused = !!p.paused; renderSettings(); break;
                     case 'HOURS_UPDATE': if (app.pub) { app.pub.hours = p.hours; app.pub.timezone = p.timezone; } renderSetup(); break;
@@ -2057,9 +2098,33 @@
                     break;
                 case 'save-pin':
                     api('PUT', '/api/owner/staff-pin', { pin: $('newStaffPin').value.trim() }).then(function (r) {
-                        say('secMsg', r.ok ? 'Staff PIN updated. Staff were signed out.' : (r.data.error || 'Could not update.'), r.ok);
-                        if (r.ok) $('newStaffPin').value = '';
+                        crewSay(r.ok ? '✓ Shared PIN saved. Screens using the old one were signed out.' : (r.data.error || 'Could not update.'), r.ok);
+                        if (r.ok) { $('newStaffPin').value = ''; loadCrew(); }
                     });
+                    break;
+                case 'shared-pin-off':
+                    if (!confirm('Turn off the shared PIN? Screens using it are signed out; crew with their own PIN stay signed in.')) break;
+                    api('DELETE', '/api/owner/staff-pin').then(function (r) { if (r.ok) { crewSay('✓ Shared PIN is off.', true); loadCrew(); } });
+                    break;
+                case 'crew-add':
+                    api('POST', '/api/owner/crew', { name: $('crewName').value, pin: $('crewPin').value.trim() }).then(function (r) {
+                        if (!r.ok) { crewSay(r.data.error || 'Could not add.', false); return; }
+                        crewSay('✓ ' + $('crewName').value.trim() + ' can sign in with their PIN now.', true);
+                        $('crewName').value = ''; $('crewPin').value = String(1000 + Math.floor(Math.random() * 9000));
+                        app.crew = r.data; renderCrew();
+                    });
+                    break;
+                case 'crew-del':
+                    var cm = (app.crew.crew || []).filter(function (m) { return m.id === +el.getAttribute('data-id'); })[0];
+                    if (!cm || !confirm('Remove ' + cm.name + '? They are signed out right away. Their name stays on past orders.')) break;
+                    api('DELETE', '/api/owner/crew/' + cm.id).then(function (r) { if (r.ok) { app.crew = r.data; renderCrew(); crewSay('✓ ' + cm.name + ' removed and signed out.', true); } });
+                    break;
+                case 'crew-pin':
+                    var cp = (app.crew.crew || []).filter(function (m) { return m.id === +el.getAttribute('data-id'); })[0];
+                    if (!cp) break;
+                    var np = prompt('New PIN for ' + cp.name + ' (4 to 8 numbers). It signs them out everywhere.', '');
+                    if (np === null) break;
+                    api('PUT', '/api/owner/crew/' + cp.id, { pin: np.trim() }).then(function (r) { if (r.ok) { app.crew = r.data; renderCrew(); crewSay('✓ New PIN for ' + cp.name + '.', true); } else crewSay(r.data.error || 'Could not change.', false); });
                     break;
                 case 'save-password':
                     api('PUT', '/api/owner/password', { currentPassword: $('pwCurrent').value, newPassword: $('pwNew').value, email: $('pwEmail').value.trim() }).then(function (r) {

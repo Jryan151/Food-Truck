@@ -382,6 +382,33 @@
             return ok({ order: o });
         }
 
+        /* crew */
+        if (!d.crew) { d.crew = [{ id: 1, name: 'Maria', createdAt: Date.now() - 40 * 864e5, lastLoginAt: Date.now() - 3600e3 }, { id: 2, name: 'Jo', createdAt: Date.now() - 12 * 864e5, lastLoginAt: Date.now() - 2 * 864e5 }]; d.crewPins = { 1: '2580', 2: '1470' }; d.sharedPin = true; }
+        var crewOut = function () { return { crew: d.crew.map(function (m) { return Object.assign({ screens: m.id === 1 ? 1 : 0 }, m); }).sort(function (a, c) { return a.name.localeCompare(c.name); }), sharedPin: !!d.sharedPin, sharedScreens: 0, max: 30 }; };
+        var pinTaken = function (pin, except) { return Object.keys(d.crewPins).some(function (k) { return +k !== except && d.crewPins[k] === pin; }); };
+        if (p === '/api/owner/crew' && method === 'GET') return ok(crewOut());
+        if (p === '/api/owner/crew' && method === 'POST') {
+            var nm = String(b.name || '').replace(/\s+/g, ' ').trim().slice(0, 30), pn = String(b.pin || '').trim();
+            if (!nm) return fail(400, 'Add their name.');
+            if (!/^[0-9]{4,8}$/.test(pn)) return fail(400, 'A crew PIN is 4 to 8 numbers.');
+            if (pinTaken(pn)) return fail(400, 'Someone on your crew already has that PIN. Pick another.');
+            var nid = d.crew.reduce(function (mx, m) { return Math.max(mx, m.id); }, 0) + 1;
+            d.crew.push({ id: nid, name: nm, createdAt: Date.now(), lastLoginAt: null }); d.crewPins[nid] = pn; save(d);
+            return ok(crewOut(), 201);
+        }
+        if ((m = p.match(/^\/api\/owner\/crew\/(\d+)$/))) {
+            var cid = +m[1], cm = d.crew.filter(function (x) { return x.id === cid; })[0];
+            if (!cm) return fail(404, 'That person is gone.');
+            if (method === 'DELETE') { d.crew = d.crew.filter(function (x) { return x.id !== cid; }); delete d.crewPins[cid]; save(d); return ok(crewOut()); }
+            if (method === 'PUT') {
+                if (b.pin !== undefined) { var np = String(b.pin || '').trim(); if (!/^[0-9]{4,8}$/.test(np)) return fail(400, 'A crew PIN is 4 to 8 numbers.'); if (pinTaken(np, cid)) return fail(400, 'Someone on your crew already has that PIN. Pick another.'); d.crewPins[cid] = np; }
+                if (b.name !== undefined) cm.name = String(b.name).trim().slice(0, 30) || cm.name;
+                save(d); return ok(crewOut());
+            }
+        }
+        if (p === '/api/owner/staff-pin' && method === 'DELETE') { d.sharedPin = false; save(d); return ok({ ok: true }); }
+        if (p === '/api/owner/staff-pin' && method === 'PUT') { if (!/^[A-Za-z0-9]{4,8}$/.test(String(b.pin || ''))) return fail(400, 'PIN must be 4-8 letters or numbers.'); d.sharedPin = true; save(d); return ok({ ok: true }); }
+
         /* punch card */
         if (p === '/api/rewards' && method === 'GET') { var st0 = rw(d); return ok(st0.on ? cardOut(d, u.searchParams.get('card') || '') : { on: false }); }
         if (p === '/api/rewards/save' && method === 'POST') return ok({ ok: true, message: 'In the demo, no email is sent. On your page, this emails a link that keeps the card on any phone.' });

@@ -30,6 +30,8 @@ function publicMenu(v) {
 }
 
 const orderShape = core.orderShape;
+// Who did it, for the service record: the crew member's name when they have their own PIN.
+const actorOf = (req) => (req.session && req.session.staff_name ? req.session.staff_name : (req.session && req.session.role) || 'staff');
 
 /* =====================================================================
    PUBLIC
@@ -129,7 +131,7 @@ router.get('/live-stream', async (req, res) => {
   });
   res.flushHeaders();
   res.write('retry: 3000\n\n');
-  const remove = core.sseAdd(v.id, res, !!s);
+  const remove = core.sseAdd(v.id, res, !!s, s);
   // Send the current state immediately so a new visitor never sees stale open/closed info.
   res.write(`data: ${JSON.stringify({ type: 'STATE', payload: await core.getState(v.id) })}\n\n`);
   req.on('close', remove);
@@ -369,7 +371,7 @@ router.patch('/owner/orders/:id', staffOrOwner, async (req, res) => {
     const row = await get('UPDATE orders SET allergy_ack_at = ?, updated_at = ? WHERE id = ? AND vendor_id = ? AND allergy IS NOT NULL AND allergy_ack_at IS NULL RETURNING *',
       [Date.now(), Date.now(), parseInt(req.params.id, 10), v.id]);
     if (!row) return res.status(409).json({ error: 'That allergy was already confirmed.' });
-    core.logOrderEvent(v.id, row.id, 'allergy-confirmed', req.session.role);
+    core.logOrderEvent(v.id, row.id, 'allergy-confirmed', actorOf(req));
     core.broadcast(v.id, 'ORDER_UPDATE', orderShape(row), true);
     return res.json({ order: orderShape(row) });
   }
@@ -396,7 +398,7 @@ router.patch('/owner/orders/:id', staffOrOwner, async (req, res) => {
     [next, Date.now(), id, v.id, ...from]
   );
   if (!row) return res.status(409).json({ error: 'That order cannot be changed.' });
-  core.logOrderEvent(v.id, row.id, next.toLowerCase(), req.session.role);
+  core.logOrderEvent(v.id, row.id, next.toLowerCase(), actorOf(req));
   if (next === 'Canceled') await rewards.undo(row.id);
   else await rewards.stamp(v.id, row.id);
   if (next === 'Ready') sms.notifyReady(v, existing).catch(() => {});
@@ -799,8 +801,84 @@ router.put('/owner/staff-pin', ownerOnly, async (req, res) => {
   const pin = String((req.body || {}).pin || '').trim();
   if (!auth.PIN_RE.test(pin)) return res.status(400).json({ error: 'PIN must be 4-8 letters or numbers.' });
   await run('UPDATE vendors SET staff_pin_hash = ?, updated_at = ? WHERE id = ?', [await bcrypt.hash(pin, 10), Date.now(), req.tenant.vendor.id]);
-  await run("DELETE FROM sessions WHERE vendor_id = ? AND role = 'staff'", [req.tenant.vendor.id]); // old staff logins stop working
+  // Screens opened with the old shared PIN stop working; crew signed in with their own PIN stay signed in.
+  await run("DELETE FROM sessions WHERE vendor_id = ? AND role = 'staff' AND staff_id IS NULL", [req.tenant.vendor.id]);
+  core.dropStreams(req.tenant.vendor.id, (c) => c.role === 'staff' && !c.staffId);
   res.json({ ok: true });
+});
+router.delete('/owner/staff-pin', ownerOnly, async (req, res) => {
+  await run('UPDATE vendors SET staff_pin_hash = NULL, updated_at = ? WHERE id = ?', [Date.now(), req.tenant.vendor.id]);
+  await run("DELETE FROM sessions WHERE vendor_id = ? AND role = 'staff' AND staff_id IS NULL", [req.tenant.vendor.id]);
+  core.dropStreams(req.tenant.vendor.id, (c) => c.role === 'staff' && !c.staffId);
+  res.json({ ok: true });
+});
+
+/* ----- Crew: each person their own PIN ----- */
+const MAX_CREW = 30;
+const crewShape = (m) => ({ id: m.id, name: m.name, createdAt: m.created_at, lastLoginAt: m.last_login_at || null });
+async function crewList(vendorId) {
+  const rows = await all('SELECT * FROM staff_members WHERE vendor_id = ? ORDER BY name COLLATE NOCASE', [vendorId]);
+  const v = await get('SELECT staff_pin_hash FROM vendors WHERE id = ?', [vendorId]);
+  const on = await all("SELECT staff_id, COUNT(*) AS n FROM sessions WHERE vendor_id = ? AND role = 'staff' AND expires_at > ? GROUP BY staff_id", [vendorId, Date.now()]);
+  const live = Object.fromEntries(on.map((r) => [r.staff_id === null ? 'shared' : r.staff_id, r.n]));
+  return { crew: rows.map((m) => Object.assign(crewShape(m), { screens: live[m.id] || 0 })), sharedPin: !!(v && v.staff_pin_hash), sharedScreens: live.shared || 0, max: MAX_CREW };
+}
+async function checkCrewPin(vendorId, pin, exceptId) {
+  if (!/^[0-9]{4,8}$/.test(pin)) return 'A crew PIN is 4 to 8 numbers.';
+  const clash = await get('SELECT id FROM staff_members WHERE vendor_id = ? AND pin_lookup = ?', [vendorId, await core.pinLookup(vendorId, pin)]);
+  if (clash && clash.id !== exceptId) return 'Someone on your crew already has that PIN. Pick another.';
+  return null;
+}
+const cleanName = (n) => String(n || '').replace(/\s+/g, ' ').trim().slice(0, 30);
+
+router.get('/owner/crew', ownerOnly, async (req, res) => res.json(await crewList(req.tenant.vendor.id)));
+router.post('/owner/crew', ownerOnly, async (req, res) => {
+  const vid = req.tenant.vendor.id;
+  const name = cleanName((req.body || {}).name);
+  const pin = String((req.body || {}).pin || '').trim();
+  if (!name) return res.status(400).json({ error: 'Add their name.' });
+  const n = await get('SELECT COUNT(*) AS n FROM staff_members WHERE vendor_id = ?', [vid]);
+  if (n.n >= MAX_CREW) return res.status(400).json({ error: `Up to ${MAX_CREW} people.` });
+  const bad = await checkCrewPin(vid, pin);
+  if (bad) return res.status(400).json({ error: bad });
+  try {
+    await run('INSERT INTO staff_members (vendor_id, name, pin_lookup, pin_hash, created_at) VALUES (?, ?, ?, ?, ?)', [vid, name, await core.pinLookup(vid, pin), await bcrypt.hash(pin, 10), Date.now()]);
+  } catch (e) {
+    if (e.code === 'SQLITE_CONSTRAINT') return res.status(400).json({ error: 'Someone on your crew already has that PIN. Pick another.' });
+    throw e;
+  }
+  res.status(201).json(await crewList(vid));
+});
+router.put('/owner/crew/:id', ownerOnly, async (req, res) => {
+  const vid = req.tenant.vendor.id;
+  const id = parseInt(req.params.id, 10);
+  const m = await get('SELECT * FROM staff_members WHERE id = ? AND vendor_id = ?', [id, vid]);
+  if (!m) return res.status(404).json({ error: 'That person is gone.' });
+  const b = req.body || {};
+  if (b.name !== undefined) {
+    const name = cleanName(b.name);
+    if (!name) return res.status(400).json({ error: 'Add their name.' });
+    await run('UPDATE staff_members SET name = ? WHERE id = ?', [name, id]);
+  }
+  if (b.pin !== undefined) {
+    const pin = String(b.pin || '').trim();
+    const bad = await checkCrewPin(vid, pin, id);
+    if (bad) return res.status(400).json({ error: bad });
+    await run('UPDATE staff_members SET pin_lookup = ?, pin_hash = ? WHERE id = ?', [await core.pinLookup(vid, pin), await bcrypt.hash(pin, 10), id]);
+    await run('DELETE FROM sessions WHERE staff_id = ?', [id]); // a new PIN signs them out everywhere
+    core.dropStreams(vid, (c) => c.staffId === id);
+  }
+  res.json(await crewList(vid));
+});
+// Removing someone signs them out on every screen right away.
+router.delete('/owner/crew/:id', ownerOnly, async (req, res) => {
+  const vid = req.tenant.vendor.id;
+  const id = parseInt(req.params.id, 10);
+  const r = await run('DELETE FROM staff_members WHERE id = ? AND vendor_id = ?', [id, vid]);
+  if (!r.changes) return res.status(404).json({ error: 'That person is gone.' });
+  await run('DELETE FROM sessions WHERE staff_id = ?', [id]);
+  core.dropStreams(vid, (c) => c.staffId === id);
+  res.json(await crewList(vid));
 });
 
 router.put('/owner/password', ownerOnly, async (req, res) => {

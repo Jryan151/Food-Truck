@@ -332,3 +332,11 @@ New tables (`catering_settings`, `catering_bookings`) are created automatically.
 - Followers only hear from the truck when the owner taps "Email this week" (at most every 3 days) or ticks
   "tell followers" at Start service (at most every 6 hours).
 - No new environment settings are needed. The tables are created on start.
+
+## Crew PINs
+
+- Each crew member can have their own kitchen PIN (Settings → Crew). Their name is recorded on what they do.
+- PINs are found with a keyed hash and checked with bcrypt; the PIN itself is never stored. The key comes
+  from `PIN_PEPPER` if set, otherwise one is generated on first start and kept in the database.
+  If you set `PIN_PEPPER` later, existing crew PINs stop matching and need to be set again.
+- The old shared staff PIN still works until the owner turns it off.

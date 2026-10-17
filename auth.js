@@ -125,7 +125,7 @@ async function getSession(req) {
   if (!v) return null;
   const token = requestToken(req);
   if (!token) return null;
-  const s = await get('SELECT vendor_id, role, expires_at FROM sessions WHERE token_hash = ?', [core.sha256(token)]);
+  const s = await get('SELECT s.vendor_id, s.role, s.expires_at, s.staff_id, m.name AS staff_name FROM sessions s LEFT JOIN staff_members m ON m.id = s.staff_id WHERE s.token_hash = ?', [core.sha256(token)]);
   if (s && s.expires_at > Date.now() && s.vendor_id === v.id) req._session = s;
   return req._session;
 }
@@ -140,11 +140,11 @@ function requireRole(...roles) {
   };
 }
 
-async function startSession(req, res, vendorId, role) {
+async function startSession(req, res, vendorId, role, staffId) {
   const token = core.randomToken(32);
   const ttl = role === 'owner' ? OWNER_TTL : STAFF_TTL;
-  await run('INSERT INTO sessions (token_hash, vendor_id, role, expires_at) VALUES (?, ?, ?, ?)', [
-    core.sha256(token), vendorId, role, Date.now() + ttl,
+  await run('INSERT INTO sessions (token_hash, vendor_id, role, expires_at, staff_id) VALUES (?, ?, ?, ?, ?)', [
+    core.sha256(token), vendorId, role, Date.now() + ttl, staffId || null,
   ]);
   res.append(
     'Set-Cookie',
@@ -488,7 +488,16 @@ router.post('/staff', limitLogin, async (req, res) => {
   const v = req.tenant.vendor;
   if (!v || v.status !== 'active') return res.status(404).json({ error: 'Not found' });
   if (pinLocked(v.id, req.ip)) return res.status(429).json({ error: 'Too many attempts from this device. Try again in 15 minutes.' });
-  const pin = String((req.body || {}).pin || '');
+  const pin = String((req.body || {}).pin || '').trim();
+  // A crew member's own PIN first (their name goes on everything they do), then the shared kitchen PIN.
+  if (PIN_RE.test(pin)) {
+    const m = await get('SELECT * FROM staff_members WHERE vendor_id = ? AND pin_lookup = ?', [v.id, await core.pinLookup(v.id, pin)]);
+    if (m && (await bcrypt.compare(pin.toUpperCase(), m.pin_hash))) {
+      await run('UPDATE staff_members SET last_login_at = ? WHERE id = ?', [Date.now(), m.id]);
+      await startSession(req, res, v.id, 'staff', m.id);
+      return res.json({ ok: true, role: 'staff', name: m.name });
+    }
+  }
   const ok = v.staff_pin_hash ? await bcrypt.compare(pin, v.staff_pin_hash) : false;
   if (!ok) { pinFailed(v.id, req.ip); return res.status(401).json({ error: 'Incorrect PIN.' }); }
   await startSession(req, res, v.id, 'staff');
@@ -509,6 +518,8 @@ router.get('/me', async (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.json({
     role: s.role,
+    staffName: s.staff_name || '',   // the crew member signed in on this screen (named PINs)
+    staffId: s.staff_id || null,
     vendor: {
       businessName: v.business_name,
       slug: v.slug,

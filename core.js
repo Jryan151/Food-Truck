@@ -256,6 +256,19 @@ async function refreshAllWaits() {
   for (const vendorId of [...clients.keys()]) await refreshWait(vendorId);
 }
 
+/* ---------- PIN lookup for named crew logins ---------- */
+let pepper = null;
+async function pinPepper() {
+  if (pepper) return pepper;
+  if (process.env.PIN_PEPPER) return (pepper = process.env.PIN_PEPPER);
+  await run("INSERT OR IGNORE INTO app_settings (key, value) VALUES ('pin_pepper', ?)", [crypto.randomBytes(32).toString('hex')]);
+  pepper = (await get("SELECT value FROM app_settings WHERE key = 'pin_pepper'")).value;
+  return pepper;
+}
+async function pinLookup(vendorId, pin) {
+  return crypto.createHmac('sha256', await pinPepper()).update(`${vendorId}:${String(pin).toUpperCase()}`).digest('hex');
+}
+
 /** Adds a line to an order's service record. Never throws: the record must not block the kitchen. */
 function logOrderEvent(vendorId, orderId, event, actor) {
   return run('INSERT INTO order_events (vendor_id, order_id, event, actor, at) VALUES (?, ?, ?, ?, ?)', [vendorId, orderId, event, actor, Date.now()]).catch((e) => console.error('order_events:', e.message));
@@ -282,9 +295,9 @@ async function consumeToken(rawToken, kind) {
 /* ---------- live sync hub (SSE) ---------- */
 const clients = new Map(); // vendorId -> Set<{res, staff}>
 
-function sseAdd(vendorId, res, staff) {
+function sseAdd(vendorId, res, staff, who) {
   if (!clients.has(vendorId)) clients.set(vendorId, new Set());
-  const c = { res, staff: !!staff };
+  const c = { res, staff: !!staff, role: who && who.role, staffId: who ? who.staff_id || null : null };
   clients.get(vendorId).add(c);
   return () => {
     const set = clients.get(vendorId);
@@ -293,6 +306,19 @@ function sseAdd(vendorId, res, staff) {
       if (set.size === 0) clients.delete(vendorId);
     }
   };
+}
+
+/** Ends live connections that match (e.g. a crew member who was just removed). Their screen reconnects as a guest. */
+function dropStreams(vendorId, match) {
+  const set = clients.get(vendorId);
+  if (!set) return 0;
+  let n = 0;
+  for (const c of [...set]) {
+    if (!match(c)) continue;
+    try { c.res.write(`data: ${JSON.stringify({ type: 'SESSION_ENDED', payload: {} })}\n\n`); c.res.end(); } catch (e) {}
+    set.delete(c); n++;
+  }
+  return n;
 }
 
 /** staffOnly=true sends only to logged-in owner/staff screens (new orders contain customer names). */
@@ -466,6 +492,21 @@ async function ensureSchema() {
     role TEXT NOT NULL,
     expires_at INTEGER NOT NULL
   )`);
+  // Crew members with their own PIN (the service record shows their name). pin_lookup finds the person
+  // from a PIN (a peppered hash, unique per truck); pin_hash then checks it with bcrypt.
+  await exec(`CREATE TABLE IF NOT EXISTS staff_members (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vendor_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    pin_lookup TEXT NOT NULL,
+    pin_hash TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    last_login_at INTEGER
+  )`);
+  await exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_staff_pin ON staff_members (vendor_id, pin_lookup)');
+  await addColumn('sessions', 'staff_id', 'INTEGER');
+  // Small server-wide values that must survive restarts (e.g. the PIN pepper when PIN_PEPPER isn't set).
+  await exec('CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
   await exec(`CREATE TABLE IF NOT EXISTS tokens (
     token_hash TEXT PRIMARY KEY,
     vendor_id INTEGER NOT NULL,
@@ -652,6 +693,8 @@ module.exports = {
   DEFAULT_MENU, normalizeItem, normalizeMenu, normalizeOptions, parseMenu, saveMenu, num, PHOTO_RE,
   normalizeHours, parseHours, validTimezone,
   getState,
+  dropStreams,
+  pinLookup,
   onOrderClosed,
   orderClosed,
   refreshWait,

@@ -43,3 +43,7 @@ TWILIO_MESSAGING_SERVICE_SID=
 TWILIO_FROM=
 # Safety cap on texts per truck per month (protects your Twilio bill)
 SMS_MONTHLY_LIMIT=1000
+
+# Optional: key for looking up crew PINs. If unset, one is generated and stored in the database.
+# Set it once and keep it; changing it means crew PINs must be set again.
+PIN_PEPPER=
