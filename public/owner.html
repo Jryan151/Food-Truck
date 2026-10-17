@@ -4,13 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Management Portal</title>
-    <meta name="theme-color" content="#09090b">
+    <meta name="theme-color" content="#0a0a0b">
     <link rel="manifest" href="/manifest-owner.webmanifest">
     <link rel="icon" type="image/png" href="/favicon.png">
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="Kitchen">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+    <script src="/theme.js"></script>
     <link rel="stylesheet" href="/app.css">
+    <link rel="stylesheet" href="/theme.css">
     <script src="/qr.js"></script>
     <script src="/logo.js"></script>
     <style>
@@ -496,7 +501,7 @@
         function applyPublic(d) {
             app.pub = d;
             $('login-name').textContent = d.businessName;
-            TruckLogo.set($('login-emoji'), d.emoji, '#09090b');
+            TruckLogo.set($('login-emoji'), d.emoji, 'var(--z950)');
             document.title = d.businessName + ' - Manage';
         }
 
@@ -506,7 +511,7 @@
             $('ownerDashboardView').style.display = 'block';
             var v = app.me.vendor;
             $('dash-name').textContent = v.businessName;
-            TruckLogo.set($('dash-emoji'), v.emoji, '#18181b');
+            TruckLogo.set($('dash-emoji'), v.emoji, 'var(--z900)');
             $('dash-owner').textContent = v.ownerName || 'Partner';
             $('dash-role').textContent = app.role === 'staff' ? 'Staff' : '';
             $('dash-role').style.display = app.role === 'staff' ? 'inline' : 'none';
@@ -1243,7 +1248,7 @@
                 return '<button type="button" data-action="pick-logo" data-logo="' + esc(e) + '" aria-label="' + (e ? esc(e) : 'Food truck logo') + '" class="aspect-square rounded-lg flex items-center justify-center text-xl border ' +
                     (on ? 'border-emerald-500 bg-emerald-500/10' : 'border-zinc-800 bg-zinc-950') + ' text-zinc-100"' + (e ? '>' + esc(e) : ' data-truck="1">') + '</button>';
             }).join('');
-            $('logoPicker').querySelectorAll('[data-truck]').forEach(function (b) { TruckLogo.set(b, '', '#09090b'); });
+            $('logoPicker').querySelectorAll('[data-truck]').forEach(function (b) { TruckLogo.set(b, '', 'var(--z950)'); });
             $('profEmojiCustom').value = TruckLogo.presets.indexOf(cur) < 0 ? cur : '';
         }
         $('profEmojiCustom').addEventListener('input', function (e) {
@@ -1383,7 +1388,7 @@
                 case 'save-profile':
                     api('PUT', '/api/owner/profile', { businessName: $('profName').value.trim(), emoji: $('profEmoji').value.trim(), ownerIG: $('profIG').value.trim(), ownerName: $('profOwner').value.trim() }).then(function (r) {
                         say('profMsg', r.ok ? 'Saved.' : (r.data.error || 'Could not save.'), r.ok);
-                        if (r.ok) loadMe().then(function () { $('dash-name').textContent = app.me.vendor.businessName; TruckLogo.set($('dash-emoji'), app.me.vendor.emoji, '#18181b'); TruckLogo.set($('login-emoji'), app.me.vendor.emoji, '#09090b'); $('dash-owner').textContent = app.me.vendor.ownerName || 'Partner'; });
+                        if (r.ok) loadMe().then(function () { $('dash-name').textContent = app.me.vendor.businessName; TruckLogo.set($('dash-emoji'), app.me.vendor.emoji, 'var(--z900)'); TruckLogo.set($('login-emoji'), app.me.vendor.emoji, 'var(--z950)'); $('dash-owner').textContent = app.me.vendor.ownerName || 'Partner'; });
                     });
                     break;
                 case 'save-pin':

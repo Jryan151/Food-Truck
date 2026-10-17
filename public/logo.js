@@ -11,11 +11,11 @@
         '<svg viewBox="0 0 64 44" width="1em" height="1em" fill="currentColor" aria-hidden="true" style="width:1.4em;height:1.4em;display:block">' +
         '<rect x="3" y="8" width="38" height="25" rx="3.5"/>' +
         '<path d="M40 16h11.5a3 3 0 0 1 2.3 1.1l6.5 7.9a3 3 0 0 1 .7 1.9V31a2 2 0 0 1-2 2H40z"/>' +
-        '<rect x="8" y="15" width="27" height="10" rx="1.5" fill="var(--logo-hole,#09090b)"/>' +
-        '<rect x="45" y="20" width="9" height="6" rx="1.2" fill="var(--logo-hole,#09090b)"/>' +
-        '<rect x="5" y="8" width="6" height="5" fill="#10b981"/><rect x="17" y="8" width="6" height="5" fill="#10b981"/><rect x="29" y="8" width="6" height="5" fill="#10b981"/>' +
-        '<circle cx="15" cy="34" r="6" fill="var(--logo-hole,#09090b)"/><circle cx="15" cy="34" r="3.6"/>' +
-        '<circle cx="50" cy="34" r="6" fill="var(--logo-hole,#09090b)"/><circle cx="50" cy="34" r="3.6"/>' +
+        '<rect x="8" y="15" width="27" height="10" rx="1.5" fill="var(--logo-hole,#0a0a0b)"/>' +
+        '<rect x="45" y="20" width="9" height="6" rx="1.2" fill="var(--logo-hole,#0a0a0b)"/>' +
+        '<rect x="5" y="8" width="6" height="5" fill="var(--logo-hole,#0a0a0b)"/><rect x="17" y="8" width="6" height="5" fill="var(--logo-hole,#0a0a0b)"/><rect x="29" y="8" width="6" height="5" fill="var(--logo-hole,#0a0a0b)"/>' +
+        '<circle cx="15" cy="34" r="6" fill="var(--logo-hole,#0a0a0b)"/><circle cx="15" cy="34" r="3.6"/>' +
+        '<circle cx="50" cy="34" r="6" fill="var(--logo-hole,#0a0a0b)"/><circle cx="50" cy="34" r="3.6"/>' +
         '</svg>';
 
     // '' = the universal truck logo (default for every new truck).

@@ -1,0 +1,179 @@
+/*
+ * theme.css — the Online Kitchen look: silver and black, with a day and a night theme, set in Manrope.
+ * Load it AFTER app.css. It re-points the color classes the pages use onto the tokens below,
+ * so every page (and every screen the app's code builds) follows the same two themes.
+ *
+ * Theme choice: follows the device (light = day, dark = night) unless the page's <html> carries
+ * data-theme="day" or data-theme="night" (set by theme.js from the owner's choice).
+ * Color is used only where it carries meaning: --ok, --warn and --bad. Everything else is silver/black.
+ *
+ * The "COLOR CLASS MAP" block at the bottom is generated: if a page starts using a new color class,
+ * add a rule for it there (or regenerate it).
+ */
+
+/* ---------- tokens: night (default) ---------- */
+:root {
+  color-scheme: dark;
+  --z950: #0a0a0b;   /* page */
+  --z900: #151618;   /* cards, panels */
+  --z800: #26282b;   /* hairlines, borders */
+  --z700: #3a3c40;
+  --z600: #6b6e74;
+  --z500: #8a8d93;   /* quiet text */
+  --z400: #a3a6ab;   /* secondary text */
+  --z300: #c4c6ca;
+  --z200: #d3d5d8;
+  --z100: #dcdee1;   /* silver: primary buttons, strongest surfaces */
+  --zwhite: #f4f5f7;
+  --zblack: #000000;
+  --ink: #dcdee1;    /* main action */
+  --on-ink: #0a0a0b;
+  --ok: #7cc79a;
+  --warn: #e3b456;
+  --bad: #f2928d;
+  --bad-solid: #c2413b;
+}
+
+/* ---------- tokens: day ---------- */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="night"]) {
+    color-scheme: light;
+    --z950: #e8e9eb; --z900: #f7f7f8; --z800: #cfd1d5; --z700: #b6b9be; --z600: #6b6e74;
+    --z500: #5c5f65; --z400: #4b4e54; --z300: #36383c; --z200: #24262a; --z100: #0b0b0c;
+    --zwhite: #000000; --zblack: #0b0b0c;
+    --ink: #0b0b0c; --on-ink: #e8e9eb;
+    --ok: #2f7a4f; --warn: #8a5a00; --bad: #b3261e; --bad-solid: #b3261e;
+  }
+}
+:root[data-theme="day"] {
+  color-scheme: light;
+  --z950: #e8e9eb; --z900: #f7f7f8; --z800: #cfd1d5; --z700: #b6b9be; --z600: #6b6e74;
+  --z500: #5c5f65; --z400: #4b4e54; --z300: #36383c; --z200: #24262a; --z100: #0b0b0c;
+  --zwhite: #000000; --zblack: #0b0b0c;
+  --ink: #0b0b0c; --on-ink: #e8e9eb;
+  --ok: #2f7a4f; --warn: #8a5a00; --bad: #b3261e; --bad-solid: #b3261e;
+}
+
+/* ---------- type ---------- */
+html, body {
+  font-family: 'Manrope', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-feature-settings: 'tnum' 0;
+  -webkit-font-smoothing: antialiased;
+}
+body { background-color: var(--z950); color: var(--z100); }
+/* Headings used a serif italic; the new look is one modern sans, set heavier and tighter. */
+.font-serif { font-family: 'Manrope', ui-sans-serif, system-ui, sans-serif; font-weight: 800; letter-spacing: -0.02em; }
+.font-serif.italic, .italic.font-serif, h1.italic, h2.italic { font-style: normal; }
+.font-sans { font-family: 'Manrope', ui-sans-serif, system-ui, sans-serif; }
+/* Prices and counts line up like a printed menu. */
+.font-mono, [data-num] { font-variant-numeric: tabular-nums; }
+input, select, textarea, button { font-family: inherit; }
+input::placeholder, textarea::placeholder { color: var(--z500); opacity: 1; }
+
+/* ---------- main actions: silver on night, black on day ---------- */
+.bg-zinc-100, .bg-emerald-600, .bg-emerald-500, .bg-blue-600 { background-color: var(--ink); }
+.bg-zinc-100.text-zinc-950, .bg-emerald-600.text-white, .bg-emerald-500.text-white, .bg-blue-600.text-white,
+.bg-emerald-500.text-zinc-950, .bg-emerald-600.text-zinc-950 { color: var(--on-ink); }
+.hover\:bg-white:hover.bg-zinc-100, .hover\:bg-emerald-500:hover.bg-emerald-600, .hover\:bg-blue-500:hover.bg-blue-600 {
+  background-color: color-mix(in srgb, var(--ink) 86%, var(--z950));
+}
+/* Danger and brand-colored buttons keep white text in both themes. */
+.bg-rose-600.text-white, .bg-red-600.text-white, .bg-rose-500.text-white, .bg-\[\#635bff\].text-white { color: #ffffff; }
+.shadow-lg { --tw-shadow-color: transparent; }
+
+/* ---------- owner portal switches ---------- */
+.switch { background: var(--z700) !important; }
+.switch::after { background: var(--z950) !important; }
+.switch.on { background: var(--ink) !important; }
+.switch.amber.on { background: var(--warn) !important; }
+.guide-flash { outline-color: var(--ink) !important; }
+
+/* ---------- theme toggle (owner portal) ---------- */
+.theme-seg { display: inline-flex; border: 1px solid var(--z800); border-radius: 10px; overflow: hidden; }
+.theme-seg button { padding: 6px 12px; font-size: 12px; font-weight: 700; background: transparent; color: var(--z400); border: 0; }
+.theme-seg button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
+
+/* ---------- COLOR CLASS MAP (generated) ---------- */
+.accent-emerald-500{accent-color:var(--ink)}
+.accent-rose-500{accent-color:var(--bad)}
+.bg-amber-500{background-color:var(--warn)}
+.bg-amber-500\/10{background-color:color-mix(in srgb, var(--warn) 10%, transparent)}
+.bg-black\/80{background-color:color-mix(in srgb, var(--zblack) 80%, transparent)}
+.bg-blue-500\/10{background-color:color-mix(in srgb, var(--z400) 10%, transparent)}
+.bg-blue-600{background-color:var(--ink)}
+.bg-emerald-400{background-color:var(--ok)}
+.bg-emerald-500{background-color:var(--ink)}
+.bg-emerald-500\/10{background-color:color-mix(in srgb, var(--ok) 10%, transparent)}
+.bg-emerald-500\/15{background-color:color-mix(in srgb, var(--ok) 15%, transparent)}
+.bg-emerald-600{background-color:var(--ink)}
+.bg-red-500\/10{background-color:color-mix(in srgb, var(--bad) 10%, transparent)}
+.bg-red-600{background-color:var(--bad-solid)}
+.bg-red-600\/10{background-color:color-mix(in srgb, var(--bad) 10%, transparent)}
+.bg-rose-500{background-color:var(--bad)}
+.bg-rose-500\/10{background-color:color-mix(in srgb, var(--bad) 10%, transparent)}
+.bg-rose-600{background-color:var(--bad-solid)}
+.bg-white{background-color:var(--zwhite)}
+.bg-zinc-100{background-color:var(--z100)}
+.bg-zinc-500\/10{background-color:color-mix(in srgb, var(--z500) 10%, transparent)}
+.bg-zinc-600{background-color:var(--z600)}
+.bg-zinc-700{background-color:var(--z700)}
+.bg-zinc-800{background-color:var(--z800)}
+.bg-zinc-900{background-color:var(--z900)}
+.bg-zinc-900\/50{background-color:color-mix(in srgb, var(--z900) 50%, transparent)}
+.bg-zinc-950{background-color:var(--z950)}
+.bg-zinc-950\/60{background-color:color-mix(in srgb, var(--z950) 60%, transparent)}
+.bg-zinc-950\/95{background-color:color-mix(in srgb, var(--z950) 95%, transparent)}
+.border-amber-500\/20{border-color:color-mix(in srgb, var(--warn) 20%, transparent)}
+.border-amber-500\/30{border-color:color-mix(in srgb, var(--warn) 30%, transparent)}
+.border-amber-500\/40{border-color:color-mix(in srgb, var(--warn) 40%, transparent)}
+.border-blue-500\/20{border-color:color-mix(in srgb, var(--z400) 20%, transparent)}
+.border-blue-500\/30{border-color:color-mix(in srgb, var(--z400) 30%, transparent)}
+.border-blue-500\/60{border-color:color-mix(in srgb, var(--ink) 60%, transparent)}
+.border-emerald-400{border-color:var(--ok)}
+.border-emerald-500{border-color:var(--ink)}
+.border-emerald-500\/20{border-color:color-mix(in srgb, var(--ok) 20%, transparent)}
+.border-emerald-500\/30{border-color:color-mix(in srgb, var(--ok) 30%, transparent)}
+.border-emerald-500\/40{border-color:color-mix(in srgb, var(--ok) 40%, transparent)}
+.border-red-500\/30{border-color:color-mix(in srgb, var(--bad) 30%, transparent)}
+.border-red-600\/50{border-color:color-mix(in srgb, var(--bad-solid) 50%, transparent)}
+.border-rose-500\/20{border-color:color-mix(in srgb, var(--bad) 20%, transparent)}
+.border-rose-500\/30{border-color:color-mix(in srgb, var(--bad) 30%, transparent)}
+.border-zinc-500\/30{border-color:color-mix(in srgb, var(--z500) 30%, transparent)}
+.border-zinc-600{border-color:var(--z600)}
+.border-zinc-700{border-color:var(--z700)}
+.border-zinc-800{border-color:var(--z800)}
+.border-zinc-800\/50{border-color:color-mix(in srgb, var(--z800) 50%, transparent)}
+.border-zinc-800\/80{border-color:color-mix(in srgb, var(--z800) 80%, transparent)}
+.border-zinc-900{border-color:var(--z900)}
+.border-zinc-900\/50{border-color:color-mix(in srgb, var(--z900) 50%, transparent)}
+.focus\:border-red-500:focus{border-color:var(--bad)}
+.hover\:bg-blue-500:hover{background-color:var(--ink)}
+.hover\:bg-emerald-500:hover{background-color:var(--ink)}
+.hover\:bg-rose-500:hover{background-color:var(--bad)}
+.hover\:bg-white:hover{background-color:var(--zwhite)}
+.hover\:bg-zinc-700:hover{background-color:var(--z700)}
+.hover\:border-zinc-600:hover{border-color:var(--z600)}
+.hover\:text-rose-300:hover{color:var(--bad)}
+.hover\:text-white:hover{color:var(--zwhite)}
+.hover\:text-zinc-200:hover{color:var(--z200)}
+.hover\:text-zinc-300:hover{color:var(--z300)}
+.hover\:text-zinc-400:hover{color:var(--z400)}
+.shadow-emerald-600\/20{--tw-shadow-color:color-mix(in srgb, var(--ok) 20%, transparent)}
+.text-amber-400{color:var(--warn)}
+.text-amber-500{color:var(--warn)}
+.text-blue-300{color:var(--z300)}
+.text-blue-400{color:var(--z300)}
+.text-emerald-400{color:var(--ok)}
+.text-emerald-500{color:var(--ink)}
+.text-red-500{color:var(--bad)}
+.text-rose-400{color:var(--bad)}
+.text-rose-500{color:var(--bad)}
+.text-white{color:var(--zwhite)}
+.text-zinc-100{color:var(--z100)}
+.text-zinc-200{color:var(--z200)}
+.text-zinc-300{color:var(--z300)}
+.text-zinc-400{color:var(--z400)}
+.text-zinc-500{color:var(--z500)}
+.text-zinc-600{color:var(--z600)}
+.text-zinc-700{color:var(--z700)}
+.text-zinc-950{color:var(--z950)}

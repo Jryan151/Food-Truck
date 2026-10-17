@@ -161,8 +161,8 @@ function manifest(kind) {
       start_url: owner ? '/owner.html' : '/',
       scope: '/',
       display: 'standalone',
-      background_color: '#09090b',
-      theme_color: '#09090b',
+      background_color: '#0a0a0b',
+      theme_color: '#0a0a0b',
       icons: [
         { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
         { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
