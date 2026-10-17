@@ -380,7 +380,7 @@
 
             var hasSale = app.menu.some(function (m) { return m.salePrice && m.salePrice > 0 && !m.soldOut; });
             $('saleBadgeContainer').innerHTML = (hasSale && canOrder())
-                ? '<div class="bg-red-600/10 border border-red-600/50 rounded-xl px-4 py-2 text-xs mb-3 text-red-500 flex items-center justify-center font-bold animate-pulse">' + esc(t('sale')) + '</div>'
+                ? '<div class="bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-2 text-xs mb-3 text-zinc-100 flex items-center justify-center font-bold">' + esc(t('sale')) + '</div>'
                 : '';
 
             // If the truck closes or pauses while someone has the menu open, send them back instead of letting them build a doomed cart.

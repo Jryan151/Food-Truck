@@ -2,216 +2,425 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Create your page — Online Kitchen</title>
-    <link rel="stylesheet" href="/app.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Create your ordering page · Online Kitchen</title>
+    <meta name="theme-color" content="#0a0a0b">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+    <script src="/theme.js"></script>
+    <link rel="stylesheet" href="/theme.css">
+    <style>
+        /* Signup: preview first, account second. Colors come from theme.css tokens (day/night). */
+        * { box-sizing: border-box; }
+        body { margin: 0; min-height: 100vh; }
+        .wrap { max-width: 440px; margin: 0 auto; padding: 22px 24px calc(28px + env(safe-area-inset-bottom)); min-height: 100vh; display: flex; flex-direction: column; gap: 22px; }
+        .top { display: flex; justify-content: space-between; align-items: center; }
+        .brand { font-weight: 800; font-size: 18px; letter-spacing: -0.01em; color: var(--z100); text-decoration: none; }
+        .quiet-link { font-size: 13px; font-weight: 600; color: var(--z100); text-decoration: none; border-bottom: 1px solid var(--z700); padding-bottom: 1px; background: none; border-top: 0; border-left: 0; border-right: 0; cursor: pointer; font-family: inherit; }
+        .steps { display: flex; align-items: center; gap: 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; color: var(--z500); }
+        .steps .line { flex: 1; height: 1px; background: var(--z800); }
+        .steps .on { color: var(--z100); }
+        h1 { margin: 0; font-weight: 800; font-size: 34px; line-height: 1.08; letter-spacing: -0.025em; color: var(--z100); }
+        .lede { margin: 8px 0 0; color: var(--z500); font-size: 15px; line-height: 1.5; }
+        .label { display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; color: var(--z500); margin-bottom: 6px; }
+        .line-input { width: 100%; height: 46px; background: transparent; border: 0; border-bottom: 1.5px solid var(--z100); padding: 0; color: var(--z100); font-size: 20px; font-weight: 600; outline: none; border-radius: 0; }
+        .line-input:focus { border-bottom-width: 2.5px; }
+        .field { display: flex; flex-direction: column; gap: 6px; }
+        .box-input { width: 100%; height: 50px; background: var(--z900); border: 1px solid var(--z800); border-radius: 12px; padding: 0 14px; color: var(--z100); font-size: 16px; outline: none; }
+        .box-input:focus { border-color: var(--z100); }
+        .hint { font-size: 13px; color: var(--z500); line-height: 1.45; }
+        .addr { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--z500); }
+        .addr b { color: var(--z100); font-weight: 700; }
+        .addr-edit { display: flex; align-items: center; height: 44px; background: var(--z900); border: 1px solid var(--z800); border-radius: 10px; overflow: hidden; }
+        .addr-edit input { flex: 1; min-width: 0; height: 100%; background: transparent; border: 0; padding: 0 0 0 12px; color: var(--z100); font-size: 16px; text-align: right; outline: none; font-family: inherit; }
+        .addr-edit span { padding-right: 12px; font-size: 14px; color: var(--z500); }
+        .ok { color: var(--ok); } .bad { color: var(--bad); }
+        .tabs { display: flex; gap: 18px; }
+        .tab { padding: 6px 0; background: transparent; border: 0; border-bottom: 1.5px solid transparent; color: var(--z500); font-weight: 600; font-size: 13px; cursor: pointer; }
+        .tab[aria-pressed="true"] { color: var(--z100); border-bottom-color: var(--z100); font-weight: 700; }
+        .rows { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+        .row { display: flex; gap: 8px; }
+        .row input { height: 44px; background: var(--z900); border: 1px solid var(--z800); border-radius: 10px; padding: 0 12px; color: var(--z100); font-size: 16px; outline: none; min-width: 0; font-family: inherit; }
+        .row input:first-child { flex: 1; }
+        .row input:last-child { width: 96px; }
+        .add-row { align-self: flex-start; background: none; border: 0; padding: 4px 0; color: var(--z100); font-weight: 600; font-size: 13px; text-decoration: underline; cursor: pointer; }
+        .card { background: var(--z900); border: 1px solid var(--z800); border-radius: 20px; padding: 20px; display: flex; flex-direction: column; gap: 18px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.06); }
+        .truck { display: flex; gap: 14px; align-items: center; }
+        .mono { width: 52px; height: 52px; flex: none; border-radius: 26px; background: var(--ink); color: var(--on-ink); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 17px; }
+        .truck-name { font-weight: 800; font-size: 22px; letter-spacing: -0.015em; color: var(--z100); overflow-wrap: anywhere; }
+        .status { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--z500); font-weight: 500; }
+        .dot { width: 6px; height: 6px; border-radius: 3px; background: var(--z100); }
+        .menu { display: flex; flex-direction: column; gap: 12px; }
+        .menu-head { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; color: var(--z500); }
+        .item { display: flex; align-items: baseline; gap: 8px; font-size: 15px; color: var(--z100); }
+        .item .n { font-weight: 600; overflow-wrap: anywhere; }
+        .item .lead { flex: 1; min-width: 12px; border-bottom: 1px dotted var(--z700); transform: translateY(-4px); }
+        .item .p { font-variant-numeric: tabular-nums; font-weight: 600; }
+        .card-foot { display: flex; justify-content: space-between; gap: 10px; padding-top: 14px; border-top: 1px solid var(--z800); font-size: 12px; color: var(--z500); font-weight: 500; }
+        .card-foot b { font-weight: 700; white-space: nowrap; }
+        .bottom { margin-top: auto; display: flex; flex-direction: column; gap: 12px; }
+        .primary { height: 56px; border: 0; border-radius: 14px; background: var(--ink); color: var(--on-ink); font-weight: 700; font-size: 16px; display: flex; align-items: center; justify-content: space-between; padding: 0 22px; cursor: pointer; width: 100%; }
+        .primary.center { justify-content: center; }
+        .primary:disabled { opacity: 0.55; cursor: default; }
+        .primary svg { flex: none; }
+        .foot-note { text-align: center; font-size: 13px; color: var(--z500); }
+        .err { font-size: 14px; color: var(--bad); text-align: center; min-height: 0; }
+        .err:empty { display: none; }
+        .pw { display: flex; align-items: center; height: 50px; background: var(--z900); border: 1px solid var(--z800); border-radius: 12px; overflow: hidden; }
+        .pw:focus-within { border-color: var(--z100); }
+        .pw input { flex: 1; min-width: 0; height: 100%; background: transparent; border: 0; padding: 0 14px; color: var(--z100); font-size: 16px; outline: none; font-family: inherit; }
+        .pw button { height: 100%; padding: 0 14px; background: transparent; border: 0; color: var(--z300); font-weight: 600; font-size: 14px; cursor: pointer; }
+        .check { display: flex; gap: 12px; align-items: flex-start; font-size: 14px; color: var(--z300); line-height: 1.45; }
+        .check input { width: 22px; height: 22px; margin: 0; flex: none; accent-color: var(--ink); }
+        .check a { color: var(--z100); }
+        .note { display: flex; gap: 12px; padding: 14px; border-radius: 14px; background: var(--z900); border: 1px solid var(--z800); font-size: 14px; color: var(--z300); line-height: 1.45; }
+        .code { width: 100%; height: 64px; background: var(--z900); border: 1px solid var(--z800); border-radius: 14px; color: var(--z100); font-size: 30px; font-weight: 800; letter-spacing: 0.4em; text-align: center; padding-left: 0.4em; outline: none; font-variant-numeric: tabular-nums; }
+        .code:focus { border-color: var(--z100); }
+        .row-links { display: flex; justify-content: space-between; align-items: center; }
+        .pinbox { padding: 16px; border-radius: 16px; background: var(--z900); border: 1px solid var(--z800); display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+        .pin { font-weight: 800; font-size: 26px; letter-spacing: 0.2em; font-variant-numeric: tabular-nums; color: var(--z100); }
+        .quiet-link:disabled { color: var(--z500); border-bottom-color: transparent; cursor: default; }
+        .check-ring { width: 56px; height: 56px; border-radius: 28px; border: 2px solid var(--z100); display: flex; align-items: center; justify-content: center; }
+        [hidden] { display: none !important; }
+        .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    </style>
 </head>
-<body class="bg-zinc-950 text-zinc-100 font-sans min-h-screen">
-    <div class="max-w-md mx-auto px-6 py-8">
-        <div class="flex justify-between items-center mb-6">
-            <a href="/" class="font-serif font-bold italic text-lg">Online Kitchen</a>
-            <a href="/login.html" class="text-xs text-zinc-400 hover:text-white underline">Log in</a>
-        </div>
-        <div class="h-1 bg-zinc-900 rounded-full mb-8 overflow-hidden"><div id="bar" class="h-full bg-emerald-500 transition-all" style="width:25%"></div></div>
-
-        <form id="form" novalidate>
-            <!-- Step 1 -->
-            <section data-step="1">
-                <h1 class="text-2xl font-serif font-bold italic mb-1">Let's meet you</h1>
-                <p class="text-zinc-400 text-sm mb-5">Takes about two minutes. Free to start. <a href="/demo" class="underline text-zinc-300">Try the demo first</a></p>
-                <label class="block text-xs text-zinc-400 mb-1 font-medium" for="ownerName">Your name</label>
-                <input id="ownerName" maxlength="60" autocomplete="name" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-sm mb-4">
-                <label class="block text-xs text-zinc-400 mb-1 font-medium" for="ownerIG">Instagram handle (optional)</label>
-                <input id="ownerIG" maxlength="31" placeholder="@yourtruck" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-sm">
-            </section>
-
-            <!-- Step 2 -->
-            <section data-step="2" style="display:none;">
-                <h1 class="text-2xl font-serif font-bold italic mb-1">Name your truck</h1>
-                <p class="text-zinc-400 text-sm mb-5">This becomes your customer web address.</p>
-                <label class="block text-xs text-zinc-400 mb-1 font-medium" for="businessName">Business name</label>
-                <input id="businessName" maxlength="60" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-sm mb-4">
-                <label class="block text-xs text-zinc-400 mb-1 font-medium" for="slug">Web address</label>
-                <div class="flex items-center bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
-                    <input id="slug" maxlength="30" autocapitalize="none" autocomplete="off" class="flex-1 min-w-0 bg-transparent p-3 text-sm text-right outline-none">
-                    <span id="rootSuffix" class="pr-3 text-sm text-zinc-500">.onlinekitchen.fyi</span>
-                </div>
-                <div id="slugMsg" class="text-xs mt-2 min-h-[1rem]"></div>
-            </section>
-
-            <!-- Step 3 -->
-            <section data-step="3" style="display:none;">
-                <h1 class="text-2xl font-serif font-bold italic mb-1">Your menu</h1>
-                <p class="text-zinc-400 text-sm mb-4">Start with a sample menu, or add your own items. You can change everything later.</p>
-                <div class="grid grid-cols-2 gap-2 mb-4">
-                    <button type="button" data-action="menu-mode" data-mode="sample" id="modeSample" class="py-2 rounded-xl text-xs font-bold"></button>
-                    <button type="button" data-action="menu-mode" data-mode="custom" id="modeCustom" class="py-2 rounded-xl text-xs font-bold"></button>
-                </div>
-                <div id="sampleNote" class="text-xs text-zinc-400 bg-zinc-900 border border-zinc-800 rounded-xl p-4">We'll add six sample items so your page isn't empty. Edit or delete them from your dashboard.</div>
-                <div id="customBox" style="display:none;">
-                    <div id="itemRows" class="space-y-2 mb-3"></div>
-                    <button type="button" data-action="add-row" id="addRowBtn" class="text-xs text-zinc-300 underline">+ Add another item</button>
-                    <p class="text-[11px] text-zinc-500 mt-2">Add the rest (up to 200 items) from your dashboard.</p>
-                </div>
-            </section>
-
-            <!-- Step 4 -->
-            <section data-step="4" style="display:none;">
-                <h1 class="text-2xl font-serif font-bold italic mb-1">Secure your account</h1>
-                <p class="text-zinc-400 text-sm mb-5">You'll use this to log in.</p>
-                <label class="block text-xs text-zinc-400 mb-1 font-medium" for="email">Email</label>
-                <input id="email" type="email" autocomplete="email" maxlength="120" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-sm mb-4">
-                <label class="block text-xs text-zinc-400 mb-1 font-medium" for="password">Password (8+ characters)</label>
-                <input id="password" type="password" autocomplete="new-password" maxlength="72" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-sm mb-4">
-                <label class="block text-xs text-zinc-400 mb-1 font-medium" for="staffPin">Staff PIN (optional, 4-8 letters or numbers)</label>
-                <input id="staffPin" maxlength="8" autocomplete="off" placeholder="We'll pick one if blank" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-sm font-mono">
-                <p class="text-[11px] text-zinc-500 mt-1">Your team uses this to open the kitchen screen only.</p>
-                <label class="flex items-start gap-2 mt-5 text-xs text-zinc-400">
-                    <input id="acceptTerms" type="checkbox" class="mt-0.5 w-4 h-4 accent-emerald-500">
-                    <span>I agree to the <a href="/terms" target="_blank" class="underline text-zinc-300">Terms of Service</a> and <a href="/privacy" target="_blank" class="underline text-zinc-300">Privacy Policy</a>.</span>
-                </label>
-            </section>
-
-            <div id="err" class="text-xs text-rose-400 text-center mt-4" style="display:none;"></div>
-            <div class="flex gap-3 mt-6">
-                <button type="button" id="back" data-action="back" class="px-5 py-3 rounded-xl border border-zinc-800 text-zinc-300 text-sm font-semibold" style="display:none;">Back</button>
-                <button type="submit" id="next" class="flex-1 bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-3 rounded-xl transition shadow-lg">Continue</button>
-            </div>
-        </form>
-
-        <!-- Done -->
-        <section id="done" style="display:none;" class="text-center">
-            <div class="text-5xl mb-3" id="doneIcon">🎉</div>
-            <h1 id="doneTitle" class="text-2xl font-serif font-bold italic mb-2"></h1>
-            <p id="doneText" class="text-zinc-400 text-sm mb-5"></p>
-            <div id="pinBox" class="bg-zinc-900 border border-zinc-800 rounded-xl p-4 mb-5">
-                <div class="text-xs text-zinc-400 mb-1">Staff PIN — write it down</div>
-                <div id="pinShown" class="font-mono text-2xl tracking-widest"></div>
-            </div>
-            <a id="goBtn" href="#" class="block w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 rounded-xl transition" style="display:none;">Open my dashboard</a>
-        </section>
+<body>
+<main class="wrap">
+    <div class="top">
+        <a class="brand" href="/">Online Kitchen</a>
+        <a class="quiet-link" href="/login.html">Log in</a>
     </div>
+    <div class="steps" aria-hidden="true"><span id="stepA" class="on">01 PREVIEW</span><span class="line"></span><span id="stepB">02 SAVE</span></div>
 
-    <script>
-    (function () {
-        'use strict';
-        var $ = function (id) { return document.getElementById(id); };
-        var step = 1, total = 4, mode = 'sample', slugOk = false, slugTimer = null, slugSeq = 0;
-        var MAX_SIGNUP_ROWS = 25;
-        var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    <!-- ===== Step 1: preview (nothing is saved) ===== -->
+    <section id="vPreview" style="display:flex;flex-direction:column;gap:22px;flex:1">
+        <div>
+            <h1>Your truck's ordering page, in a moment.</h1>
+            <p class="lede">Type your truck's name to see it. No account needed.</p>
+        </div>
+        <div class="field">
+            <label class="label" for="truck">TRUCK NAME</label>
+            <input id="truck" class="line-input" maxlength="60" autocomplete="organization" placeholder="e.g. Birria Boyz">
+            <div class="addr" id="addrView">
+                <span id="addrText">Your web address appears here.</span>
+                <button type="button" class="quiet-link" id="addrEditBtn" hidden>Edit</button>
+            </div>
+            <div id="addrEditRow" hidden>
+                <label class="sr" for="slug">Web address</label>
+                <div class="addr-edit"><input id="slug" maxlength="30" autocapitalize="none" autocomplete="off" spellcheck="false"><span id="rootSuffix">.onlinekitchen.fyi</span></div>
+            </div>
+            <div class="hint" id="slugMsg" aria-live="polite"></div>
+        </div>
+        <div>
+            <div class="tabs" role="group" aria-label="Menu">
+                <button type="button" class="tab" data-mode="sample" aria-pressed="true">Sample menu</button>
+                <button type="button" class="tab" data-mode="custom" aria-pressed="false">Type my items</button>
+            </div>
+            <div id="customBox" hidden>
+                <div class="rows" id="rows"></div>
+                <button type="button" class="add-row" id="addRow">+ Add another item</button>
+            </div>
+        </div>
 
-        // Show the real root domain next to the web address box.
-        var host = location.hostname.replace(/^www\./, '');
-        $('rootSuffix').textContent = '.' + host + (location.port ? ':' + location.port : '');
+        <div class="card" aria-label="Preview of your ordering page">
+            <div class="truck">
+                <div class="mono" id="pvMono" aria-hidden="true">OK</div>
+                <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+                    <div class="truck-name" id="pvName">Your truck</div>
+                    <div class="status"><span class="dot"></span>Open now · ready in about 10 min</div>
+                </div>
+            </div>
+            <div class="menu">
+                <div class="menu-head" id="pvMenuHead">MENU · SAMPLE ITEMS</div>
+                <div id="pvItems" class="menu"></div>
+            </div>
+            <div class="card-foot"><span id="pvAddr" style="overflow-wrap:anywhere">yourtruck.onlinekitchen.fyi</span><b>Preview · not saved</b></div>
+        </div>
 
-        function err(t) { var e = $('err'); e.textContent = t || ''; e.style.display = t ? 'block' : 'none'; }
-        function show() {
-            document.querySelectorAll('[data-step]').forEach(function (s) { s.style.display = (Number(s.getAttribute('data-step')) === step) ? 'block' : 'none'; });
-            $('bar').style.width = (step / total * 100) + '%';
-            $('back').style.display = step > 1 ? 'block' : 'none';
-            $('next').textContent = step === total ? 'Create my page' : 'Continue';
-            err('');
-        }
-        function setMode(m) {
-            mode = m;
-            var on = 'py-2 rounded-xl text-xs font-bold bg-zinc-100 text-zinc-950', off = 'py-2 rounded-xl text-xs font-bold bg-zinc-900 border border-zinc-800 text-zinc-300';
-            $('modeSample').className = m === 'sample' ? on : off; $('modeCustom').className = m === 'custom' ? on : off;
-            $('modeSample').textContent = 'Sample menu'; $('modeCustom').textContent = 'My own items';
-            $('sampleNote').style.display = m === 'sample' ? 'block' : 'none';
-            $('customBox').style.display = m === 'custom' ? 'block' : 'none';
-            if (m === 'custom' && !$('itemRows').children.length) { addRow(); addRow(); }
-        }
-        function addRow() {
-            if ($('itemRows').children.length >= MAX_SIGNUP_ROWS) return;
-            var d = document.createElement('div');
-            d.className = 'flex gap-2';
-            d.innerHTML = '<input class="it-name flex-1 min-w-0 bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-sm" maxlength="80" placeholder="Item name">' +
-                '<input class="it-price w-24 bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-sm" type="number" min="0" step="0.01" inputmode="decimal" placeholder="$ Price">';
-            $('itemRows').appendChild(d);
-            $('addRowBtn').style.display = $('itemRows').children.length >= MAX_SIGNUP_ROWS ? 'none' : 'inline';
-        }
-        function customItems() {
-            var out = [];
-            document.querySelectorAll('#itemRows > div').forEach(function (r) {
-                var n = r.querySelector('.it-name').value.trim(), p = parseFloat(r.querySelector('.it-price').value);
-                if (n && p >= 0) out.push({ name: n, desc: '', price: p, prep: 5 });
-            });
-            return out;
-        }
+        <div class="bottom">
+            <div class="err" id="err1" role="alert"></div>
+            <button type="button" class="primary" id="toSave"><span>Like it? Save my page</span>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></button>
+            <div class="foot-note">Just your email to keep it. Free during beta.</div>
+        </div>
+    </section>
 
-        function checkSlug() {
-            var s = $('slug').value.trim().toLowerCase(), m = $('slugMsg');
-            slugOk = false;
-            if (!s) { m.textContent = ''; return; }
-            m.className = 'text-xs mt-2 text-zinc-500'; m.textContent = 'Checking…';
-            var seq = ++slugSeq;
-            fetch('/api/auth/slug-available?slug=' + encodeURIComponent(s)).then(function (r) { return r.json(); }).then(function (d) {
-                if (seq !== slugSeq) return;
-                slugOk = !!d.available;
-                m.className = 'text-xs mt-2 ' + (slugOk ? 'text-emerald-400' : 'text-rose-400');
-                m.textContent = slugOk ? '✓ ' + d.slug + ' is available' : (d.error || 'Not available.');
-            }).catch(function () { if (seq === slugSeq) { m.className = 'text-xs mt-2 text-rose-400'; m.textContent = 'Could not check right now.'; } });
-        }
+    <!-- ===== Step 2: save (account details) ===== -->
+    <form id="vSave" hidden novalidate style="display:flex;flex-direction:column;gap:18px;flex:1">
+        <div>
+            <h1 id="saveTitle">Save your page</h1>
+            <p class="lede">We'll email you a 6-digit code. Your web address becomes yours once you enter it.</p>
+        </div>
+        <div class="field"><label class="label" for="ownerName">YOUR NAME</label>
+            <input id="ownerName" class="box-input" maxlength="60" autocomplete="name" placeholder="First and last"></div>
+        <div class="field"><label class="label" for="email">EMAIL</label>
+            <input id="email" class="box-input" type="email" maxlength="120" autocomplete="email" inputmode="email" placeholder="you@yourtruck.com"></div>
+        <div class="field"><label class="label" for="password">PASSWORD · 8 OR MORE CHARACTERS</label>
+            <div class="pw"><input id="password" type="password" maxlength="72" autocomplete="new-password"><button type="button" id="pwShow" aria-controls="password">Show</button></div></div>
+        <label class="check"><input type="checkbox" id="terms"><span>I agree to the <a href="/terms" target="_blank" rel="noopener">Terms</a> and <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</span></label>
+        <div class="bottom">
+            <div class="err" id="err2" role="alert"></div>
+            <button type="submit" class="primary center" id="sendCode">Email me a code</button>
+            <div class="row-links"><button type="button" class="quiet-link" id="back1">Back to preview</button><span class="hint">Free during beta</span></div>
+        </div>
+    </form>
 
-        function validate() {
-            if (step === 2) {
-                if ($('businessName').value.trim().length < 2) return 'Please enter your business name.';
-                if (!$('slug').value.trim()) return 'Pick a web address.';
-                if (!slugOk) return 'Please choose an available web address.';
-            }
-            if (step === 3 && mode === 'custom' && !customItems().length) return 'Add at least one item with a name and price, or choose the sample menu.';
-            if (step === 4) {
-                if (!EMAIL_RE.test($('email').value.trim())) return 'Please enter a valid email.';
-                var pw = $('password').value; if (pw.length < 8 || pw.length > 72) return 'Password must be 8-72 characters.';
-                var pin = $('staffPin').value.trim(); if (pin && !/^[A-Za-z0-9]{4,8}$/.test(pin)) return 'Staff PIN must be 4-8 letters or numbers.';
-                if (!$('acceptTerms').checked) return 'Please agree to the Terms and Privacy Policy.';
-            }
-            return '';
-        }
+    <!-- ===== Step 3: email code ===== -->
+    <form id="vCode" hidden novalidate style="display:flex;flex-direction:column;gap:18px;flex:1">
+        <div>
+            <h1>Check your email</h1>
+            <p class="lede">We sent a 6-digit code to <b id="codeEmail" style="color:var(--z100)"></b>. It works for 15 minutes.</p>
+        </div>
+        <div class="field"><label class="label" for="code">CODE</label>
+            <input id="code" class="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000">
+            <div class="err" id="err3" role="alert" style="text-align:left"></div></div>
+        <div id="slugFixRow" class="field" hidden>
+            <label class="label" for="slugFix">PICK ANOTHER WEB ADDRESS</label>
+            <div class="addr-edit"><input id="slugFix" maxlength="30" autocapitalize="none" autocomplete="off" spellcheck="false"><span class="suffix">.onlinekitchen.fyi</span></div>
+        </div>
+        <div class="bottom">
+            <button type="submit" class="primary center" id="confirm">Confirm and open my page</button>
+            <div class="row-links"><button type="button" class="quiet-link" id="resend">Send a new code</button><button type="button" class="quiet-link" id="back2">Change email</button></div>
+        </div>
+    </form>
 
-        function submit() {
-            var b = $('next'); b.disabled = true; b.textContent = 'Creating…';
-            var body = {
-                ownerName: $('ownerName').value.trim(), ownerIG: $('ownerIG').value.trim(),
-                businessName: $('businessName').value.trim(), slug: $('slug').value.trim().toLowerCase(),
-                email: $('email').value.trim(), password: $('password').value, staffPin: $('staffPin').value.trim(),
-                acceptTerms: $('acceptTerms').checked
-            };
-            if (mode === 'custom') body.menuData = customItems();
-            fetch('/api/auth/signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-                .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, d: d }; }); })
-                .catch(function () { return { ok: false, d: { error: 'Connection problem. Please try again.' } }; })
-                .then(function (r) {
-                    b.disabled = false; b.textContent = 'Create my page';
-                    if (!r.ok) { err(r.d.error || 'Could not create your page.'); return; }
-                    $('form').style.display = 'none'; $('bar').parentNode.style.display = 'none';
-                    $('done').style.display = 'block'; $('pinShown').textContent = r.d.staffPin;
-                    if (r.d.pending) {
-                        $('doneIcon').textContent = '📧'; $('doneTitle').textContent = 'Check your email';
-                        $('doneText').textContent = 'We sent an activation link to ' + body.email + '. Click it to switch on your page at ' + r.d.slug + '.';
-                    } else {
-                        $('doneTitle').textContent = "You're live!";
-                        $('doneText').textContent = 'Your page ' + r.d.slug + ' is ready. Add your staff PIN to a safe place — you can change it any time in Settings.';
-                        var g = $('goBtn'); g.href = r.d.redirect; g.style.display = 'block';
-                    }
-                });
-        }
+    <!-- ===== Done ===== -->
+    <section id="vDone" hidden style="display:flex;flex-direction:column;gap:20px;flex:1">
+        <div class="check-ring" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"></path></svg></div>
+        <div>
+            <h1 id="doneTitle">It's yours</h1>
+            <p class="lede" id="doneText"></p>
+        </div>
+        <div class="pinbox">
+            <div style="display:flex;flex-direction:column;gap:2px"><span class="hint" style="font-weight:600">Crew PIN for the kitchen screen</span><span class="hint">Change it any time in Settings.</span></div>
+            <div class="pin" id="pinShown">0000</div>
+        </div>
+        <div class="bottom">
+            <a class="primary center" id="goBtn" href="#" style="text-decoration:none">Open my dashboard</a>
+        </div>
+    </section>
+</main>
 
-        $('form').addEventListener('submit', function (e) {
-            e.preventDefault();
-            var msg = validate(); if (msg) { err(msg); return; }
-            if (step < total) { step++; show(); } else submit();
+<script>
+(function () {
+    'use strict';
+    var $ = function (id) { return document.getElementById(id); };
+    var host = location.hostname.replace(/^www\./, '');
+    var SUFFIX = '.' + host + (location.port ? ':' + location.port : '');
+    $('rootSuffix').textContent = SUFFIX;
+    document.querySelectorAll('.suffix').forEach(function (el) { el.textContent = SUFFIX; });
+
+    // Same sample menu the server saves when no items are typed (core.js DEFAULT_MENU).
+    var SAMPLE = [
+        { name: 'Street Tacos (3)', price: 9 }, { name: 'Loaded Quesadilla', price: 10.5 }, { name: 'Burrito Bowl', price: 12 },
+        { name: 'Street Corn', price: 5 }, { name: 'Chips & Salsa', price: 3.5 }, { name: 'Agua Fresca', price: 4 }
+    ];
+    var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    var st = { mode: 'sample', slugEdited: false, slugOk: false, slugSeq: 0, slugTimer: null, email: '', resendAt: 0 };
+
+    /* ---------- helpers ---------- */
+    function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function slugify(name) {
+        return String(name || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
+            .replace(/['’]/g, '').replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').replace(/-{2,}/g, '-').slice(0, 30).replace(/-+$/, '');
+    }
+    function initials(name) {
+        var w = String(name || '').trim().split(/\s+/).filter(Boolean);
+        if (!w.length) return 'OK';
+        return (w[0][0] + (w[1] ? w[1][0] : (w[0][1] || ''))).toUpperCase();
+    }
+    function money(n) { return (Math.round(n * 100) / 100).toFixed(2); }
+    function show(view) {
+        ['vPreview', 'vSave', 'vCode', 'vDone'].forEach(function (v) { $(v).hidden = v !== view; });
+        $('stepA').className = view === 'vPreview' ? 'on' : '';
+        $('stepB').className = view === 'vPreview' ? '' : 'on';
+        window.scrollTo(0, 0);
+    }
+    function post(url, body) {
+        return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+            .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, status: r.status, d: d }; }); })
+            .catch(function () { return { ok: false, status: 0, d: { error: 'Connection problem. Please try again.' } }; });
+    }
+    function busy(btn, on, label) { btn.disabled = on; if (label) btn.dataset.label = btn.dataset.label || btn.textContent; btn.textContent = on ? label : (btn.dataset.label || btn.textContent); }
+
+    /* ---------- menu rows ---------- */
+    function addRow(name, price) {
+        if ($('rows').children.length >= 10) return;
+        var d = document.createElement('div'); d.className = 'row';
+        d.innerHTML = '<input class="it-name" maxlength="80" placeholder="Item name" aria-label="Item name"><input class="it-price" type="number" min="0" step="0.01" inputmode="decimal" placeholder="$ Price" aria-label="Price">';
+        if (name) d.querySelector('.it-name').value = name;
+        if (price) d.querySelector('.it-price').value = price;
+        $('rows').appendChild(d);
+    }
+    function typedItems() {
+        var out = [];
+        document.querySelectorAll('#rows .row').forEach(function (r) {
+            var n = r.querySelector('.it-name').value.trim(), p = parseFloat(r.querySelector('.it-price').value);
+            if (n && p >= 0) out.push({ name: n, desc: '', price: p, prep: 5 });
         });
-        $('slug').addEventListener('input', function () { clearTimeout(slugTimer); slugOk = false; slugTimer = setTimeout(checkSlug, 350); });
-        document.addEventListener('click', function (e) {
-            var el = e.target.closest('[data-action]'); if (!el) return;
-            var a = el.getAttribute('data-action');
-            if (a === 'back' && step > 1) { step--; show(); }
-            else if (a === 'menu-mode') setMode(el.getAttribute('data-mode'));
-            else if (a === 'add-row') addRow();
+        return out;
+    }
+    function setMode(m) {
+        st.mode = m;
+        document.querySelectorAll('.tab').forEach(function (t) { t.setAttribute('aria-pressed', String(t.dataset.mode === m)); });
+        $('customBox').hidden = m !== 'custom';
+        if (m === 'custom' && !$('rows').children.length) { addRow(); addRow(); }
+        render();
+    }
+
+    /* ---------- live preview ---------- */
+    function currentSlug() { return st.slugEdited ? $('slug').value.trim().toLowerCase() : slugify($('truck').value); }
+    function render() {
+        var name = $('truck').value.trim();
+        $('pvName').textContent = name || 'Your truck';
+        $('pvMono').textContent = initials(name);
+        var slug = currentSlug();
+        $('pvAddr').textContent = (slug || 'yourtruck') + SUFFIX;
+        if (slug) {
+            $('addrText').innerHTML = '<b>' + esc(slug + SUFFIX) + '</b>';
+            $('addrEditBtn').hidden = st.slugEdited;
+        } else {
+            $('addrText').textContent = 'Your web address appears here.';
+            $('addrEditBtn').hidden = true;
+        }
+        var items = st.mode === 'custom' ? typedItems() : [];
+        var sample = !items.length;
+        $('pvMenuHead').textContent = sample ? 'MENU · SAMPLE ITEMS' : 'MENU';
+        var list = (sample ? SAMPLE.slice(0, 3) : items.slice(0, 5));
+        $('pvItems').innerHTML = list.map(function (it) {
+            return '<div class="item"><span class="n">' + esc(it.name) + '</span><span class="lead"></span><span class="p">' + money(it.price) + '</span></div>';
+        }).join('') + (!sample && items.length > 5 ? '<div class="hint">+ ' + (items.length - 5) + ' more</div>' : '');
+    }
+
+    /* ---------- web address availability ---------- */
+    function checkSlug() {
+        var slug = currentSlug(), m = $('slugMsg');
+        st.slugOk = false;
+        if (!slug) { m.textContent = ''; return; }
+        m.className = 'hint'; m.textContent = 'Checking ' + slug + '…';
+        var seq = ++st.slugSeq;
+        fetch('/api/auth/slug-available?slug=' + encodeURIComponent(slug)).then(function (r) { return r.json(); }).then(function (d) {
+            if (seq !== st.slugSeq) return;
+            st.slugOk = !!d.available;
+            if (d.available) { m.className = 'hint'; m.innerHTML = '<span class="ok">Available.</span> It becomes yours once you confirm your email.'; }
+            else {
+                m.className = 'hint bad';
+                m.textContent = (d.error || 'Not available.') + (st.slugEdited ? '' : ' Tap Edit to choose another.');
+                if (!st.slugEdited) $('addrEditBtn').hidden = false;
+            }
+        }).catch(function () { if (seq === st.slugSeq) { m.className = 'hint bad'; m.textContent = "Couldn't check the web address right now."; } });
+    }
+    function queueSlugCheck() { clearTimeout(st.slugTimer); st.slugOk = false; st.slugTimer = setTimeout(checkSlug, 350); }
+
+    $('truck').addEventListener('input', function () { render(); queueSlugCheck(); $('err1').textContent = ''; });
+    $('slug').addEventListener('input', function () {
+        var clean = this.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+        if (clean !== this.value) this.value = clean;
+        render(); queueSlugCheck();
+    });
+    $('addrEditBtn').addEventListener('click', function () {
+        st.slugEdited = true; $('slug').value = slugify($('truck').value);
+        $('addrView').hidden = true; $('addrEditRow').hidden = false; $('slug').focus(); render();
+    });
+    document.querySelectorAll('.tab').forEach(function (t) { t.addEventListener('click', function () { setMode(t.dataset.mode); }); });
+    $('addRow').addEventListener('click', function () { addRow(); });
+    $('rows').addEventListener('input', render);
+
+    /* ---------- step 1 -> 2 ---------- */
+    $('toSave').addEventListener('click', function () {
+        var name = $('truck').value.trim(), e = $('err1');
+        if (name.length < 2) { e.textContent = "Type your truck's name first."; $('truck').focus(); return; }
+        if (!currentSlug()) { e.textContent = 'Pick a web address.'; return; }
+        if (!st.slugOk) { e.textContent = $('slugMsg').textContent ? 'Please choose an available web address.' : 'Checking your web address…'; checkSlug(); return; }
+        if (st.mode === 'custom' && !typedItems().length) { e.textContent = 'Add at least one item with a name and price, or use the sample menu.'; return; }
+        e.textContent = '';
+        $('saveTitle').textContent = 'Save ' + name;
+        show('vSave'); $('ownerName').focus();
+    });
+    $('back1').addEventListener('click', function () { show('vPreview'); });
+    $('pwShow').addEventListener('click', function () {
+        var p = $('password'), on = p.type === 'password';
+        p.type = on ? 'text' : 'password'; this.textContent = on ? 'Hide' : 'Show';
+    });
+
+    function signupBody() {
+        return {
+            businessName: $('truck').value.trim(), slug: currentSlug(),
+            menuData: st.mode === 'custom' ? typedItems() : [],
+            ownerName: $('ownerName').value.trim(), email: $('email').value.trim(), password: $('password').value,
+            acceptTerms: $('terms').checked
+        };
+    }
+
+    /* ---------- step 2: email a code ---------- */
+    function startSignup(btn, errEl) {
+        var b = signupBody();
+        if (!b.ownerName) { errEl.textContent = 'Please enter your name.'; return; }
+        if (!EMAIL_RE.test(b.email)) { errEl.textContent = 'Please enter a valid email.'; return; }
+        if (b.password.length < 8) { errEl.textContent = 'Password must be at least 8 characters.'; return; }
+        if (!b.acceptTerms) { errEl.textContent = 'Please agree to the Terms and Privacy Policy.'; return; }
+        errEl.textContent = '';
+        busy(btn, true, 'Sending…');
+        post('/api/auth/signup/start', b).then(function (r) {
+            busy(btn, false);
+            if (!r.ok) {
+                errEl.textContent = r.d.error || 'Something went wrong. Please try again.';
+                if (r.d.field === 'slug') { show('vPreview'); $('err1').textContent = r.d.error; st.slugOk = false; $('addrEditBtn').click(); }
+                return;
+            }
+            if (r.d.created) return finish(r.d);   // this server has no email yet: page created directly
+            st.email = r.d.email; st.resendAt = Date.now() + 45000;
+            $('codeEmail').textContent = r.d.email;
+            $('code').value = ''; $('err3').textContent = '';
+            show('vCode'); $('code').focus(); tickResend();
         });
-        setMode('sample'); show();
-    })();
-    </script>
+    }
+    $('vSave').addEventListener('submit', function (e) { e.preventDefault(); startSignup($('sendCode'), $('err2')); });
+
+    /* ---------- step 3: confirm code ---------- */
+    function tickResend() {
+        var b = $('resend'), left = Math.ceil((st.resendAt - Date.now()) / 1000);
+        if (left > 0) { b.disabled = true; b.textContent = 'Send a new code (' + left + 's)'; setTimeout(tickResend, 1000); }
+        else { b.disabled = false; b.textContent = 'Send a new code'; }
+    }
+    $('code').addEventListener('input', function () {
+        this.value = this.value.replace(/\D/g, '').slice(0, 6);
+        if (this.value.length === 6) $('vCode').requestSubmit ? $('vCode').requestSubmit() : $('confirm').click();
+    });
+    $('vCode').addEventListener('submit', function (e) {
+        e.preventDefault();
+        var code = $('code').value, btn = $('confirm'), errEl = $('err3');
+        if (code.length !== 6) { errEl.textContent = 'Enter the 6-digit code from the email.'; return; }
+        var body = { email: st.email, code: code };
+        if (!$('slugFixRow').hidden) body.slug = $('slugFix').value.trim().toLowerCase();
+        busy(btn, true, 'Confirming…');
+        post('/api/auth/signup/verify', body).then(function (r) {
+            busy(btn, false);
+            if (r.ok) return finish(r.d);
+            errEl.textContent = r.d.error || 'Something went wrong. Please try again.';
+            if (r.d.field === 'slug') { $('slugFixRow').hidden = false; $('slugFix').value = currentSlug(); $('slugFix').focus(); }
+            if (r.d.expired) { $('code').value = ''; st.resendAt = 0; tickResend(); }
+        });
+    });
+    $('resend').addEventListener('click', function () { startSignup(this, $('err3')); });
+    $('back2').addEventListener('click', function () { show('vSave'); $('email').focus(); });
+
+    /* ---------- done ---------- */
+    function finish(d) {
+        var name = $('truck').value.trim();
+        $('doneTitle').textContent = name + ' is yours';
+        $('doneText').textContent = d.slug + SUFFIX + ' is claimed and live. Add your real menu and hours from your dashboard.';
+        $('pinShown').textContent = d.staffPin || '';
+        $('goBtn').href = d.redirect || '/login.html';
+        show('vDone');
+    }
+
+    $('truck').focus();
+    render();
+})();
+</script>
 </body>
 </html>

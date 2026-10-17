@@ -88,9 +88,13 @@ input::placeholder, textarea::placeholder { color: var(--z500); opacity: 1; }
 .switch.amber.on { background: var(--warn) !important; }
 .guide-flash { outline-color: var(--ink) !important; }
 
+/* ---------- quiet (secondary) button ---------- */
+.ok-btn-quiet { background: transparent; color: var(--z100); border: 1px solid var(--z700); }
+.ok-btn-quiet:hover { background: var(--z900); }
+
 /* ---------- theme toggle (owner portal) ---------- */
-.theme-seg { display: inline-flex; border: 1px solid var(--z800); border-radius: 10px; overflow: hidden; }
-.theme-seg button { padding: 6px 12px; font-size: 12px; font-weight: 700; background: transparent; color: var(--z400); border: 0; }
+.theme-seg { display: flex; width: 100%; border: 1px solid var(--z800); border-radius: 10px; overflow: hidden; }
+.theme-seg button { flex: 1; padding: 10px 12px; font-size: 12px; font-weight: 700; background: transparent; color: var(--z400); border: 0; }
 .theme-seg button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
 
 /* ---------- COLOR CLASS MAP (generated) ---------- */

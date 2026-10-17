@@ -281,6 +281,153 @@ router.post('/signup', limitSignup, async (req, res) => {
   });
 });
 
+/* ---------- preview-first signup with a 6-digit email code ----------
+ * 1. The page builds a live preview in the browser (no account, nothing saved).
+ * 2. POST /signup/start  {businessName, slug, menuData, ownerName, email, password, acceptTerms}
+ *    checks everything and emails a 6-digit code. NOTHING is created or reserved yet.
+ * 3. POST /signup/verify {email, code[, slug]} creates the page, verified, and signs the owner in.
+ * If email isn't set up on this server (no Resend key) and REQUIRE_EMAIL_VERIFY isn't 'true',
+ * step 2 creates the page directly, so signups keep working until email is configured.
+ */
+const CODE_TTL_MS = 15 * 60 * 1000;
+const CODE_MAX_TRIES = 5;
+const CODE_RESEND_MS = 45 * 1000;
+const codeHash = (email, code) => core.sha256(`${email}:${code}`);
+
+function readSignup(b) {
+  const out = {
+    email: String(b.email || '').trim().toLowerCase(),
+    password: String(b.password || ''),
+    businessName: String(b.businessName || '').trim(),
+    ownerName: String(b.ownerName || '').trim().slice(0, 60),
+    ownerIG: cleanIG(b.ownerIG),
+    slug: core.validateSlug(b.slug),
+  };
+  if (!out.businessName || out.businessName.length < 2 || out.businessName.length > 60) out.error = 'Truck name must be 2-60 characters.';
+  else if (!out.slug.ok) out.error = out.slug.error;
+  else if (!out.ownerName) out.error = 'Please enter your name.';
+  else if (!EMAIL_RE.test(out.email) || out.email.length > 120) out.error = 'Please enter a valid email.';
+  else if (out.password.length < 8 || out.password.length > 72) out.error = 'Password must be 8-72 characters.';
+  else if (b.acceptTerms !== true) out.error = 'Please agree to the Terms and Privacy Policy.';
+  return out;
+}
+
+/** Creates an active, email-verified vendor. Returns { vendorId, staffPin } or { conflict: 'email'|'slug' }. */
+async function createVerifiedVendor({ email, passwordHash, businessName, ownerName, ownerIG, slug, menu }) {
+  const staffPin = String(crypto.randomInt(1000, 10000));
+  const staffHash = await bcrypt.hash(staffPin, 10);
+  const now = Date.now();
+  try {
+    const r = await run(
+      `INSERT INTO vendors (slug, business_name, menu_data, email, password_hash, staff_pin_hash,
+                            owner_name, owner_ig, status, plan, plan_status, email_verified, updated_at, terms_accepted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', 'free', 'active', 1, ?, ?)`,
+      [slug, businessName, JSON.stringify(menu), email, passwordHash, staffHash, ownerName, ownerIG || '', now, now]
+    );
+    await run('INSERT OR IGNORE INTO store_state (vendor_id) VALUES (?)', [r.lastID]);
+    return { vendorId: r.lastID, staffPin };
+  } catch (err) {
+    if (err.code === 'SQLITE_CONSTRAINT') return { conflict: String(err.message).includes('email') ? 'email' : 'slug' };
+    throw err;
+  }
+}
+
+function signupMenu(menuData) {
+  // normalizeMenu also enforces the 200-item ceiling. No items = the sample menu, which the owner edits later.
+  const menu = core.normalizeMenu(menuData);
+  return menu.length ? menu : core.normalizeMenu(core.DEFAULT_MENU);
+}
+
+router.post('/signup/start', limitSignup, async (req, res) => {
+  if (!req.tenant.isRoot) return res.status(404).json({ error: 'Not found' });
+  const s = readSignup(req.body || {});
+  if (s.error) return res.status(400).json({ error: s.error });
+
+  if (await get('SELECT id FROM vendors WHERE email = ?', [s.email])) {
+    return res.status(409).json({ error: 'An account with that email already exists. Try logging in.', field: 'email' });
+  }
+  if (await get('SELECT id FROM vendors WHERE slug = ?', [s.slug.slug])) {
+    return res.status(409).json({ error: 'That web address was just taken. Please pick another.', field: 'slug' });
+  }
+
+  const passwordHash = await bcrypt.hash(s.password, 10);
+  const menu = signupMenu((req.body || {}).menuData);
+
+  // No email on this server yet: create the page now (same as before codes existed).
+  if (!mailConfigured() && !REQUIRE_EMAIL_VERIFY) {
+    console.warn('[signup] Email is not set up, so this page was created without an email code:', s.slug.slug);
+    const made = await createVerifiedVendor({ ...s, slug: s.slug.slug, passwordHash, menu });
+    if (made.conflict === 'email') return res.status(409).json({ error: 'An account with that email already exists. Try logging in.', field: 'email' });
+    if (made.conflict) return res.status(409).json({ error: 'That web address was just taken. Please pick another.', field: 'slug' });
+    const handoff = await core.createToken(made.vendorId, 'handoff', 5 * 60 * 1000);
+    return res.status(201).json({ created: true, slug: s.slug.slug, staffPin: made.staffPin, redirect: vendorUrl(s.slug.slug, `/api/auth/handoff?code=${handoff}`) });
+  }
+
+  const prev = await get('SELECT sent_at FROM pending_signups WHERE email = ?', [s.email]);
+  if (prev && Date.now() - prev.sent_at < CODE_RESEND_MS) {
+    return res.status(429).json({ error: 'We just sent a code. Please wait a minute before asking for another.' });
+  }
+
+  const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+  const now = Date.now();
+  const data = JSON.stringify({ passwordHash, businessName: s.businessName, ownerName: s.ownerName, ownerIG: s.ownerIG, slug: s.slug.slug, menu });
+  await run(
+    `INSERT INTO pending_signups (email, code_hash, data, attempts, sent_at, expires_at) VALUES (?, ?, ?, 0, ?, ?)
+     ON CONFLICT(email) DO UPDATE SET code_hash = excluded.code_hash, data = excluded.data, attempts = 0,
+       sent_at = excluded.sent_at, expires_at = excluded.expires_at`,
+    [s.email, codeHash(s.email, code), data, now, now + CODE_TTL_MS]
+  );
+  const sent = await sendMail({
+    to: s.email,
+    subject: `${code} is your Online Kitchen code`,
+    text: `Your code to save ${s.businessName}: ${code}\n\nIt works for 15 minutes. If you didn't ask for this, you can ignore this email.`,
+    html: `<p>Your code to save <b>${escHtml(s.businessName)}</b>:</p><p style="font-size:28px;font-weight:800;letter-spacing:6px">${code}</p><p>It works for 15 minutes. If you didn't ask for this, you can ignore this email.</p>`,
+  });
+  if (!sent) {
+    await run('DELETE FROM pending_signups WHERE email = ?', [s.email]);
+    return res.status(502).json({ error: "We couldn't send the email just now. Please try again in a minute." });
+  }
+  res.json({ codeSent: true, email: s.email });
+});
+
+router.post('/signup/verify', limitLogin, async (req, res) => {
+  if (!req.tenant.isRoot) return res.status(404).json({ error: 'Not found' });
+  const b = req.body || {};
+  const email = String(b.email || '').trim().toLowerCase();
+  const code = String(b.code || '').replace(/\D/g, '');
+  const row = email ? await get('SELECT * FROM pending_signups WHERE email = ?', [email]) : null;
+  if (!row || row.expires_at < Date.now()) return res.status(400).json({ error: 'This code has expired. Send a new one.', expired: true });
+  if (row.attempts >= CODE_MAX_TRIES) {
+    await run('DELETE FROM pending_signups WHERE email = ?', [email]);
+    return res.status(429).json({ error: 'Too many wrong codes. Send a new one.', expired: true });
+  }
+  const expected = Buffer.from(row.code_hash);
+  const given = Buffer.from(codeHash(email, code));
+  if (code.length !== 6 || expected.length !== given.length || !crypto.timingSafeEqual(expected, given)) {
+    await run('UPDATE pending_signups SET attempts = attempts + 1 WHERE email = ?', [email]);
+    const left = CODE_MAX_TRIES - row.attempts - 1;
+    return res.status(400).json({ error: left > 0 ? `That code isn't right. ${left} ${left === 1 ? 'try' : 'tries'} left.` : 'Too many wrong codes. Send a new one.', expired: left <= 0 });
+  }
+
+  const data = JSON.parse(row.data);
+  // The web address may have been taken while they checked their email: let them pick another.
+  let slug = data.slug;
+  if (b.slug !== undefined) {
+    const sv = core.validateSlug(b.slug);
+    if (!sv.ok) return res.status(400).json({ error: sv.error, field: 'slug' });
+    slug = sv.slug;
+  }
+  const made = await createVerifiedVendor({ ...data, email, slug });
+  if (made.conflict === 'slug') return res.status(409).json({ error: `Someone just took ${slug}. Pick another web address and tap Save again.`, field: 'slug' });
+  if (made.conflict === 'email') {
+    await run('DELETE FROM pending_signups WHERE email = ?', [email]);
+    return res.status(409).json({ error: 'An account with that email already exists. Try logging in.', field: 'email' });
+  }
+  await run('DELETE FROM pending_signups WHERE email = ?', [email]);
+  const handoff = await core.createToken(made.vendorId, 'handoff', 5 * 60 * 1000);
+  res.status(201).json({ created: true, slug, staffPin: made.staffPin, redirect: vendorUrl(slug, `/api/auth/handoff?code=${handoff}`) });
+});
+
 router.get('/verify', async (req, res) => {
   const vendorId = await core.consumeToken(String(req.query.token || ''), 'verify');
   if (!vendorId) return res.status(400).send('This activation link is invalid or has expired.');

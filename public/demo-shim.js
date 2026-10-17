@@ -398,14 +398,14 @@
     function make(tag, text, style) { var el = document.createElement(tag); if (text) el.textContent = text; if (style) css(el, style); return el; }
 
     function banner() {
-        var bar = make('div', '', { background: '#064e3b', borderBottom: '1px solid #065f46', color: '#d1fae5', fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: '12px', padding: '8px 12px', width: '100%', boxSizing: 'border-box', position: 'relative', zIndex: '30' }); // below the pages' pop-ups (z-50)
+        var bar = make('div', '', { background: '#000000', borderBottom: '1px solid #26282b', color: '#dcdee1', fontFamily: "'Manrope', system-ui, -apple-system, sans-serif", fontSize: '12px', padding: '8px 12px', width: '100%', boxSizing: 'border-box', position: 'relative', zIndex: '30' }); // below the pages' pop-ups (z-50)
         var inner = make('div', '', { maxWidth: '28rem', margin: '0 auto' });
 
         var row1 = make('div', '', { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' });
-        var chip = make('span', 'LIVE DEMO', { background: '#10b981', color: '#022c22', fontWeight: '800', fontSize: '10px', letterSpacing: '0.05em', padding: '3px 7px', borderRadius: '999px' });
-        var toggle = make('div', '', { display: 'flex', background: '#022c22', borderRadius: '10px', padding: '3px', gap: '3px' });
+        var chip = make('span', 'LIVE DEMO', { background: '#dcdee1', color: '#0a0a0b', fontWeight: '800', fontSize: '10px', letterSpacing: '0.05em', padding: '3px 7px', borderRadius: '999px' });
+        var toggle = make('div', '', { display: 'flex', background: '#1a1b1d', borderRadius: '10px', padding: '3px', gap: '3px' });
         [['Customer view', '/demo/customer', !isOwnerPage], ['Owner view', '/demo/owner', isOwnerPage]].forEach(function (t) {
-            var b = make('a', t[0], { padding: '6px 10px', borderRadius: '7px', fontWeight: '700', textDecoration: 'none', fontSize: '12px', color: t[2] ? '#022c22' : '#a7f3d0', background: t[2] ? '#d1fae5' : 'transparent' });
+            var b = make('a', t[0], { padding: '6px 10px', borderRadius: '7px', fontWeight: '700', textDecoration: 'none', fontSize: '12px', color: t[2] ? '#0a0a0b' : '#a3a6ab', background: t[2] ? '#dcdee1' : 'transparent' });
             b.href = t[1];
             b.setAttribute('data-demo-nav', '1');
             toggle.appendChild(b);
@@ -415,13 +415,13 @@
         var hint = make('div', isOwnerPage
             ? 'You are the truck owner. Tap Mark Ready on an order, then switch to Customer view to see their tracker update.'
             : 'You are a customer. Place an order, then switch to Owner view to see it land in the kitchen.',
-            { marginTop: '6px', color: '#a7f3d0', lineHeight: '1.35' });
+            { marginTop: '6px', color: '#a3a6ab', lineHeight: '1.35' });
 
         var row2 = make('div', '', { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' });
-        var reset = make('button', '↺ Reset demo', { background: 'transparent', border: '0', color: '#6ee7b7', textDecoration: 'underline', cursor: 'pointer', fontSize: '11px', padding: '0' });
+        var reset = make('button', '↺ Reset demo', { background: 'transparent', border: '0', color: '#c4c6ca', textDecoration: 'underline', cursor: 'pointer', fontSize: '11px', padding: '0' });
         reset.type = 'button';
         reset.addEventListener('click', function () { if (confirm('Reset the demo truck back to the start?')) resetDemo(); });
-        var signup = make('a', 'Create my free page →', { color: '#ffffff', fontWeight: '700', textDecoration: 'none', background: '#059669', padding: '5px 10px', borderRadius: '8px', fontSize: '11px' });
+        var signup = make('a', 'Create my free page →', { color: '#0a0a0b', fontWeight: '700', textDecoration: 'none', background: '#dcdee1', padding: '5px 10px', borderRadius: '8px', fontSize: '11px' });
         signup.href = '/signup.html';
         row2.appendChild(reset); row2.appendChild(signup);
 

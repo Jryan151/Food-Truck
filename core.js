@@ -363,6 +363,16 @@ async function ensureSchema() {
     id TEXT PRIMARY KEY,
     created_at INTEGER NOT NULL
   )`);
+  // Signups waiting for their 6-digit email code. Nothing (not even the web address) is claimed
+  // until the code is entered; then the vendor row is created. One row per email.
+  await exec(`CREATE TABLE IF NOT EXISTS pending_signups (
+    email TEXT PRIMARY KEY,
+    code_hash TEXT NOT NULL,
+    data TEXT NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    sent_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL
+  )`);
 
   // Existing vendors: carry their old PIN over as the staff PIN, and give them a state row.
   await run('UPDATE vendors SET staff_pin_hash = hashed_pin WHERE staff_pin_hash IS NULL AND hashed_pin IS NOT NULL');
@@ -412,6 +422,7 @@ function orderShape(o) {
 setInterval(() => {
   run('DELETE FROM sessions WHERE expires_at < ?', [Date.now()]).catch(() => {});
   run('DELETE FROM tokens WHERE expires_at < ?', [Date.now()]).catch(() => {});
+  run('DELETE FROM pending_signups WHERE expires_at < ?', [Date.now()]).catch(() => {});
 }, 60 * 60 * 1000).unref();
 setInterval(() => { autoCloseOrders().catch((e) => console.error('Auto-close failed:', e.message)); }, 15 * 60 * 1000).unref();
 
