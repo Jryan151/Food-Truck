@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Your catering booking</title>
+    <meta name="robots" content="noindex">
+    <meta name="theme-color" content="#0a0a0b">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+    <script src="/theme.js"></script>
+    <link rel="stylesheet" href="/theme.css">
+    <link rel="stylesheet" href="/ok.css">
+    <script src="/catering-quote.js"></script>
+</head>
+<body>
+<main class="ok-wrap">
+    <div class="ok-top">
+        <a class="ok-truck" href="/catering" style="text-decoration:none">
+            <div class="ok-mono" id="mono" aria-hidden="true">&nbsp;</div>
+            <div style="display:flex;flex-direction:column"><span class="ok-truck-name" id="truckName">&nbsp;</span><span class="ok-sub">Catering</span></div>
+        </a>
+        <span class="ok-pill" id="statusPill" hidden></span>
+    </div>
+    <div id="loading" class="ok-lede">Loading…</div>
+    <div id="missing" hidden><h1 class="ok-h1">We couldn't find that booking.</h1><p class="ok-lede">Check the link in your email, or <a href="/catering" style="color:var(--z100)">start a new request</a>.</p></div>
+
+    <div id="view" hidden style="display:flex;flex-direction:column;gap:20px">
+        <div>
+            <div class="ok-step" id="kicker"></div>
+            <h1 class="ok-h1" id="headline" style="margin-top:4px"></h1>
+            <p class="ok-lede" id="explain"></p>
+        </div>
+        <div class="ok-card">
+            <div class="ok-row"><span class="ok-label">When</span><span style="font-weight:700" id="when"></span></div>
+            <div class="ok-row"><span class="ok-label">Where</span><span style="font-weight:700" id="where"></span></div>
+            <div class="ok-row"><span class="ok-label">Menu</span><span style="font-weight:700" id="menu"></span></div>
+            <div class="ok-row" id="notesRow" hidden><span class="ok-label">Your notes</span><span id="notes" style="white-space:pre-wrap"></span></div>
+        </div>
+        <section class="ok-quote">
+            <span class="ok-step" style="color:inherit;opacity:.7">Your price, locked when you booked</span>
+            <div id="lines" style="display:flex;flex-direction:column;gap:8px"></div>
+        </section>
+        <div class="ok-card pad" style="display:flex;flex-direction:column;gap:8px">
+            <span style="font-weight:700">Need a change?</span>
+            <span class="ok-note" id="changeNote">Reply to any email from us and it reaches the truck directly.</span>
+        </div>
+        <div id="cancelBox" hidden>
+            <button type="button" class="ok-btn quiet" id="cancel">Withdraw this request</button>
+            <div class="ok-err" id="err" role="alert" style="margin-top:8px"></div>
+        </div>
+    </div>
+</main>
+<script>
+(function () {
+    'use strict';
+    var Q = window.CateringQuote, $ = function (id) { return document.getElementById(id); };
+    var token = decodeURIComponent(location.pathname.split('/').pop() || '');
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function longDate(ymd) { try { return new Date(ymd + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' }); } catch (e) { return ymd; } }
+    function time12(hm) { var p = String(hm).split(':'), h = +p[0]; return ((h + 11) % 12 + 1) + ':' + p[1] + (h < 12 ? ' AM' : ' PM'); }
+    var COPY = {
+        requested: ['Request sent', 'Waiting for the truck to confirm', 'warn'],
+        accepted: ['Confirmed', 'You’re booked', 'ok'],
+        declined: ['Not available', 'The truck can’t make this date', 'bad'],
+        canceled: ['Withdrawn', 'You withdrew this request', ''],
+        expired: ['Hold ended', 'The 24-hour hold ended', '']
+    };
+    function show(d) {
+        var b = d.booking, c = COPY[b.status] || [b.status, b.status, ''];
+        $('truckName').textContent = d.businessName; $('mono').textContent = (d.businessName || ' ').trim().split(/\s+/).map(function (w) { return w[0]; }).join('').slice(0, 2).toUpperCase();
+        document.title = d.businessName + ' · Your catering booking';
+        $('statusPill').hidden = false; $('statusPill').textContent = c[0]; $('statusPill').className = 'ok-pill ' + c[2];
+        $('kicker').textContent = (b.hostName ? 'Thanks, ' + b.hostName : '') + (b.company ? ' · ' + b.company : '');
+        $('headline').textContent = c[1];
+        var held = new Date(b.holdExpiresAt);
+        $('explain').textContent = b.status === 'requested'
+            ? 'Your date is held until ' + held.toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' }) + '. We’ll email you as soon as ' + d.businessName + ' confirms.'
+            : b.status === 'accepted' ? 'We emailed your confirmation. Keep this link: it always shows the latest.'
+            : b.status === 'expired' ? d.businessName + ' can still confirm if the date is free. Reply to your email to check in.'
+            : b.status === 'declined' ? 'Reply to your email to ask about another date.' : '';
+        $('when').textContent = longDate(b.date) + ' · ' + time12(b.startTime) + ' · ' + b.guests + ' guests';
+        $('where').textContent = b.address + ' ' + b.zip;
+        $('menu').textContent = b.packageName + (b.choices.length ? ' · ' + b.choices.join(' and ') : '') + (b.vegetarian ? ' · ' + b.vegetarian + ' vegetarian' : '');
+        if (b.notes) { $('notesRow').hidden = false; $('notes').textContent = b.notes; }
+        var q = b.quote || {};
+        $('lines').innerHTML = (q.lines || []).map(function (l) { return '<div class="ok-quote-line"><span>' + esc(l.label) + '</span><span>' + Q.money(l.cents).replace('$', '') + '</span></div>'; }).join('') +
+            '<div class="ok-quote-total"><span>Total</span><span>' + Q.money(b.totalCents) + '</span></div>' +
+            (q.depositCents ? '<div class="muted">Deposit when confirmed: ' + Q.money(q.depositCents) + '</div>' : '');
+        $('cancelBox').hidden = b.status !== 'requested';
+        $('view').hidden = false;
+    }
+    function load() {
+        fetch('/api/catering/booking/' + encodeURIComponent(token)).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); }).then(function (r) {
+            $('loading').hidden = true;
+            if (!r.ok) { $('missing').hidden = false; return; }
+            show(r.d);
+        }).catch(function () { $('loading').textContent = 'Could not load. Please refresh.'; });
+    }
+    $('cancel').addEventListener('click', function () {
+        if (!confirm('Withdraw this request? The date will be released.')) return;
+        var btn = this; btn.disabled = true;
+        fetch('/api/catering/booking/' + encodeURIComponent(token) + '/cancel', { method: 'POST' }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); }).then(function (r) {
+            btn.disabled = false;
+            if (!r.ok) { $('err').textContent = r.d.error || 'Something went wrong.'; return; }
+            load();
+        });
+    });
+    load();
+})();
+</script>
+</body>
+</html>

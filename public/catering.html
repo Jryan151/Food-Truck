@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Catering</title>
+    <meta name="theme-color" content="#0a0a0b">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+    <script src="/theme.js"></script>
+    <link rel="stylesheet" href="/theme.css">
+    <link rel="stylesheet" href="/ok.css">
+    <script src="/catering-quote.js"></script>
+</head>
+<body>
+<main class="ok-wrap" id="app">
+    <div class="ok-top">
+        <a class="ok-truck" href="/" style="text-decoration:none">
+            <div class="ok-mono" id="mono" aria-hidden="true">&nbsp;</div>
+            <div style="display:flex;flex-direction:column;min-width:0"><span class="ok-truck-name" id="truckName">&nbsp;</span><span class="ok-sub">Catering · instant quote, no back-and-forth</span></div>
+        </a>
+    </div>
+
+    <div id="loading" class="ok-lede">Loading…</div>
+    <div id="closed" hidden>
+        <h1 class="ok-h1">Catering isn't open right now.</h1>
+        <p class="ok-lede">This truck isn't taking catering requests online at the moment. <a href="/" style="color:var(--z100)">See the menu</a>.</p>
+    </div>
+
+    <form id="form" hidden novalidate style="display:flex;flex-direction:column;gap:22px">
+        <h1 class="ok-h1">Price your event in about three minutes.</h1>
+
+        <!-- 01 event -->
+        <section class="ok-section" aria-labelledby="s1">
+            <div class="ok-step" id="s1">01 Your event</div>
+            <div class="ok-card">
+                <div class="ok-row">
+                    <label class="ok-label" for="date">Date</label>
+                    <input id="date" class="ok-input" type="date" required>
+                    <span class="ok-check-line quiet" id="chkDate" aria-live="polite"></span>
+                </div>
+                <div class="ok-row">
+                    <label class="ok-label" for="time">Start time</label>
+                    <input id="time" class="ok-input" type="time" value="11:30" step="900" required>
+                    <span class="ok-check-line quiet" id="chkTime"></span>
+                </div>
+                <div class="ok-row">
+                    <label class="ok-label" for="address">Address</label>
+                    <input id="address" class="ok-input" autocomplete="street-address" maxlength="160" placeholder="Street address and city">
+                </div>
+                <div class="ok-row">
+                    <label class="ok-label" for="zip">ZIP code</label>
+                    <input id="zip" class="ok-input" inputmode="numeric" autocomplete="postal-code" maxlength="5" placeholder="5 digits">
+                    <span class="ok-check-line quiet" id="chkZip" aria-live="polite"></span>
+                </div>
+                <div class="ok-row" style="flex-direction:row;justify-content:space-between;align-items:center">
+                    <div style="display:flex;flex-direction:column;gap:4px"><label class="ok-label" for="guests">Guests</label><span class="ok-check-line quiet" id="chkGuests" aria-live="polite"></span></div>
+                    <div class="ok-stepper">
+                        <button type="button" class="ok-round" data-step="guests" data-by="-5" aria-label="Fewer guests">−</button>
+                        <span class="ok-count"><input id="guests" inputmode="numeric" aria-label="Guests"></span>
+                        <button type="button" class="ok-round solid" data-step="guests" data-by="5" aria-label="More guests">+</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 02 package -->
+        <section class="ok-section" aria-labelledby="s2">
+            <div class="ok-step" id="s2">02 Package</div>
+            <div id="packages" class="ok-section" style="gap:10px"></div>
+        </section>
+
+        <!-- 03 site -->
+        <section class="ok-section" aria-labelledby="s3" id="siteSection">
+            <div class="ok-step" id="s3">03 Site check</div>
+            <div class="ok-card" id="questions"></div>
+        </section>
+
+        <!-- 04 you -->
+        <section class="ok-section" aria-labelledby="s4">
+            <div class="ok-step" id="s4"><span id="s4num">04</span> Your details</div>
+            <div class="ok-field"><label for="hostName">Your name</label><input id="hostName" class="ok-box" autocomplete="name" maxlength="80"></div>
+            <div class="ok-field"><label for="hostEmail">Email</label><input id="hostEmail" class="ok-box" type="email" inputmode="email" autocomplete="email" maxlength="120"></div>
+            <div class="ok-grid2">
+                <div class="ok-field"><label for="hostPhone">Phone (optional)</label><input id="hostPhone" class="ok-box" type="tel" autocomplete="tel" maxlength="30"></div>
+                <div class="ok-field"><label for="company">Company (optional)</label><input id="company" class="ok-box" autocomplete="organization" maxlength="80"></div>
+            </div>
+            <div class="ok-field"><label for="notes">Anything the crew should know? (optional)</label><textarea id="notes" class="ok-box" maxlength="600" placeholder="Gate code, where to park, allergies…"></textarea></div>
+        </section>
+
+        <!-- custom request: for anything outside the rules -->
+        <section class="ok-section" id="customBox" hidden>
+            <div class="ok-card pad" style="display:flex;flex-direction:column;gap:10px">
+                <div class="ok-h2" style="font-size:17px">Ask for something custom</div>
+                <p class="ok-note" style="margin:0" id="customWhy">Tell the truck what you need. They'll reply to your email.</p>
+                <textarea id="customMsg" class="ok-box" maxlength="1200" placeholder="e.g. 400 guests at a company picnic in Flagstaff"></textarea>
+                <div class="ok-err" id="customErr" role="alert"></div>
+                <button type="button" class="ok-btn small" id="customSend" style="align-self:flex-start">Send to the truck</button>
+                <p class="ok-note ok-ok" id="customDone" hidden style="margin:0">Sent. Watch your email for their reply.</p>
+            </div>
+        </section>
+        <button type="button" class="ok-link" id="customOpen" style="align-self:flex-start">Need something not listed here? Ask for a custom quote</button>
+
+        <!-- quote -->
+        <section class="ok-quote" aria-live="polite" aria-labelledby="qh">
+            <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="ok-step" id="qh" style="color:inherit;opacity:.7">Your quote</span><span class="muted">Updates as you choose</span></div>
+            <div id="quoteLines" style="display:flex;flex-direction:column;gap:8px"></div>
+            <label class="ok-check"><input type="checkbox" id="accept"><span id="policyText">I agree to the booking terms.</span></label>
+            <div class="ok-err" id="err" role="alert" style="color:inherit;font-weight:700"></div>
+            <button type="submit" class="ok-btn split" id="submit"><span id="submitLabel">Request this date</span><span id="submitAmt"></span></button>
+            <div class="muted ok-center" id="holdNote">No payment now. The date is held for 24 hours while the truck confirms.</div>
+        </section>
+    </form>
+</main>
+
+<script>
+(function () {
+    'use strict';
+    var Q = window.CateringQuote;
+    var $ = function (id) { return document.getElementById(id); };
+    var C = null, S = null;
+    var st = { packageId: null, choices: [], veg: 0, answers: {}, customByHost: false };
+
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function initials(n) { var w = String(n || '').trim().split(/\s+/); return ((w[0] || ' ')[0] + ((w[1] || w[0] || '  ')[w[1] ? 0 : 1] || '')).toUpperCase(); }
+    function shortDate(ymd) {
+        try { return new Date(ymd + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }); } catch (e) { return ymd; }
+    }
+    function setLine(el, text, kind) { el.textContent = text || ''; el.className = 'ok-check-line ' + (kind || 'quiet'); }
+
+    function pkg() { return S.packages.filter(function (p) { return p.id === st.packageId; })[0] || null; }
+    function priceLabel(p) {
+        return p.tiers.map(function (t, i) { return Q.money(t.priceCents).replace('.00', '') + (i ? ' for ' + t.minGuests + '+' : ''); }).join(' · ') + ' per guest';
+    }
+
+    function renderPackages() {
+        $('packages').innerHTML = S.packages.map(function (p) {
+            var on = p.id === st.packageId;
+            var inner = '<span class="ok-pkg-head"><span class="ok-pkg-name">' + esc(p.name) + '</span><span class="ok-pkg-price">' + esc(priceLabel(p)) + '</span></span>' +
+                (p.desc ? '<span class="ok-pkg-desc">' + esc(p.desc) + '</span>' : '');
+            return '<div class="ok-section" style="gap:0"><button type="button" class="ok-pkg" data-pkg="' + esc(p.id) + '" aria-pressed="' + on + '">' + inner + '</button>' +
+                (on ? pkgOptions(p) : '') + '</div>';
+        }).join('');
+    }
+    function pkgOptions(p) {
+        var h = '';
+        if (p.chooseCount && p.choices.length) {
+            h += '<div class="ok-card pad" style="margin-top:8px;display:flex;flex-direction:column;gap:8px"><span class="ok-label">Choose ' + p.chooseCount + ' ' + esc((p.choiceLabel || 'options').toLowerCase()) + '</span><div class="ok-chips">' +
+                p.choices.map(function (c) { return '<button type="button" class="ok-chip" data-choice="' + esc(c) + '" aria-pressed="' + (st.choices.indexOf(c) !== -1) + '">' + esc(c) + '</button>'; }).join('') + '</div></div>';
+        }
+        if (p.allowVegetarian) {
+            h += '<div class="ok-card pad" style="margin-top:8px;display:flex;justify-content:space-between;align-items:center;gap:10px"><div style="display:flex;flex-direction:column"><span style="font-weight:700;font-size:14px">Vegetarian plates</span><span class="ok-note">Counted inside your guest total</span></div>' +
+                '<div class="ok-stepper"><button type="button" class="ok-round" data-step="veg" data-by="-1" aria-label="Fewer vegetarian plates">−</button><span class="ok-count" id="vegCount">' + st.veg + '</span><button type="button" class="ok-round solid" data-step="veg" data-by="1" aria-label="More vegetarian plates">+</button></div></div>';
+        }
+        return h;
+    }
+    function renderQuestions() {
+        if (!S.siteQuestions.length) { $('siteSection').hidden = true; $('s4num').textContent = '03'; return; }
+        $('questions').innerHTML = S.siteQuestions.map(function (q) {
+            var a = st.answers[q.id];
+            var note = a === true ? q.yesNote : a === false ? q.noNote : '';
+            return '<div class="ok-q"><div class="ok-q-line"><span class="ok-q-text">' + esc(q.question) + '</span>' +
+                '<div class="ok-yn" role="group" aria-label="' + esc(q.question) + '"><button type="button" data-q="' + esc(q.id) + '" data-a="yes" aria-pressed="' + (a === true) + '">Yes</button><button type="button" data-q="' + esc(q.id) + '" data-a="no" aria-pressed="' + (a === false) + '">No</button></div></div>' +
+                (note ? '<span class="ok-note">' + esc(note) + '</span>' : '') + '</div>';
+        }).join('');
+    }
+
+    function guests() { return parseInt($('guests').value, 10) || 0; }
+
+    function render() {
+        var p = pkg();
+        if (p && !p.allowVegetarian) st.veg = 0;
+        var q = Q.computeQuote(S, { packageId: st.packageId, guests: guests(), zip: $('zip').value.trim(), vegetarian: st.veg });
+        var probs = {}; q.problems.forEach(function (x) { if (!probs[x.field]) probs[x.field] = x.message; });
+
+        // instant checks
+        var d = $('date').value;
+        var dp = d ? Q.checkDate(S, d, C.today, C.fullDates) : null;
+        setLine($('chkDate'), d ? (dp || '✓ Available') : 'Earliest date: ' + Q.addDays(C.today, S.leadDays), d ? (dp ? 'bad' : '') : 'quiet');
+        setLine($('chkTime'), 'Served for ' + S.serviceHours + ' hours', 'quiet');
+        var zip = $('zip').value.trim();
+        if (/^\d{5}$/.test(zip)) {
+            var z = Q.findZone(S, zip);
+            setLine($('chkZip'), z ? '✓ ' + z.name + ' · ' + (z.feeCents ? Q.money(z.feeCents) + ' travel' : 'travel is free') : probs.zip, z ? '' : 'bad');
+        } else setLine($('chkZip'), '', 'quiet');
+        var g = guests();
+        setLine($('chkGuests'), probs.guests ? probs.guests : '✓ Meets the ' + S.minGuests + '-guest minimum', probs.guests ? 'bad' : '');
+        var veg = $('vegCount'); if (veg) veg.textContent = st.veg;
+
+        // The custom request opens by itself when the rules can't price the event, and closes again
+        // once they can (unless the host opened it on purpose or has started typing).
+        var outside = (probs.zip && /^\d{5}$/.test(zip)) || (g > S.maxGuests);
+        if (outside) {
+            $('customBox').hidden = false; $('customOpen').hidden = true;
+            $('customWhy').textContent = (probs.zip || probs.guests) + ' Tell the truck what you need and they’ll reply by email.';
+        } else if (!st.customByHost && !$('customMsg').value.trim()) {
+            $('customBox').hidden = true; $('customOpen').hidden = false;
+        }
+
+        // quote panel
+        var lines = $('quoteLines');
+        if (!q.lines.length) {
+            lines.innerHTML = '<div class="muted" style="font-size:14px;opacity:.8">Choose a package and guest count to see your price.</div>';
+        } else {
+            lines.innerHTML = q.lines.map(function (l) {
+                return '<div class="ok-quote-line"><span>' + esc(l.label) + '</span><span>' + Q.money(l.cents).replace('$', '') + '</span></div>' +
+                    (l.key === 'food' && q.tierNote ? '<div class="muted" style="margin-top:-4px">' + esc(q.tierNote) + '</div>' : '') +
+                    (l.key === 'food' && q.nextBreak ? '<div class="muted" style="margin-top:-4px">' + (q.nextBreak.guests - g) + ' more guests drops you to ' + Q.money(q.nextBreak.perGuestCents) + ' per guest</div>' : '');
+            }).join('') + (q.totalCents != null ? '<div class="ok-quote-total"><span>Total</span><span>' + Q.money(q.totalCents) + '</span></div>' : '') +
+                (q.depositCents ? '<div class="muted">Deposit when confirmed: ' + Q.money(q.depositCents) + ' (' + S.depositPct + '%)</div>' : '');
+        }
+        $('submitLabel').textContent = d && !dp ? 'Request ' + shortDate(d) : 'Request this date';
+        $('submitAmt').textContent = q.ok && q.totalCents != null ? Q.money(q.totalCents) : '';
+        return { q: q, dateProblem: dp };
+    }
+
+    function firstProblem() {
+        var r = render();
+        if (!$('date').value) return ['date', 'Choose a date.'];
+        if (r.dateProblem) return ['date', r.dateProblem];
+        if (!$('time').value) return ['time', 'Choose a start time.'];
+        if ($('address').value.trim().length < 5) return ['address', 'Enter the event address.'];
+        if (r.q.problems.length) return [r.q.problems[0].field, r.q.problems[0].message];
+        var p = pkg();
+        if (p && p.chooseCount && st.choices.length !== p.chooseCount) return ['packages', 'Choose ' + p.chooseCount + ' ' + (p.choiceLabel || 'options').toLowerCase() + '.'];
+        for (var i = 0; i < S.siteQuestions.length; i++) {
+            var qq = S.siteQuestions[i], a = st.answers[qq.id];
+            if (a !== true && a !== false) return ['questions', 'Please answer: ' + qq.question];
+            if (qq.mustBeYes && a !== true) return ['questions', (qq.noNote || 'We need a yes to: ' + qq.question) + ' Ask for a custom quote instead.'];
+        }
+        if (!$('hostName').value.trim()) return ['hostName', 'Please enter your name.'];
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test($('hostEmail').value.trim())) return ['hostEmail', 'Please enter a valid email.'];
+        if (!$('accept').checked) return ['accept', 'Please agree to the booking terms.'];
+        return null;
+    }
+    function focusField(f) {
+        var map = { package: 'packages', vegetarian: 'packages', choices: 'packages', site: 'questions' };
+        var el = $(map[f] || f);
+        if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); if (el.focus && /INPUT|TEXTAREA/.test(el.tagName)) el.focus({ preventScroll: true }); }
+    }
+
+    /* ---------- events ---------- */
+    document.addEventListener('click', function (e) {
+        var t = e.target.closest('button'); if (!t) return;
+        if (t.dataset.pkg) { if (st.packageId !== t.dataset.pkg) { st.packageId = t.dataset.pkg; st.choices = []; } renderPackages(); render(); return; }
+        if (t.dataset.choice) {
+            var p = pkg(), c = t.dataset.choice, i = st.choices.indexOf(c);
+            if (i !== -1) st.choices.splice(i, 1);
+            else { st.choices.push(c); if (p && st.choices.length > p.chooseCount) st.choices.shift(); }
+            renderPackages(); render(); return;
+        }
+        if (t.dataset.q) { st.answers[t.dataset.q] = t.dataset.a === 'yes'; renderQuestions(); render(); return; }
+        if (t.dataset.step === 'guests') {
+            var g = guests() || S.minGuests;
+            var by = parseInt(t.dataset.by, 10);
+            g = Math.max(1, by > 0 ? Math.floor(g / 5) * 5 + 5 : Math.ceil(g / 5) * 5 - 5);
+            $('guests').value = g; render(); return;
+        }
+        if (t.dataset.step === 'veg') { st.veg = Math.max(0, Math.min(guests(), st.veg + parseInt(t.dataset.by, 10))); render(); return; }
+    });
+    ['date', 'time', 'address', 'zip', 'guests'].forEach(function (id) { $(id).addEventListener('input', function () { $('err').textContent = ''; render(); }); });
+    $('zip').addEventListener('input', function () { this.value = this.value.replace(/\D/g, '').slice(0, 5); });
+    $('guests').addEventListener('input', function () { this.value = this.value.replace(/\D/g, '').slice(0, 4); });
+    $('accept').addEventListener('change', function () { $('err').textContent = ''; });
+    $('customOpen').addEventListener('click', function () {
+        st.customByHost = true; $('customBox').hidden = false; this.hidden = true;
+        $('customWhy').textContent = 'Tell the truck what you need. They’ll reply to your email.'; $('customMsg').focus();
+    });
+
+    $('customSend').addEventListener('click', function () {
+        var btn = this, e = $('customErr');
+        if (!$('hostName').value.trim() || !$('hostEmail').value.trim()) { e.textContent = 'Fill in your name and email under "Your details" first.'; focusField('hostName'); return; }
+        e.textContent = ''; btn.disabled = true; btn.textContent = 'Sending…';
+        post('/api/catering/custom', { hostName: $('hostName').value, hostEmail: $('hostEmail').value, hostPhone: $('hostPhone').value, date: $('date').value, guests: guests(), zip: $('zip').value, message: $('customMsg').value })
+            .then(function (r) {
+                btn.disabled = false; btn.textContent = 'Send to the truck';
+                if (!r.ok) { e.textContent = r.d.error || 'Something went wrong.'; return; }
+                $('customDone').hidden = false; btn.hidden = true;
+            });
+    });
+
+    function post(url, body) {
+        return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+            .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, d: d }; }); })
+            .catch(function () { return { ok: false, d: { error: 'Connection problem. Please try again.' } }; });
+    }
+
+    $('form').addEventListener('submit', function (e) {
+        e.preventDefault();
+        var prob = firstProblem();
+        if (prob) { $('err').textContent = prob[1]; focusField(prob[0]); return; }
+        var btn = $('submit'); btn.disabled = true; $('submitLabel').textContent = 'Sending…';
+        post('/api/catering/request', {
+            date: $('date').value, startTime: $('time').value, address: $('address').value, zip: $('zip').value, guests: guests(),
+            packageId: st.packageId, choices: st.choices, vegetarian: st.veg, siteAnswers: st.answers,
+            hostName: $('hostName').value, hostEmail: $('hostEmail').value, hostPhone: $('hostPhone').value, company: $('company').value,
+            notes: $('notes').value, acceptPolicy: $('accept').checked
+        }).then(function (r) {
+            btn.disabled = false; render();
+            if (!r.ok) {
+                $('err').textContent = r.d.error || 'Something went wrong. Please try again.';
+                if (r.d.field === 'date') { C.fullDates.push($('date').value); render(); }
+                if (r.d.field) focusField(r.d.field);
+                return;
+            }
+            location.href = r.d.link;
+        });
+    });
+
+    /* ---------- start ---------- */
+    fetch('/api/catering/config').then(function (r) { return r.json(); }).then(function (d) {
+        C = d; $('loading').hidden = true;
+        $('truckName').textContent = d.businessName || '';
+        $('mono').textContent = d.emoji || initials(d.businessName);
+        document.title = (d.businessName ? d.businessName + ' · ' : '') + 'Catering';
+        if (!d.enabled) { $('closed').hidden = false; return; }
+        S = d.settings;
+        $('form').hidden = false;
+        $('date').min = Q.addDays(d.today, S.leadDays);
+        $('date').max = Q.addDays(d.today, S.maxDaysAhead);
+        $('guests').value = Math.min(Math.max(S.minGuests, 50), S.maxGuests); // a typical event size inside the truck's limits
+        st.packageId = S.packages[0] ? S.packages[0].id : null;
+        var terms = [];
+        if (S.finalCountDays) terms.push('Final guest count is due ' + S.finalCountDays + ' days before the event.');
+        if (S.cancellationPolicy) terms.push(S.cancellationPolicy);
+        $('policyText').textContent = 'I agree to the booking terms. ' + terms.join(' ');
+        renderPackages(); renderQuestions(); render();
+    }).catch(function () { $('loading').textContent = 'Could not load. Please refresh.'; });
+})();
+</script>
+</body>
+</html>

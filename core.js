@@ -363,6 +363,35 @@ async function ensureSchema() {
     id TEXT PRIMARY KEY,
     created_at INTEGER NOT NULL
   )`);
+  // Catering: one playbook per truck (JSON, cleaned by public/catering-quote.js) and its bookings.
+  await exec(`CREATE TABLE IF NOT EXISTS catering_settings (
+    vendor_id INTEGER PRIMARY KEY,
+    data TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`);
+  await exec(`CREATE TABLE IF NOT EXISTS catering_bookings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vendor_id INTEGER NOT NULL,
+    public_token TEXT NOT NULL UNIQUE,
+    status TEXT NOT NULL,              -- requested, accepted, declined, canceled, expired
+    event_date TEXT NOT NULL,          -- YYYY-MM-DD in the truck's time zone
+    start_time TEXT NOT NULL,          -- HH:MM
+    guests INTEGER NOT NULL,
+    package_id TEXT NOT NULL,
+    details TEXT NOT NULL,             -- JSON: package snapshot, choices, vegetarian, site answers, address, notes
+    quote TEXT NOT NULL,               -- JSON: the itemized quote as accepted by the host (locked)
+    total_cents INTEGER NOT NULL,
+    host_name TEXT NOT NULL,
+    host_email TEXT NOT NULL,
+    host_phone TEXT,
+    company TEXT,
+    hold_expires_at INTEGER NOT NULL,
+    expiry_notified INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`);
+  await exec('CREATE INDEX IF NOT EXISTS idx_catering_vendor_date ON catering_bookings (vendor_id, event_date)');
+
   // Signups waiting for their 6-digit email code. Nothing (not even the web address) is claimed
   // until the code is entered; then the vendor row is created. One row per email.
   await exec(`CREATE TABLE IF NOT EXISTS pending_signups (

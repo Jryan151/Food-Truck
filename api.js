@@ -13,6 +13,7 @@ const auth = require('./auth');
 const billing = require('./billing');
 const payments = require('./payments');
 const sms = require('./sms');
+const catering = require('./catering');
 const { run, get, all } = core;
 const { requireVendor, requireRole, getSession, rateLimit } = auth;
 
@@ -62,6 +63,7 @@ router.get('/vendor-data', async (req, res) => {
     timezone: v.timezone || '',
     payMode: payments.effectivePayMode(v),         // window | both | online
     smsReady: sms.enabledFor(v) && !!v.sms_customer_ready, // show the "text me when it's ready" box
+    cateringEnabled: await catering.isEnabled(v.id),   // show the Catering link
   });
 });
 

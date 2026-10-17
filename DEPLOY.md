@@ -296,3 +296,27 @@ No new packages. `npm run build:css` is optional: `theme.css` doesn't depend on 
 1. Open the home page on your phone in light mode, then dark mode: day is silver with black buttons, night is black with silver buttons.
 2. Sign up a test truck from your phone: type a name, watch the preview, Save, enter the code from your email, land in the dashboard.
 3. Owner portal → Settings → Appearance: try Day and Night.
+
+# Catering (branch `catering`, built on `new-look`)
+
+## What it is
+- **Hosts** book at `yourtruck.onlinekitchen.fyi/catering`: date, address, ZIP and guests are checked instantly, they pick a package, answer the site questions, and see an exact itemized quote that updates as they choose. "Request" holds the date for 24 hours. They get one link (`/catering/b/...`) that always shows the booking.
+- **Owners** manage everything at `/catering/manage` (also linked from Settings → Catering in the kitchen portal): the **Playbook** (packages with price breaks, minimums, notice, travel zones by ZIP, service charge, tax, deposit %, site questions, blocked days, terms) and **Bookings** (accept or decline in one tap, and a day-of **event sheet** that keeps working without signal).
+- A **"Planning an event? Get a catering quote"** button appears on the truck's page once catering is turned on.
+- Anything outside the rules (a far ZIP, too many guests) becomes a structured **custom request** emailed to the owner, with replies going straight to the host.
+- Emails: host request receipt, owner new-request alert, confirmation or decline, and hold-ended notices. Replies always go to the other person.
+
+## Rules that protect the money
+- Prices are worked out on the server with `public/catering-quote.js` (the same code the page uses), in whole cents; the browser's numbers are never trusted.
+- A day can't be double-booked, even if two hosts submit at the same instant.
+- A hold that isn't answered within 24 hours ends on its own; the owner can still accept later if the day is free.
+- Deposits are shown to hosts but not collected until Stripe is set up.
+
+## Install
+```
+cd /var/www/foodtruck
+git fetch origin
+git checkout catering
+pm2 restart foodtruck-backend
+```
+New tables (`catering_settings`, `catering_bookings`) are created automatically. Email (Resend) must be set up for hosts and owners to get the emails.

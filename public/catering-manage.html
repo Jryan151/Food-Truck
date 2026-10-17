@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Catering</title>
+    <meta name="robots" content="noindex">
+    <meta name="theme-color" content="#0a0a0b">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+    <script src="/theme.js"></script>
+    <link rel="stylesheet" href="/theme.css">
+    <link rel="stylesheet" href="/ok.css">
+    <script src="/catering-quote.js"></script>
+    <style>
+        .pk { display: flex; flex-direction: column; gap: 10px; }
+        .tier { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+        .zone { display: flex; flex-direction: column; gap: 8px; }
+        .money-in { position: relative; } .money-in span { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--z500); font-size: 15px; }
+        .money-in input { padding-left: 24px; }
+        .pct-in { position: relative; } .pct-in span { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--z500); }
+        .x { background: none; border: 0; color: var(--z500); font-size: 22px; line-height: 1; cursor: pointer; padding: 6px; font-family: inherit; }
+        .bk { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
+        .bk-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+        .bk-title { font-weight: 800; font-size: 17px; letter-spacing: -0.01em; }
+        .bk-meta { font-size: 13px; color: var(--z500); line-height: 1.5; }
+        .worth { background: var(--ink); color: var(--on-ink); border-radius: 14px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: baseline; }
+        .worth b { font-size: 22px; font-variant-numeric: tabular-nums; }
+        .savebar { position: sticky; bottom: 0; padding: 12px 0 calc(12px + env(safe-area-inset-bottom)); background: linear-gradient(to top, var(--z950) 70%, transparent); }
+        .sheet-big { font-weight: 800; font-size: 30px; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+        .counts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+        .counts div { padding: 10px; border-radius: 12px; background: var(--z950); display: flex; flex-direction: column; }
+        .counts b { font-size: 24px; font-variant-numeric: tabular-nums; }
+        .counts .hl { background: var(--ink); color: var(--on-ink); }
+    </style>
+</head>
+<body>
+<main class="ok-wrap">
+    <div class="ok-top no-print">
+        <a class="ok-truck" href="/owner.html" style="text-decoration:none">
+            <div class="ok-mono" id="mono" aria-hidden="true">&nbsp;</div>
+            <div style="display:flex;flex-direction:column"><span class="ok-truck-name" id="truckName">Catering</span><span class="ok-sub">← Back to your kitchen portal</span></div>
+        </a>
+        <a class="ok-btn small quiet" href="/catering" target="_blank" rel="noopener" id="previewLink" style="white-space:nowrap;flex:none">Host view</a>
+    </div>
+
+    <div id="loading" class="ok-lede">Loading…</div>
+    <div id="needLogin" hidden><h1 class="ok-h1">Log in first</h1><p class="ok-lede">Catering is managed by the owner. <a href="/owner.html" style="color:var(--z100)">Log in from your kitchen portal</a>, then come back.</p></div>
+
+    <div id="appView" hidden style="display:flex;flex-direction:column;gap:18px">
+        <div class="ok-tabs no-print" role="group" aria-label="Catering sections">
+            <button type="button" data-tab="bookings" aria-pressed="true">Bookings</button>
+            <button type="button" data-tab="playbook" aria-pressed="false">Playbook</button>
+        </div>
+
+        <!-- ===== bookings ===== -->
+        <section id="tabBookings" style="display:flex;flex-direction:column;gap:18px">
+            <div id="offNote" class="ok-card pad" hidden><span style="font-weight:700">Catering is off.</span> <span class="ok-note">Set up your playbook and turn it on, and a "Get a catering quote" button appears on your page.</span> <button type="button" class="ok-link" data-tab="playbook">Open the playbook</button></div>
+            <div class="ok-section"><div class="ok-step">Needs your answer</div><div id="listRequested" class="ok-section" style="gap:10px"></div></div>
+            <div class="ok-section"><div class="ok-step">Upcoming</div><div id="listUpcoming" class="ok-section" style="gap:10px"></div></div>
+            <div class="ok-section"><div class="ok-step">Past and closed</div><div id="listClosed" class="ok-section" style="gap:10px"></div></div>
+        </section>
+
+        <!-- ===== event sheet ===== -->
+        <section id="tabSheet" hidden style="display:flex;flex-direction:column;gap:14px"></section>
+
+        <!-- ===== playbook ===== -->
+        <section id="tabPlaybook" hidden style="display:flex;flex-direction:column;gap:22px">
+            <div class="ok-card pad" style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+                <div style="display:flex;flex-direction:column;gap:2px"><span style="font-weight:800">Take catering requests</span><span class="ok-note">Shows "Get a catering quote" on your page.</span></div>
+                <button type="button" class="ok-switch" id="enabled" aria-pressed="false" aria-label="Take catering requests"></button>
+            </div>
+            <p class="ok-note" style="margin:-8px 0 0">Answer each question once here. Hosts then get an exact price on their own, so there's nothing to negotiate.</p>
+
+            <div class="ok-section"><div class="ok-step">Packages</div>
+                <div id="packagesEd" class="ok-section" style="gap:12px"></div>
+                <button type="button" class="ok-btn small quiet" id="addPkg" style="align-self:flex-start">+ Add a package</button>
+            </div>
+
+            <div class="ok-section"><div class="ok-step">Guests and dates</div>
+                <div class="ok-grid2">
+                    <div class="ok-field"><label for="minGuests">Minimum guests</label><input id="minGuests" class="ok-box" inputmode="numeric"></div>
+                    <div class="ok-field"><label for="maxGuests">Maximum guests</label><input id="maxGuests" class="ok-box" inputmode="numeric"></div>
+                    <div class="ok-field"><label for="minSpend">Minimum order</label><div class="money-in"><span>$</span><input id="minSpend" class="ok-box" inputmode="decimal" placeholder="0"></div></div>
+                    <div class="ok-field"><label for="leadDays">Days of notice</label><input id="leadDays" class="ok-box" inputmode="numeric"></div>
+                    <div class="ok-field"><label for="maxEventsPerDay">Events per day</label><input id="maxEventsPerDay" class="ok-box" inputmode="numeric"></div>
+                    <div class="ok-field"><label for="serviceHours">Hours of service</label><input id="serviceHours" class="ok-box" inputmode="decimal"></div>
+                    <div class="ok-field"><label for="finalCountDays">Final count due (days before)</label><input id="finalCountDays" class="ok-box" inputmode="numeric"></div>
+                    <div class="ok-field"><label for="maxDaysAhead">Book up to (days ahead)</label><input id="maxDaysAhead" class="ok-box" inputmode="numeric"></div>
+                </div>
+            </div>
+
+            <div class="ok-section"><div class="ok-step">Money</div>
+                <div class="ok-grid2">
+                    <div class="ok-field"><label for="serviceChargePct">Service charge</label><div class="pct-in"><input id="serviceChargePct" class="ok-box" inputmode="decimal"><span>%</span></div></div>
+                    <div class="ok-field"><label for="taxPct">Sales tax</label><div class="pct-in"><input id="taxPct" class="ok-box" inputmode="decimal"><span>%</span></div></div>
+                    <div class="ok-field"><label for="depositPct">Deposit</label><div class="pct-in"><input id="depositPct" class="ok-box" inputmode="numeric"><span>%</span></div></div>
+                </div>
+                <p class="ok-note" style="margin:0">Tax is added to food, service and travel. Check your local rules. Deposits are shown to hosts now and collected once card payments are on.</p>
+            </div>
+
+            <div class="ok-section"><div class="ok-step">Where you travel</div>
+                <p class="ok-note" style="margin:0">List the ZIP codes you serve, grouped by travel fee. Hosts outside every zone can still send a custom request.</p>
+                <div id="zonesEd" class="ok-section" style="gap:12px"></div>
+                <button type="button" class="ok-btn small quiet" id="addZone" style="align-self:flex-start">+ Add a travel zone</button>
+            </div>
+
+            <div class="ok-section"><div class="ok-step">Site questions</div>
+                <p class="ok-note" style="margin:0">Yes/no questions hosts answer, with the answer shown right away. These replace your usual FAQs.</p>
+                <div id="questionsEd" class="ok-section" style="gap:12px"></div>
+                <button type="button" class="ok-btn small quiet" id="addQ" style="align-self:flex-start">+ Add a question</button>
+            </div>
+
+            <div class="ok-section"><div class="ok-step">Days you're not available</div>
+                <div style="display:flex;gap:8px"><input id="blockDate" class="ok-box" type="date" style="flex:1"><button type="button" class="ok-btn small" id="addBlock">Block</button></div>
+                <div class="ok-chips" id="blockedList"></div>
+            </div>
+
+            <div class="ok-section"><div class="ok-step">Terms hosts agree to</div>
+                <textarea id="cancellationPolicy" class="ok-box" maxlength="600"></textarea>
+            </div>
+
+            <div class="savebar no-print">
+                <div class="ok-err" id="saveErr" role="alert" style="margin-bottom:8px"></div>
+                <button type="button" class="ok-btn" id="save">Save playbook</button>
+            </div>
+        </section>
+    </div>
+</main>
+
+<script>
+(function () {
+    'use strict';
+    var Q = window.CateringQuote, $ = function (id) { return document.getElementById(id); };
+    var S = null, B = [], today = '', tab = 'bookings', CACHE = 'ok_catering_bookings';
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function longDate(ymd) { try { return new Date(ymd + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }); } catch (e) { return ymd; } }
+    function time12(hm) { var p = String(hm).split(':'), h = +p[0]; return ((h + 11) % 12 + 1) + ':' + p[1] + (h < 12 ? ' AM' : ' PM'); }
+    function minus(hm, mins) { var p = hm.split(':'), t = (+p[0]) * 60 + (+p[1]) - mins; t = (t + 1440) % 1440; return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); }
+    function toast(msg) { var t = document.createElement('div'); t.className = 'ok-toast'; t.textContent = msg; document.body.appendChild(t); setTimeout(function () { t.remove(); }, 2200); }
+    function api(method, url, body) {
+        return fetch(url, { method: method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined })
+            .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, status: r.status, d: d }; }); })
+            .catch(function () { return { ok: false, status: 0, d: { error: 'No connection.' } }; });
+    }
+    function cents(v) { var n = parseFloat(String(v).replace(/[^0-9.]/g, '')); return isFinite(n) ? Math.round(n * 100) : 0; }
+    function dollars(c) { return c ? (c / 100).toFixed(2).replace(/\.00$/, '') : ''; }
+
+    /* ---------- tabs ---------- */
+    function setTab(t) {
+        tab = t;
+        document.querySelectorAll('.ok-tabs [data-tab]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.tab === t || (t === 'sheet' && b.dataset.tab === 'bookings'))); });
+        $('tabBookings').hidden = t !== 'bookings'; $('tabPlaybook').hidden = t !== 'playbook'; $('tabSheet').hidden = t !== 'sheet';
+        window.scrollTo(0, 0);
+    }
+
+    /* ---------- bookings ---------- */
+    function bookingCard(b) {
+        var q = b.quote || {};
+        var site = (b.siteAnswers || []).map(function (a) { return esc(a.question) + ' <b>' + (a.answer === 'yes' ? 'Yes' : 'No') + '</b>'; }).join('<br>');
+        var pill = b.status === 'requested' ? '<span class="ok-pill warn">Hold ends ' + new Date(b.holdExpiresAt).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' }) + '</span>'
+            : b.status === 'expired' ? '<span class="ok-pill">Hold ended</span>' : b.status === 'accepted' ? '<span class="ok-pill ok">Confirmed</span>'
+            : '<span class="ok-pill">' + esc(b.status[0].toUpperCase() + b.status.slice(1)) + '</span>';
+        var h = '<div class="ok-card bk"><div class="bk-head"><div style="display:flex;flex-direction:column;gap:2px"><span class="bk-title">' + esc(longDate(b.date)) + ' · ' + time12(b.startTime) + '</span>' +
+            '<span class="bk-meta">' + b.guests + ' guests · ' + esc(b.packageName) + (b.choices.length ? ' (' + esc(b.choices.join(', ')) + ')' : '') + (b.vegetarian ? ' · ' + b.vegetarian + ' vegetarian' : '') + '</span></div>' + pill + '</div>' +
+            '<div class="bk-meta"><b style="color:var(--z100)">' + esc(b.hostName) + '</b>' + (b.company ? ' · ' + esc(b.company) : '') + '<br>' + esc(b.address) + ' ' + esc(b.zip) +
+            '<br><a href="mailto:' + esc(b.hostEmail) + '" style="color:var(--z100)">' + esc(b.hostEmail) + '</a>' + (b.hostPhone ? ' · <a href="tel:' + esc(b.hostPhone) + '" style="color:var(--z100)">' + esc(b.hostPhone) + '</a>' : '') + '</div>' +
+            (site ? '<div class="bk-meta">' + site + '</div>' : '') + (b.notes ? '<div class="bk-meta" style="white-space:pre-wrap">“' + esc(b.notes) + '”</div>' : '') +
+            '<div class="worth"><span>Food, service and travel before tax</span><b>' + Q.money((q.totalCents || 0) - (q.taxCents || 0)) + '</b></div>';
+        if (b.status === 'requested' || b.status === 'expired') {
+            h += '<div class="ok-note">Inside all your rules. Nothing to negotiate.</div>' +
+                '<button type="button" class="ok-btn" data-accept="' + b.id + '">Accept booking</button>' +
+                '<button type="button" class="ok-btn quiet" data-decline="' + b.id + '">Decline</button>';
+        } else if (b.status === 'accepted') {
+            h += '<button type="button" class="ok-btn quiet" data-sheet="' + b.id + '">Event sheet</button>';
+        }
+        return h + '</div>';
+    }
+    function renderBookings() {
+        var req = B.filter(function (b) { return (b.status === 'requested' || b.status === 'expired') && b.date >= today; });
+        var up = B.filter(function (b) { return b.status === 'accepted' && b.date >= today; });
+        var closed = B.filter(function (b) { return req.indexOf(b) === -1 && up.indexOf(b) === -1; }).reverse();
+        var empty = function (t) { return '<div class="ok-note">' + t + '</div>'; };
+        $('listRequested').innerHTML = req.length ? req.map(bookingCard).join('') : empty('Nothing waiting. New requests appear here and in your email.');
+        $('listUpcoming').innerHTML = up.length ? up.map(bookingCard).join('') : empty('No confirmed events yet.');
+        $('listClosed').innerHTML = closed.length ? closed.slice(0, 20).map(bookingCard).join('') : empty('Nothing yet.');
+        $('offNote').hidden = !S || S.enabled;
+    }
+    function loadBookings() {
+        return api('GET', '/api/catering/owner/bookings').then(function (r) {
+            if (!r.ok) { try { var c = JSON.parse(localStorage.getItem(CACHE) || 'null'); if (c) { B = c.bookings; today = c.today; renderBookings(); toast('Offline: showing saved bookings'); } } catch (e) {} return; }
+            B = r.d.bookings; today = r.d.today;
+            try { localStorage.setItem(CACHE, JSON.stringify(r.d)); } catch (e) {}   // the event sheet works with no signal
+            renderBookings();
+        });
+    }
+
+    /* ---------- event sheet ---------- */
+    function showSheet(id) {
+        var b = B.filter(function (x) { return x.id === id; })[0]; if (!b) return;
+        var meat = b.guests - (b.vegetarian || 0);
+        var per = b.choices.length ? Math.floor(meat / b.choices.length) : meat, extra = b.choices.length ? meat - per * b.choices.length : 0;
+        var counts = b.choices.length ? b.choices.map(function (c, i) { return '<div><b>' + (per + (i < extra ? 1 : 0)) + '</b><span>' + esc(c) + '</span></div>'; }).join('') : '<div><b>' + meat + '</b><span>' + esc(b.packageName) + '</span></div>';
+        if (b.vegetarian) counts += '<div class="hl"><b>' + b.vegetarian + '</b><span>Vegetarian</span></div>';
+        var maps = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(b.address + ' ' + b.zip);
+        $('tabSheet').innerHTML =
+            '<div class="no-print" style="display:flex;justify-content:space-between;align-items:center"><button type="button" class="ok-link" data-back="1">← Bookings</button><span class="ok-pill">Saved for offline</span></div>' +
+            '<div><div class="ok-step">Event sheet</div><h1 class="ok-h1" style="margin-top:4px">' + esc(b.company || b.hostName) + '</h1><p class="ok-lede">' + esc(longDate(b.date)) + ' · serve ' + time12(b.startTime) + (b.serviceHours ? ' for ' + b.serviceHours + ' hours' : '') + ' · ' + b.guests + ' guests</p></div>' +
+            '<div class="worth"><div style="display:flex;flex-direction:column"><span style="opacity:.7;font-size:12px;font-weight:600">Arrive by</span><span class="sheet-big">' + time12(minus(b.startTime, 45)) + '</span></div><a class="ok-btn small no-print" href="' + maps + '" target="_blank" rel="noopener" style="background:var(--on-ink);color:var(--ink);width:auto">Directions</a></div>' +
+            '<div class="ok-card"><div class="ok-row"><span class="ok-label">Address</span><span style="font-weight:700">' + esc(b.address) + ' ' + esc(b.zip) + '</span></div>' +
+            '<div class="ok-row"><span class="ok-label">On-site contact</span><span style="font-weight:700">' + esc(b.hostName) + '</span>' + (b.hostPhone ? '<a href="tel:' + esc(b.hostPhone) + '" style="color:var(--z100)">' + esc(b.hostPhone) + '</a>' : '<span class="ok-note">' + esc(b.hostEmail) + '</span>') + '</div>' +
+            (b.siteAnswers.length ? '<div class="ok-row"><span class="ok-label">Site</span><span class="bk-meta">' + b.siteAnswers.map(function (a) { return esc(a.question) + ' <b>' + (a.answer === 'yes' ? 'Yes' : 'No') + '</b>'; }).join('<br>') + '</span></div>' : '') +
+            (b.notes ? '<div class="ok-row"><span class="ok-label">Host notes</span><span style="white-space:pre-wrap">' + esc(b.notes) + '</span></div>' : '') + '</div>' +
+            '<div class="ok-card pad" style="display:flex;flex-direction:column;gap:10px"><span class="ok-step">Counts</span><div class="counts">' + counts + '</div>' +
+            (b.choices.length ? '<span class="ok-note">Split evenly across ' + esc(b.choices.join(' and ')) + '. Adjust to the host’s final count.</span>' : '') + '</div>' +
+            '<button type="button" class="ok-btn quiet no-print" onclick="window.print()">Print</button>';
+        setTab('sheet');
+    }
+
+    /* ---------- playbook editor ---------- */
+    var NUMS = ['minGuests', 'maxGuests', 'leadDays', 'maxEventsPerDay', 'serviceHours', 'finalCountDays', 'maxDaysAhead', 'serviceChargePct', 'taxPct', 'depositPct'];
+    function fillPlaybook() {
+        $('enabled').setAttribute('aria-pressed', String(!!S.enabled));
+        NUMS.forEach(function (k) { $(k).value = S[k]; });
+        $('minSpend').value = dollars(S.minSpendCents);
+        $('cancellationPolicy').value = S.cancellationPolicy || '';
+        renderPackagesEd(); renderZonesEd(); renderQuestionsEd(); renderBlocked();
+    }
+    function renderPackagesEd() {
+        $('packagesEd').innerHTML = S.packages.map(function (p, i) {
+            return '<div class="ok-card pad pk" data-pi="' + i + '"><div style="display:flex;gap:8px;align-items:center"><input class="ok-box" data-f="name" value="' + esc(p.name) + '" placeholder="Package name" aria-label="Package name" style="font-weight:700"><button type="button" class="x" data-delpkg="' + i + '" aria-label="Remove package">×</button></div>' +
+                '<textarea class="ok-box" data-f="desc" placeholder="What’s included" aria-label="What’s included" maxlength="240">' + esc(p.desc) + '</textarea>' +
+                '<span class="ok-label">Price per guest</span>' + p.tiers.map(function (t, j) {
+                    return '<div class="tier"><div class="ok-field"><label class="sr" for="tg' + i + '_' + j + '">From guests</label><input id="tg' + i + '_' + j + '" class="ok-box" data-tier="' + j + '" data-tf="minGuests" inputmode="numeric" value="' + t.minGuests + '" placeholder="From guests"></div>' +
+                        '<div class="money-in"><span>$</span><input class="ok-box" data-tier="' + j + '" data-tf="price" inputmode="decimal" value="' + dollars(t.priceCents) + '" aria-label="Price per guest"></div>' +
+                        '<button type="button" class="x" data-deltier="' + j + '" aria-label="Remove price">×</button></div>';
+                }).join('') + '<span class="ok-note">Row 1 is the base price (from 1 guest). Add rows for lower prices at bigger counts.</span>' +
+                '<button type="button" class="ok-link" data-addtier="' + i + '" style="align-self:flex-start">+ Add a price break</button>' +
+                '<div class="ok-grid2"><div class="ok-field"><label>Guests choose</label><input class="ok-box" data-f="chooseCount" inputmode="numeric" value="' + p.chooseCount + '"></div>' +
+                '<div class="ok-field"><label>…from these</label><input class="ok-box" data-f="choiceLabel" value="' + esc(p.choiceLabel) + '" placeholder="e.g. Proteins"></div></div>' +
+                '<input class="ok-box" data-f="choices" value="' + esc(p.choices.join(', ')) + '" placeholder="Options, separated by commas" aria-label="Options">' +
+                '<label class="ok-check"><input type="checkbox" data-f="allowVegetarian"' + (p.allowVegetarian ? ' checked' : '') + '><span>Offer vegetarian plates</span></label></div>';
+        }).join('') || '<div class="ok-note">No packages yet.</div>';
+    }
+    function renderZonesEd() {
+        $('zonesEd').innerHTML = S.zones.map(function (z, i) {
+            return '<div class="ok-card pad zone" data-zi="' + i + '"><div style="display:flex;gap:8px;align-items:center"><input class="ok-box" data-zf="name" value="' + esc(z.name) + '" placeholder="Zone name (e.g. Home area)" aria-label="Zone name"><button type="button" class="x" data-delzone="' + i + '" aria-label="Remove zone">×</button></div>' +
+                '<textarea class="ok-box" data-zf="zips" placeholder="ZIP codes, separated by commas" aria-label="ZIP codes">' + esc(z.zips.join(', ')) + '</textarea>' +
+                '<div class="ok-field"><label>Travel fee</label><div class="money-in"><span>$</span><input class="ok-box" data-zf="fee" inputmode="decimal" value="' + dollars(z.feeCents) + '" placeholder="0"></div></div></div>';
+        }).join('') || '<div class="ok-note">No travel zones yet. Add the ZIP codes you serve.</div>';
+    }
+    function renderQuestionsEd() {
+        $('questionsEd').innerHTML = S.siteQuestions.map(function (q, i) {
+            return '<div class="ok-card pad pk" data-qi="' + i + '"><div style="display:flex;gap:8px;align-items:center"><input class="ok-box" data-qf="question" value="' + esc(q.question) + '" placeholder="Question" aria-label="Question" style="font-weight:700"><button type="button" class="x" data-delq="' + i + '" aria-label="Remove question">×</button></div>' +
+                '<input class="ok-box" data-qf="yesNote" value="' + esc(q.yesNote) + '" placeholder="Shown when they answer Yes" aria-label="Note for Yes">' +
+                '<input class="ok-box" data-qf="noNote" value="' + esc(q.noNote) + '" placeholder="Shown when they answer No" aria-label="Note for No">' +
+                '<label class="ok-check"><input type="checkbox" data-qf="mustBeYes"' + (q.mustBeYes ? ' checked' : '') + '><span>Must be Yes to book (No sends them to a custom request)</span></label></div>';
+        }).join('') || '<div class="ok-note">No questions yet.</div>';
+    }
+    function renderBlocked() {
+        S.blockedDates.sort();
+        $('blockedList').innerHTML = S.blockedDates.map(function (d) { return '<button type="button" class="ok-chip" data-unblock="' + d + '" aria-label="Unblock ' + d + '">' + esc(longDate(d)) + ' ×</button>'; }).join('') || '<span class="ok-note">None blocked.</span>';
+    }
+    // Reads the editor back into S (as raw values; the server cleans them up again).
+    function readPlaybook() {
+        NUMS.forEach(function (k) { S[k] = parseFloat($(k).value); });
+        S.minSpendCents = cents($('minSpend').value);
+        S.cancellationPolicy = $('cancellationPolicy').value;
+        document.querySelectorAll('[data-pi]').forEach(function (el) {
+            var p = S.packages[+el.dataset.pi];
+            p.name = el.querySelector('[data-f="name"]').value; p.desc = el.querySelector('[data-f="desc"]').value;
+            p.chooseCount = parseInt(el.querySelector('[data-f="chooseCount"]').value, 10) || 0;
+            p.choiceLabel = el.querySelector('[data-f="choiceLabel"]').value;
+            p.choices = el.querySelector('[data-f="choices"]').value.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+            p.allowVegetarian = el.querySelector('[data-f="allowVegetarian"]').checked;
+            p.tiers = p.tiers.map(function (t, j) {
+                return { minGuests: parseInt(el.querySelector('[data-tier="' + j + '"][data-tf="minGuests"]').value, 10) || 1, priceCents: cents(el.querySelector('[data-tier="' + j + '"][data-tf="price"]').value) };
+            });
+        });
+        document.querySelectorAll('[data-zi]').forEach(function (el) {
+            var z = S.zones[+el.dataset.zi];
+            z.name = el.querySelector('[data-zf="name"]').value;
+            z.zips = el.querySelector('[data-zf="zips"]').value.split(/[\s,]+/).filter(Boolean);
+            z.feeCents = cents(el.querySelector('[data-zf="fee"]').value);
+        });
+        document.querySelectorAll('[data-qi]').forEach(function (el) {
+            var q = S.siteQuestions[+el.dataset.qi];
+            ['question', 'yesNote', 'noNote'].forEach(function (k) { q[k] = el.querySelector('[data-qf="' + k + '"]').value; });
+            q.mustBeYes = el.querySelector('[data-qf="mustBeYes"]').checked;
+        });
+        S.enabled = $('enabled').getAttribute('aria-pressed') === 'true';
+    }
+    function save() {
+        readPlaybook();
+        var btn = $('save'); btn.disabled = true; btn.textContent = 'Saving…'; $('saveErr').textContent = '';
+        api('PUT', '/api/catering/owner/settings', { settings: S }).then(function (r) {
+            btn.disabled = false; btn.textContent = 'Save playbook';
+            if (!r.ok) { $('saveErr').textContent = r.d.error || 'Could not save.'; return; }
+            S = r.d.settings; fillPlaybook(); renderBookings(); toast(S.enabled ? 'Saved. Catering is on.' : 'Saved.');
+        });
+    }
+
+    /* ---------- events ---------- */
+    document.addEventListener('click', function (e) {
+        var t = e.target.closest('button'); if (!t) return;
+        var d = t.dataset;
+        if (d.tab) return setTab(d.tab);
+        if (d.back) return setTab('bookings');
+        if (d.sheet) return showSheet(+d.sheet);
+        if (d.accept || d.decline) {
+            var accept = !!d.accept, id = accept ? d.accept : d.decline, msg = '';
+            if (!accept) { msg = prompt('Decline this request? Add a short note for the host (optional):', ''); if (msg === null) return; }
+            t.disabled = true;
+            api('POST', '/api/catering/owner/bookings/' + id + '/' + (accept ? 'accept' : 'decline'), { message: msg }).then(function (r) {
+                t.disabled = false;
+                if (!r.ok) { toast(r.d.error || 'Could not update.'); return; }
+                toast(accept ? 'Accepted. The host has been emailed.' : 'Declined. The host has been emailed.');
+                loadBookings();
+            });
+            return;
+        }
+        if (t.id === 'enabled') { t.setAttribute('aria-pressed', String(t.getAttribute('aria-pressed') !== 'true')); return; }
+        if (t.id === 'save') return save();
+        if (t.id === 'addPkg') { readPlaybook(); S.packages.push({ id: '', name: '', desc: '', tiers: [{ minGuests: 1, priceCents: 0 }], choiceLabel: '', choices: [], chooseCount: 0, allowVegetarian: false }); renderPackagesEd(); return; }
+        if (d.delpkg) { readPlaybook(); S.packages.splice(+d.delpkg, 1); renderPackagesEd(); return; }
+        if (d.addtier) { readPlaybook(); var p = S.packages[+d.addtier]; var last = p.tiers[p.tiers.length - 1]; p.tiers.push({ minGuests: last ? last.minGuests + 50 : 1, priceCents: last ? last.priceCents : 0 }); renderPackagesEd(); return; }
+        if (d.deltier !== undefined) { readPlaybook(); var pi = +t.closest('[data-pi]').dataset.pi; if (S.packages[pi].tiers.length > 1) S.packages[pi].tiers.splice(+d.deltier, 1); renderPackagesEd(); return; }
+        if (t.id === 'addZone') { readPlaybook(); S.zones.push({ name: '', zips: [], feeCents: 0 }); renderZonesEd(); return; }
+        if (d.delzone) { readPlaybook(); S.zones.splice(+d.delzone, 1); renderZonesEd(); return; }
+        if (t.id === 'addQ') { readPlaybook(); S.siteQuestions.push({ id: '', question: '', yesNote: '', noNote: '', mustBeYes: false }); renderQuestionsEd(); return; }
+        if (d.delq) { readPlaybook(); S.siteQuestions.splice(+d.delq, 1); renderQuestionsEd(); return; }
+        if (t.id === 'addBlock') { var v = $('blockDate').value; if (v && S.blockedDates.indexOf(v) === -1) { S.blockedDates.push(v); renderBlocked(); } $('blockDate').value = ''; return; }
+        if (d.unblock) { S.blockedDates = S.blockedDates.filter(function (x) { return x !== d.unblock; }); renderBlocked(); return; }
+    });
+
+    /* ---------- start ---------- */
+    api('GET', '/api/auth/me').then(function (r) {
+        $('loading').hidden = true;
+        if (!r.ok || r.d.role !== 'owner') { $('needLogin').hidden = false; return; }
+        var v = r.d.vendor;
+        $('truckName').textContent = v.businessName + ' · Catering';
+        $('mono').textContent = v.businessName.trim().split(/\s+/).map(function (w) { return w[0]; }).join('').slice(0, 2).toUpperCase();
+        document.title = v.businessName + ' · Catering';
+        $('appView').hidden = false;
+        return api('GET', '/api/catering/owner/settings').then(function (s) {
+            if (s.ok) { S = s.d.settings; fillPlaybook(); }
+            return loadBookings();
+        });
+    });
+})();
+</script>
+</body>
+</html>

@@ -78,6 +78,7 @@
             <div class="w-full space-y-3 relative mt-3">
                 <button data-action="open-menu" id="btn-start-order" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-3.5 rounded-xl transition shadow-lg">Start Order</button>
                 <button data-action="open-tracker" id="btn-track-landing" class="w-full bg-zinc-900 border border-zinc-800 text-zinc-300 font-semibold py-3 rounded-xl text-sm transition" style="display:none;" data-i18n="track_orders">Order Status</button>
+                <a href="/catering" id="cateringLink" class="ok-btn-quiet block w-full text-center font-semibold py-3 rounded-xl text-sm transition" style="display:none;"><span data-i18n="catering_cta">Planning an event? Get a catering quote</span> &rarr;</a>
             </div>
         </div>
 
@@ -229,6 +230,7 @@
                 location_label: "📍 Where we're parked (tap for map):", location_soon: 'Location coming soon', checking: 'Checking…',
                 open_now: 'Open now • Accepting orders', closed_now: 'Closed right now', paused_now: 'Open for walk-ups • Online ordering paused',
                 start_order: 'Start Order', currently_closed: 'Currently Closed', order_at_window: 'Order at the window',
+                catering_cta: 'Planning an event? Get a catering quote',
                 busy15: '⚠️ Busy: about 15 extra minutes', busy30: '🚨 Very busy: about 30 extra minutes', sale: '🏷️ Sale',
                 track_orders: 'Order Status', back: '← Back', order_menu: 'Order Menu', orders: 'Order Status', featured_title: 'Featured', featured: 'FEATURED',
                 menu: 'Menu', menu_empty: 'The menu is empty right now.', sold_out: 'Sold Out', add: 'Add +', mins: '~{n} min',
@@ -259,6 +261,7 @@
                 location_label: '📍 Dónde estamos (toca para ver el mapa):', location_soon: 'Ubicación próximamente', checking: 'Revisando…',
                 open_now: 'Abierto • Aceptando pedidos', closed_now: 'Cerrado ahora', paused_now: 'Abierto en la ventanilla • Pedidos en línea en pausa',
                 start_order: 'Hacer pedido', currently_closed: 'Cerrado', order_at_window: 'Pide en la ventanilla',
+                catering_cta: '¿Un evento? Cotiza el catering',
                 busy15: '⚠️ Mucha gente: unos 15 minutos más', busy30: '🚨 Muchísima gente: unos 30 minutos más', sale: '🏷️ Oferta',
                 track_orders: 'Estado del pedido', back: '← Atrás', order_menu: 'Menú', orders: 'Estado del pedido', featured_title: 'Destacado', featured: 'DESTACADO',
                 menu: 'Menú', menu_empty: 'El menú está vacío por ahora.', sold_out: 'Agotado', add: 'Agregar +', mins: '~{n} min',
@@ -765,6 +768,7 @@
             document.title = d.businessName;
             $('dynamic-truck-name').textContent = d.businessName;
             TruckLogo.set($('dynamic-emoji'), d.emoji, 'var(--z900)');
+            $('cateringLink').style.display = d.cateringEnabled ? 'block' : 'none';
             if (d.ownerIG) {
                 $('ig-container').style.display = 'block';
                 $('dynamic-ig-text').textContent = d.ownerIG;
