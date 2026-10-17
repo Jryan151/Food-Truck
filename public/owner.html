@@ -782,7 +782,7 @@
                 : '';
             return (function (item) {
                 var price = (item.salePrice && item.salePrice > 0)
-                    ? '<span class="line-through text-zinc-600 mr-1">' + money(item.price) + '</span> <span class="text-red-500 font-bold">' + money(item.salePrice) + '</span>'
+                    ? '<span class="line-through text-zinc-600 mr-1">' + money(item.price) + '</span> <span class="text-zinc-100 font-bold">' + money(item.salePrice) + '</span>'
                     : money(item.price);
                 return '<div class="bg-zinc-900 border border-zinc-800 p-3 rounded-xl flex justify-between items-center text-xs gap-3">' + arrows +
                     (item.photo ? '<img src="' + esc(item.photo) + '" alt="" loading="lazy" class="w-10 h-10 rounded-lg object-cover shrink-0">' : '') +

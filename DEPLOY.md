@@ -270,3 +270,29 @@ that truck; Stripe takes its card fee from the truck's payment; you take no cut;
 - Phone numbers are verified by code; texts are capped per truck per month
 
 Your Terms and Privacy templates now include payment and text-message sections — fill in and have them reviewed again.
+
+# New look + new signup (branch `new-look`)
+
+## What changed
+- **Silver and black, day and night.** `public/theme.css` (loaded after `app.css` on every page) maps the colors the pages use onto day/night tokens. `public/theme.js` picks the theme before the page paints: it follows the phone's light/dark setting, or the owner's choice in **Settings → Appearance** (saved per device).
+- **Manrope** replaces the serif headings (loaded from Google Fonts).
+- **Preview-first signup** (`public/signup.html`): truck name and menu show a live preview with no account. "Save my page" asks for name, email and password, then a **6-digit code** is emailed. The page and its web address are only created once the code is entered.
+- New endpoints: `POST /api/auth/signup/start` and `POST /api/auth/signup/verify`. New table `pending_signups` is created automatically on start.
+
+## Email and the code step
+- With Resend set up (`RESEND_API_KEY` and `MAIL_FROM` in `.env`), every signup needs the emailed code.
+- Without email set up, signups still work: the page is created straight away (as before) and the server log notes it. Once Resend works, codes turn on by themselves. Set `REQUIRE_EMAIL_VERIFY=true` to require codes even then (signups will fail until email works).
+
+## Install
+```
+cd /var/www/foodtruck
+git fetch origin
+git checkout new-look
+pm2 restart foodtruck-backend
+```
+No new packages. `npm run build:css` is optional: `theme.css` doesn't depend on it.
+
+## Check
+1. Open the home page on your phone in light mode, then dark mode: day is silver with black buttons, night is black with silver buttons.
+2. Sign up a test truck from your phone: type a name, watch the preview, Save, enter the code from your email, land in the dashboard.
+3. Owner portal → Settings → Appearance: try Day and Night.

@@ -453,7 +453,7 @@
         function itemCard(item) {
             var sale = item.salePrice && item.salePrice > 0;
             var priceHTML = sale
-                ? '<span class="text-sm font-semibold line-through text-zinc-500 mr-1">' + money(item.price) + '</span><span class="text-sm font-bold text-red-500">' + money(item.salePrice) + '</span>'
+                ? '<span class="text-sm font-semibold line-through text-zinc-500 mr-1">' + money(item.price) + '</span><span class="text-sm font-bold text-zinc-100">' + money(item.salePrice) + '</span>'
                 : '<span class="text-sm font-semibold">' + money(item.price) + '</span>';
             var btn = item.soldOut
                 ? '<button disabled class="text-zinc-500 bg-zinc-800 px-3 py-1.5 rounded-lg text-xs font-bold h-8 min-w-[60px] shrink-0">' + esc(t('sold_out')) + '</button>'
