@@ -110,6 +110,9 @@ function normalizeItem(i, id) {
     id,
     name: String(i.name || 'Item').trim().slice(0, 80) || 'Item',
     desc: String(i.desc ?? i.description ?? '').trim().slice(0, 300),
+    // The owner's own Spanish (shown when the customer's phone or toggle is in Spanish). Empty = same as English.
+    nameEs: String(i.nameEs || '').trim().slice(0, 80),
+    descEs: String(i.descEs || '').trim().slice(0, 300),
     price: Math.round(Math.max(0, Math.min(10000, num(i.price))) * 100) / 100,
     // What one costs the truck to make (owner only; never sent to customers or crew). null = not set.
     cost: i.cost === null || i.cost === undefined || i.cost === '' ? null : Math.round(Math.max(0, Math.min(10000, num(i.cost))) * 100) / 100,
@@ -375,7 +378,7 @@ const broadcastHooks = [];
 function onBroadcast(fn) { broadcastHooks.push(fn); }
 
 function broadcast(vendorId, type, payload, staffOnly = false) {
-  for (const fn of broadcastHooks) { try { fn(vendorId, type); } catch (e) { /* a hook never breaks the page update */ } }
+  for (const fn of broadcastHooks) { try { fn(vendorId, type, payload); } catch (e) { /* a hook never breaks the page update */ } }
   const set = clients.get(vendorId);
   if (!set) return 0;
   const msg = `data: ${JSON.stringify({ type, payload })}\n\n`;
@@ -419,6 +422,7 @@ async function addColumn(table, col, def) {
 const SCHEMA_CHANGES = [
   [1, 'Everything up to the first versioned release'],
   [2, 'Durability: mail retry outbox; device and big-order check on orders'],
+  [3, 'The owner’s day: feedback, sold-out log, day summaries; quiet hours, weather place, saved menus; kitchen screen setup per PIN; group orders'],
 ];
 const SCHEMA_VERSION = SCHEMA_CHANGES[SCHEMA_CHANGES.length - 1][0];
 const BACKUP_DIR = process.env.BACKUP_DIR_LOCAL || path.join(path.dirname(DB_FILE === ':memory:' ? path.join(__dirname, 'x') : DB_FILE), 'backups');
@@ -501,8 +505,13 @@ async function applySchema() {
     ['follow_open_at', 'INTEGER'],
     ['deals_json', 'TEXT'],
     ['rewards_json', 'TEXT'],
-    ['out_json', 'TEXT'],                         // ingredients the truck is out of right now (see inventory.js)                     // punch card settings (see rewards.js)                       // happy hour and other timed deals (see public/deals-core.js)
+    ['out_json', 'TEXT'],                         // ingredients the truck is out of right now (see inventory.js)
     ['follow_week_at', 'INTEGER'],
+    // The owner's day (see daily.js): quiet hours and the day summary, weather heads-up place, saved menus.
+    ['quiet_json', 'TEXT'],
+    ['weather_json', 'TEXT'],
+    ['menus_json', 'TEXT'],
+    ['owner_prefs_json', 'TEXT'],                 // the owner's own kitchen-screen setup (see /api/auth/prefs)
   ];
   for (const [c, d] of vendorCols) await addColumn('vendors', c, d);
 
@@ -621,6 +630,8 @@ async function applySchema() {
     last_login_at INTEGER
   )`);
   await exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_staff_pin ON staff_members (vendor_id, pin_lookup)');
+  // Each PIN remembers its kitchen screen: text size, sound, station, glove mode, ready button.
+  await addColumn('staff_members', 'prefs_json', 'TEXT');
   await addColumn('sessions', 'staff_id', 'INTEGER');
   // Small server-wide values that must survive restarts (e.g. the PIN pepper when PIN_PEPPER isn't set).
   await exec('CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
@@ -660,6 +671,39 @@ async function applySchema() {
   )`);
   await exec('CREATE INDEX IF NOT EXISTS idx_crm_events_client ON crm_events (client_id, at)');
   await exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_crm_events_ref ON crm_events (vendor_id, type, ref) WHERE ref IS NOT NULL');
+  // Private customer feedback: one 👍/👎 per order, seen by the owner as patterns.
+  await exec(`CREATE TABLE IF NOT EXISTS order_feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vendor_id INTEGER NOT NULL,
+    order_id INTEGER NOT NULL UNIQUE,
+    vote INTEGER NOT NULL,             -- 1 or -1
+    tags TEXT, comment TEXT,
+    items TEXT,                        -- item names on the order, for "orders with X got a thumbs down"
+    at INTEGER NOT NULL
+  )`);
+  await exec('CREATE INDEX IF NOT EXISTS idx_feedback_vendor ON order_feedback (vendor_id, at)');
+  // The first time each item ran out each day (for "you sold out of birria by 1 PM the last 3 Fridays").
+  await exec(`CREATE TABLE IF NOT EXISTS soldout_log (
+    vendor_id INTEGER NOT NULL, item_id INTEGER NOT NULL, name TEXT NOT NULL, day TEXT NOT NULL, at INTEGER NOT NULL,
+    PRIMARY KEY (vendor_id, item_id, day)
+  )`);
+  // Group orders: one link, everyone adds their own items, the host places one order (see group.js).
+  await exec(`CREATE TABLE IF NOT EXISTS group_orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vendor_id INTEGER NOT NULL, token TEXT NOT NULL UNIQUE, host_name TEXT NOT NULL, host_key_hash TEXT NOT NULL,
+    status TEXT NOT NULL,              -- open | placed | expired
+    order_id INTEGER, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL
+  )`);
+  await exec(`CREATE TABLE IF NOT EXISTS group_people (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    group_id INTEGER NOT NULL, name TEXT NOT NULL, key_hash TEXT NOT NULL, items_json TEXT NOT NULL, allergy TEXT, updated_at INTEGER NOT NULL,
+    UNIQUE (group_id, key_hash)
+  )`);
+  // One day summary per truck per day, sent once.
+  await exec(`CREATE TABLE IF NOT EXISTS day_summaries (
+    vendor_id INTEGER NOT NULL, day TEXT NOT NULL, body TEXT NOT NULL, sent_at INTEGER,
+    PRIMARY KEY (vendor_id, day)
+  )`);
   // Email that must arrive even if the mail service is briefly down: kept here and retried.
   await exec(`CREATE TABLE IF NOT EXISTS mail_outbox (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

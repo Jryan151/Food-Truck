@@ -53,7 +53,7 @@
                 order(1, 101, 'Sam', [{ id: 3, name: 'Burrito Bowl (Asada)', qty: 1, price: 13 }, { id: 6, name: 'Agua Fresca (Horchata)', qty: 1, price: 4 }], 'Fulfilled', 95),
                 order(2, 102, 'Priya', [{ id: 1, name: 'Street Tacos (3) (Al Pastor)', qty: 2, price: 9 }], 'Fulfilled', 70),
                 order(3, 103, 'Jordan', [{ id: 2, name: 'Loaded Quesadilla (Pollo)', qty: 1, price: 10.5 }, { id: 5, name: 'Chips & Salsa', qty: 1, price: 3.5 }], 'Fulfilled', 40),
-                order(4, 104, 'Maria', [{ id: 1, name: 'Street Tacos (3) (Asada)', qty: 1, price: 9 }, { id: 4, name: 'Street Corn', qty: 1, price: 4 }], 'Preparing', 3, 'Extra salsa please'),
+                Object.assign(order(4, 104, 'Maria', [{ id: 1, name: 'Street Tacos (3) (Asada)', qty: 1, price: 9 }, { id: 4, name: 'Street Corn', qty: 1, price: 4 }], 'Preparing', 3, 'Extra salsa please'), { regular: { visit: 6, label: '6th visit', usual: 'extra salsa please' } }),
                 Object.assign(order(5, 105, 'Devon', [{ id: 2, name: 'Loaded Quesadilla (Pollo)', qty: 2, price: 11.5 }, { id: 1, name: 'Street Tacos (3) (Pollo)', qty: 1, price: 9 }], 'Preparing', 1), { allergy: 'peanuts', allergyAck: false })
             ],
             nextTicket: 106, nextOrderId: 6, nextLocId: 4
@@ -149,6 +149,53 @@
             return { t: o.createdAt, cents: Math.round(o.total * 100), items: o.items, loc: o.location || d.state.location || '' };
         });
         return demoHistory.concat(live);
+    }
+
+    /* ---------- the owner's day: feedback and sold-out history, seeded like the sales history ---------- */
+    var demoFb = null, demoOuts = null;
+    function feedbackDemo(d) {
+        if (!demoFb) {
+            var tz = d.timezone, IC = window.InsightsCore;
+            demoFb = history(d).filter(function (r, i) { return seeded(i * 5 + 3) < 0.14; }).map(function (r, i) {
+                var h = IC.parts(r.t, tz).h, slowLunch = h >= 12 && h < 13 && seeded(i * 11) < 0.45;
+                var down = slowLunch || seeded(i * 19) < 0.05;
+                var tags = down ? [slowLunch ? 'Took too long' : (seeded(i) < 0.5 ? 'Cold' : 'Taste')] : (seeded(i * 23) < 0.5 ? [['Delicious', 'Fast', 'Friendly'][Math.floor(seeded(i * 29) * 3)]] : []);
+                var said = down ? (slowLunch ? ['Waited 25 minutes at lunch.', 'Long wait, food was great though.', ''][i % 3] : '') : ['Best al pastor in town.', '', 'Super quick, thank you!', ''][i % 4];
+                return { vote: down ? -1 : 1, tags: tags, comment: said, at: r.t + 25 * 60000, items: r.items.map(function (x) { return IC.baseName(x.name); }) };
+            });
+        }
+        return demoFb.concat(d.orders.filter(function (o) { return o.rated; }).map(function (o) { return { vote: o.rated, tags: o.fbTags || [], comment: o.fbComment || '', at: o.ratedAt || o.updatedAt, items: o.items.map(function (x) { return x.name; }) }; }));
+    }
+    function soldOutsDemo(d) {
+        if (!demoOuts) {
+            // Street Tacos run out around 1 PM on busy weekdays at the plaza.
+            var IC = window.InsightsCore, tz = d.timezone, t = IC.parts(Date.now(), tz);
+            demoOuts = [];
+            for (var back = 1; back <= 35; back++) {
+                var day = new Date(Date.UTC(t.y, t.m - 1, t.d - back)), wd = day.getUTCDay();
+                if (wd === 0 || back % 23 === 0) continue;
+                demoOuts.push({ itemId: 1, name: 'Street Tacos (3)', at: IC.zonedTime(day.getUTCFullYear(), day.getUTCMonth() + 1, day.getUTCDate(), 13, 5 + (back % 4) * 5, tz) });
+            }
+        }
+        return demoOuts;
+    }
+    function demoSummary(d, key) {
+        var IC = window.InsightsCore, DC = window.DayCore, tz = d.timezone;
+        var ymd = key.split('-').map(Number), from = IC.zonedStart(ymd[0], ymd[1], ymd[2], tz), to = IC.zonedStart(ymd[0], ymd[1], ymd[2] + 1, tz);
+        var rows = history(d).filter(function (r) { return r.t >= from && r.t < to; });
+        var lw = history(d).filter(function (r) { return r.t >= from - 7 * IC.DAY && r.t < to - 7 * IC.DAY; });
+        var t = IC.totals(rows), items = {}, hours = []; for (var h = 0; h < 24; h++) hours.push(0);
+        rows.forEach(function (r) { hours[IC.parts(r.t, tz).h]++; r.items.forEach(function (i) { var k = IC.baseName(i.name); items[k] = (items[k] || 0) + i.qty; }); });
+        var top = Object.keys(items).sort(function (a, b) { return items[b] - items[a]; })[0];
+        var used = []; hours.forEach(function (n, hh) { if (n) used.push(hh); });
+        var busiest = used.length ? hours.indexOf(Math.max.apply(null, hours)) : null, slowest = null;
+        if (used.length) for (var x = used[0]; x <= used[used.length - 1]; x++) if (slowest === null || hours[x] < hours[slowest]) slowest = x;
+        var fb = feedbackDemo(d).filter(function (f) { return f.at >= from && f.at < to; });
+        var outs = soldOutsDemo(d).filter(function (o) { return o.at >= from && o.at < to; }).map(function (o) { var p = IC.parts(o.at, tz); return { name: o.name, time: DC.clock(p.h * 60 + p.min) }; });
+        var s = { day: key, weekday: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][IC.parts(from + 43200000, tz).wd], orders: t.orders, cents: t.cents, avgCents: t.avgCents,
+            top: top ? { name: top, qty: items[top] } : null, busiest: busiest, slowest: slowest, lastWeek: IC.totals(lw), feedback: DC.feedbackPatterns(fb, [], tz), soldOut: outs };
+        s.lines = DC.summaryLines(s);
+        return s;
     }
 
     /* ---------- punch card (same rules as rewards.js; a new demo card starts with 3 stamps so the reward is reachable) ---------- */
@@ -412,7 +459,35 @@
         }
         if (p === '/api/orders/track') {
             var toks = String(u.searchParams.get('tokens') || '').split(',');
-            return ok({ now: Date.now(), orders: d.orders.filter(function (o) { return toks.indexOf(o.token) >= 0; }).map(function (o) { return { ticket: o.ticket, token: o.token, name: o.name, status: o.status, pickupAt: o.pickupAt || null, changeUntil: o.status === 'Preparing' ? Math.max(o.createdAt + 120000, o.pickupAt ? o.pickupAt - 1800000 : 0) : 0 }; }) });
+            return ok({ now: Date.now(), orders: d.orders.filter(function (o) { return toks.indexOf(o.token) >= 0; }).map(function (o) { return { ticket: o.ticket, token: o.token, name: o.name, status: o.status, pickupAt: o.pickupAt || null, rated: o.rated || 0, changeUntil: o.status === 'Preparing' ? Math.max(o.createdAt + 120000, o.pickupAt ? o.pickupAt - 1800000 : 0) : 0 }; }) });
+        }
+        if ((m = p.match(/^\/api\/feedback\/order\/([^/]+)$/)) && method === 'POST') {
+            var of = d.orders.filter(function (x) { return x.token === decodeURIComponent(m[1]); })[0];
+            if (!of) return fail(404, 'Order not found.');
+            if (of.status !== 'Ready' && of.status !== 'Fulfilled') return fail(409, 'You can rate your order once it’s ready.');
+            if (b.vote !== 1 && b.vote !== -1) return fail(400, 'Pick 👍 or 👎.');
+            of.rated = b.vote; of.fbTags = (b.tags || []).slice(0, 4); of.fbComment = String(b.comment || '').slice(0, 300); of.ratedAt = Date.now(); save(d);
+            return ok({ ok: true, vote: b.vote });
+        }
+        if (p === '/api/feedback/owner') {
+            var fdays = [7, 30, 90].indexOf(+u.searchParams.get('days')) >= 0 ? +u.searchParams.get('days') : 30, fnow = Date.now();
+            var frows = feedbackDemo(d).filter(function (f) { return f.at >= fnow - fdays * 864e5; }), fprev = feedbackDemo(d).filter(function (f) { return f.at < fnow - fdays * 864e5 && f.at >= fnow - 2 * fdays * 864e5; });
+            return ok(Object.assign(window.DayCore.feedbackPatterns(frows, fprev, d.timezone), { days: fdays, orders: history(d).filter(function (r) { return r.t >= fnow - fdays * 864e5; }).length }));
+        }
+        if (p === '/api/day/owner/settings') {
+            d.day = d.day || { quiet: { on: true, from: 'close', until: '08:00', summary: 'morning' }, weather: { q: 'Tempe, AZ', name: 'Tempe, Arizona', lat: 33.41, lon: -111.94 } };
+            if (method === 'PUT') {
+                if (b.quiet) Object.assign(d.day.quiet, b.quiet);
+                if (b.weather !== undefined) d.day.weather = b.weather ? { q: b.weather, name: String(b.weather).replace(/\b\w/g, function (c) { return c.toUpperCase(); }), lat: 0, lon: 0 } : null;
+                save(d);
+            }
+            return ok(d.day);
+        }
+        if (p === '/api/day/owner/brief') {
+            var ICb = window.InsightsCore, tb = ICb.parts(Date.now(), d.timezone), todayKey = ICb.dateKey(tb), sum = null;
+            for (var bk = 1; bk <= 3 && !sum; bk++) { var dd = new Date(Date.UTC(tb.y, tb.m - 1, tb.d - bk)), kk = dd.getUTCFullYear() + '-' + ('0' + (dd.getUTCMonth() + 1)).slice(-2) + '-' + ('0' + dd.getUTCDate()).slice(-2), sm = demoSummary(d, kk); if (sm.orders) sum = sm; }
+            var wx = d.day && d.day.weather === null ? null : { kind: 'rain', text: 'Rain likely tomorrow (70%). Shorten hours or prep less?' };
+            return ok({ today: todayKey, summary: sum, nudges: window.DayCore.prepNudges(soldOutsDemo(d), todayKey, d.timezone), weather: wx, place: d.day ? d.day.weather : null });
         }
         if ((m = p.match(/^\/api\/orders\/([^/]+)\/cancel$/)) && method === 'POST') {
             var oc = d.orders.filter(function (x) { return x.token === decodeURIComponent(m[1]); })[0];
@@ -591,7 +666,7 @@
                 var here = past.filter(function (r) { return r.loc === locf; }), hd = {};
                 here.forEach(function (r) { hd[IC.dateKey(IC.parts(r.t, tz))] = 1; });
                 var useHere = locf && Object.keys(hd).length >= 2, fc = IC.forecast(useHere ? here : past, tz);
-                return ok(Object.assign(fc, { date: IC.dateKey(td), weekday: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][wdf], location: locf, basis: useHere ? 'spot' : fc.days ? 'weekday' : 'none' }));
+                return ok(Object.assign(fc, { date: IC.dateKey(td), weekday: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][wdf], location: locf, basis: useHere ? 'spot' : fc.days ? 'weekday' : 'none', nudges: window.DayCore ? window.DayCore.prepNudges(soldOutsDemo(d), IC.dateKey(td), tz) : [] }));
             }
             if (p === '/api/owner/insights/locations') {
                 var days = [30, 90, 365].indexOf(+u.searchParams.get('days')) >= 0 ? +u.searchParams.get('days') : 90;
@@ -639,6 +714,33 @@
 
         /* menu */
         if (p === '/api/owner/menu' && method === 'GET') return ok({ menu: menuFor(d, true), maxItems: MAX_ITEMS, out: (demoInv(d), d.out) });
+        /* saved menus (same rules as the server) */
+        if (p.indexOf('/api/owner/menus') === 0) {
+            if (!d.savedMenus) d.savedMenus = [{ id: 'reg', name: 'Regular', items: JSON.parse(JSON.stringify(d.menu)), savedAt: Date.now() - 30 * 864e5 },
+                { id: 'fest', name: 'Street fair', items: d.menu.filter(function (m) { return m.id === 1 || m.id === 5 || m.id === 6; }).map(function (m) { return Object.assign({}, m, { price: m.price + 1 }); }), savedAt: Date.now() - 20 * 864e5 }];
+            var sig = function (items) { return JSON.stringify(items.map(function (m) { return [m.id, m.name, m.price, m.salePrice || 0, m.desc || '', m.category || '', m.meats || '', (m.options || []).join('|')]; })); };
+            var outM = function () { var cur = sig(d.menu); return { menus: d.savedMenus.map(function (m) { return { id: m.id, name: m.name, count: m.items.length, savedAt: m.savedAt, current: sig(m.items) === cur, items: m.items.map(function (i) { return i.name; }) }; }), max: 12 }; };
+            if (method === 'GET') return ok(outM());
+            if (method === 'POST' && p === '/api/owner/menus') {
+                var nm2 = String(b.name || '').trim().slice(0, 40);
+                if (!nm2) return fail(400, 'Give this menu a name, like “Street fair”.');
+                d.savedMenus = d.savedMenus.filter(function (m) { return m.name.toLowerCase() !== nm2.toLowerCase(); });
+                d.savedMenus.unshift({ id: 'm' + Date.now(), name: nm2, items: JSON.parse(JSON.stringify(d.menu)), savedAt: Date.now() }); save(d);
+                return ok(outM(), 201);
+            }
+            var mm = p.match(/^\/api\/owner\/menus\/([^/]+)(\/use)?$/);
+            if (mm && method === 'DELETE') { d.savedMenus = d.savedMenus.filter(function (m) { return m.id !== mm[1]; }); save(d); return ok(outM()); }
+            if (mm && mm[2] && method === 'POST') {
+                var pick = d.savedMenus.filter(function (m) { return m.id === mm[1]; })[0];
+                if (!pick) return fail(404, 'That menu was deleted.');
+                var keptName = null;
+                if (!d.savedMenus.some(function (m) { return sig(m.items) === sig(d.menu); })) { keptName = 'Menu before ' + pick.name; d.savedMenus.unshift({ id: 'k' + Date.now(), name: keptName, items: JSON.parse(JSON.stringify(d.menu)), savedAt: Date.now() }); }
+                d.menu = JSON.parse(JSON.stringify(pick.items)); save(d);
+                emit('MENU_UPDATE', { menu: menuFor(d, false) });
+                return ok(Object.assign(outM(), { menu: menuFor(d, true), kept: keptName }));
+            }
+        }
+        if (p === '/api/owner/insights/usual-spot') return ok({ location: 'Downtown Plaza — 5th & Main', weeks: 3, streak: 3, of: 4, why: 'the last three ' + ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'][new Date().getDay()] });
         if ((m = p.match(/^\/api\/owner\/stock\/(\d+)$/)) && method === 'PUT') {
             demoInv(d); var sid = +m[1];
             if (!d.menu.some(function (x) { return x.id === sid; })) return fail(404, 'Item not found.');

@@ -16,6 +16,7 @@
     <link rel="stylesheet" href="/theme.css">
     <script src="/insights-core.js"></script>
     <script src="/deals-core.js"></script>
+    <script src="/day-core.js"></script>
     <script src="/logo.js"></script>
     <style>
         .hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
@@ -35,6 +36,7 @@
         </div>
 
         <!-- Landing View -->
+        <div id="groupBar" class="group-bar" role="status" style="display:none"></div>
         <div id="landingView" class="p-6 flex flex-col items-center justify-center min-h-[85vh] text-center" style="display:none;">
 
             <div class="w-full flex justify-end -mt-2 mb-2">
@@ -176,20 +178,22 @@
         <div class="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center border-b border-zinc-800 pb-3"><h3 class="font-bold text-lg" data-i18n="your_order">Your Order</h3><button data-action="close-cart" class="text-zinc-400 hover:text-white text-sm" aria-label="Close">✕</button></div>
 
-            <div id="whenBox" style="display:none"></div>
-            <div id="cartWaitTimeContainer" class="bg-amber-500/10 border border-amber-500/30 rounded-lg p-2.5 flex items-center justify-between text-xs">
+            <div id="whenBox" data-noguest style="display:none"></div>
+            <div id="cartWaitTimeContainer" data-noguest class="bg-amber-500/10 border border-amber-500/30 rounded-lg p-2.5 flex items-center justify-between text-xs">
                 <span class="text-amber-400 font-medium" data-i18n="wait_time">⏱️ Wait time:</span>
                 <span id="cartEstimatedWait" class="font-bold text-amber-400 font-mono">0 mins</span>
             </div>
 
             <div id="cartItemsList" class="space-y-3 border-b border-zinc-800 pb-3"></div>
-            <div id="rewardRow" style="display:none"></div>
+            <div id="groupOthers" style="display:none"></div>
+            <button data-action="group-start" id="groupStart" class="group-start" data-noguest style="display:none" data-i18n="group_start">Ordering for a group? Send everyone a link</button>
+            <div id="rewardRow" data-noguest style="display:none"></div>
             <div class="flex justify-between items-center text-sm font-semibold"><span data-i18n="total">Total</span><span id="cartModalTotal" class="font-mono">$0.00</span></div>
 
-            <div id="payChoice" class="space-y-2"></div>
+            <div id="payChoice" class="space-y-2" data-noguest></div>
 
             <div class="space-y-3 pt-1">
-                <div>
+                <div data-noguest>
                     <label class="block text-xs text-zinc-400 mb-1" for="customerNotes" data-i18n="notes_label">Special instructions (optional)</label>
                     <textarea id="customerNotes" maxlength="300" data-i18n-ph="notes_ph" placeholder="Any requests for the kitchen?" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200 resize-none h-16"></textarea>
                 </div>
@@ -202,7 +206,7 @@
                     <label class="block text-xs text-zinc-400 mb-1" for="customerName" data-i18n="name_label">Your name</label>
                     <input type="text" id="customerName" maxlength="40" autocomplete="given-name" data-i18n-ph="name_ph" placeholder="So we can call you" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200">
                 </div>
-                <div id="smsBox" style="display:none;">
+                <div id="smsBox" data-noguest style="display:none;">
                     <label class="block text-xs text-zinc-400 mb-1" for="customerPhone" data-i18n="text_me_label">Text me when it's ready (optional)</label>
                     <input type="tel" id="customerPhone" maxlength="20" autocomplete="tel-national" inputmode="tel" data-i18n-ph="text_me_ph" placeholder="Mobile number" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200">
                     <label class="flex items-start gap-2 mt-2 text-[10px] text-zinc-400 leading-snug">
@@ -277,6 +281,14 @@
                 limp_badge: 'Online ordering is down for a moment • Order at the window', limp_note: 'Here’s the menu as of {t}. Prices and what’s left may have changed. We’ll switch back by ourselves when online ordering returns.',
                 limp_note_old: 'Here’s our last saved menu. Prices and what’s left may have changed.', see_menu: 'See the menu', at_window: 'At the window',
                 check_first: 'Big order: the truck will check it with you at the window before cooking.',
+                group_start: 'Ordering for a group? Send everyone a link', group_name_first: 'Add your name first, so everyone knows whose group it is.', group_yours: 'Your group order',
+                group_people: '{n} in so far', group_share: 'Share link', group_theirs: '{name}’s group order', group_pick: 'pick your items, then tap “Add to {name}’s order”.', group_in: 'your items are in. Change them any time before it’s placed.',
+                group_whos_in: 'Who’s in ({n})', group_you: 'you', group_placed: '{name} placed the group order', group_you_placed: 'You placed the group order', group_ended: 'This group order has ended.', group_done: 'Done',
+                group_share_text: 'Add what you want to {name}’s order from {truck}. One order, one pickup.', group_copied: 'Link copied. Send it to the group.', group_copy: 'Copy this link and send it to the group:',
+                group_added: 'Added. {name} will place the order.', group_add: 'Add to {name}’s order', group_update: 'Update my items', group_place: 'Place group order ({n})', group_also: 'Also in this order', group_note: 'GROUP ·',
+                fb_ask: 'How was it?', fb_up: 'It was good', fb_down: 'It wasn’t good', fb_private: 'Only the truck sees this.', fb_more_up: 'Thank you! Anything stand out?', fb_more_down: 'Sorry about that. What went wrong?',
+                fb_comment_ph: 'Anything else? (optional)', fb_send: 'Send', fb_thanks: 'Thank you. The owner reads every one.',
+                tag_took_too_long: 'Took too long', tag_cold: 'Cold', tag_wrong_order: 'Wrong order', tag_taste: 'Taste', tag_portion: 'Portion', tag_fast: 'Fast', tag_delicious: 'Delicious', tag_friendly: 'Friendly', tag_good_value: 'Good value',
                 order_down: 'Online ordering isn’t answering right now. Please order at the window, or try again in a minute (you won’t be charged twice).',
                 order_failed: 'Could not place your order. Please try again.', connection: 'Connection problem. Please check your signal and try again.',
                 order_placed: 'Order placed!', ticket_number: 'Your ticket number:', est_wait: 'Estimated wait: ~{n} min', view_tracker: 'Order Status',
@@ -326,6 +338,14 @@
                 limp_badge: 'Pedidos en línea caídos por un momento • Pide en la ventanilla', limp_note: 'Este es el menú de las {t}. Precios y disponibilidad pueden haber cambiado. Volveremos solos cuando regresen los pedidos en línea.',
                 limp_note_old: 'Este es nuestro último menú guardado. Precios y disponibilidad pueden haber cambiado.', see_menu: 'Ver el menú', at_window: 'En la ventanilla',
                 check_first: 'Pedido grande: el camión lo confirmará contigo en la ventanilla antes de cocinar.',
+                group_start: '¿Pedido para un grupo? Manda un enlace a todos', group_name_first: 'Primero escribe tu nombre, para que todos sepan de quién es el grupo.', group_yours: 'Tu pedido de grupo',
+                group_people: '{n} hasta ahora', group_share: 'Compartir enlace', group_theirs: 'Pedido de grupo de {name}', group_pick: 'elige lo tuyo y toca “Agregar al pedido de {name}”.', group_in: 'lo tuyo ya está. Puedes cambiarlo antes de que se haga el pedido.',
+                group_whos_in: 'Quiénes van ({n})', group_you: 'tú', group_placed: '{name} hizo el pedido de grupo', group_you_placed: 'Hiciste el pedido de grupo', group_ended: 'Este pedido de grupo terminó.', group_done: 'Listo',
+                group_share_text: 'Agrega lo que quieras al pedido de {name} en {truck}. Un pedido, una recogida.', group_copied: 'Enlace copiado. Mándalo al grupo.', group_copy: 'Copia este enlace y mándalo al grupo:',
+                group_added: 'Listo. {name} hará el pedido.', group_add: 'Agregar al pedido de {name}', group_update: 'Actualizar lo mío', group_place: 'Hacer pedido de grupo ({n})', group_also: 'También en este pedido', group_note: 'GRUPO ·',
+                fb_ask: '¿Qué tal estuvo?', fb_up: 'Estuvo bien', fb_down: 'No estuvo bien', fb_private: 'Solo el camión lo ve.', fb_more_up: '¡Gracias! ¿Algo que destacar?', fb_more_down: 'Lo sentimos. ¿Qué salió mal?',
+                fb_comment_ph: '¿Algo más? (opcional)', fb_send: 'Enviar', fb_thanks: 'Gracias. El dueño lee cada una.',
+                tag_took_too_long: 'Tardó mucho', tag_cold: 'Frío', tag_wrong_order: 'Pedido equivocado', tag_taste: 'Sabor', tag_portion: 'Porción', tag_fast: 'Rápido', tag_delicious: 'Delicioso', tag_friendly: 'Amables', tag_good_value: 'Buen precio',
                 order_down: 'Los pedidos en línea no responden ahora. Pide en la ventanilla o inténtalo en un minuto (no se cobrará dos veces).',
                 order_failed: 'No pudimos enviar tu pedido. Inténtalo de nuevo.', connection: 'Problema de conexión. Revisa tu señal e inténtalo de nuevo.',
                 order_placed: '¡Pedido enviado!', ticket_number: 'Tu número de ticket:', est_wait: 'Espera aproximada: ~{n} min', view_tracker: 'Estado del pedido',
@@ -578,6 +598,9 @@
         }
         function catId(i) { return 'cat-' + i; }
 
+        // The owner's own Spanish, when they wrote it.
+        function iname(item) { return lang === 'es' && item.nameEs ? item.nameEs : item.name; }
+        function idesc(item) { return lang === 'es' && item.descEs ? item.descEs : item.desc; }
         function itemCard(item) {
             var pi = priceInfo(item, 0);
             var priceHTML = pi.cents < pi.wasCents
@@ -593,8 +616,8 @@
                 ? '<img src="' + esc(item.photo) + '" alt="" loading="lazy" class="w-16 h-16 rounded-lg object-cover shrink-0 bg-zinc-800"' + (item.soldOut ? '' : ' data-action="add-item" data-id="' + item.id + '"') + '>'
                 : '';
             return '<div class="bg-zinc-900 border border-zinc-800 p-3 rounded-xl flex items-center gap-3' + (item.soldOut ? ' opacity-50 grayscale' : '') + '">' + photo +
-                '<div class="min-w-0 flex-1"><h4 class="font-bold text-sm">' + esc(item.name) + '</h4>' +
-                (item.desc ? '<p class="text-xs text-zinc-400 mt-0.5">' + esc(item.desc) + '</p>' : '') +
+                '<div class="min-w-0 flex-1"><h4 class="font-bold text-sm">' + esc(iname(item)) + '</h4>' +
+                (idesc(item) ? '<p class="text-xs text-zinc-400 mt-0.5">' + esc(idesc(item)) + '</p>' : '') +
                 '<div class="flex items-center gap-3 mt-1.5">' + priceHTML + '<span class="text-[10px] text-zinc-500">' + esc(t('mins', { n: item.prep || 2 })) + '</span>' +
                 (!item.soldOut && item.left ? '<span class="left-tag">' + esc(t('only_left', { n: item.left })) + '</span>' : '') + '</div></div>' + btn + '</div>';
         }
@@ -615,7 +638,7 @@
                     '<div data-action="add-item" data-id="' + first.id + '" class="bg-zinc-950/60 p-2.5 rounded-lg border border-zinc-800 cursor-pointer transition flex items-center gap-3 text-left">' +
                     (first.photo ? '<img src="' + esc(first.photo) + '" alt="" class="w-10 h-10 rounded-md object-cover">' : '') +
                     '<div class="min-w-0"><span class="text-[9px] text-zinc-400 block font-semibold">' + esc(t('featured')) + '</span>' +
-                    '<span class="font-bold text-zinc-200 text-xs truncate block">' + esc(first.name) + '</span></div></div>';
+                    '<span class="font-bold text-zinc-200 text-xs truncate block">' + esc(iname(first)) + '</span></div></div>';
             }
 
             var gs = groups();
@@ -639,9 +662,9 @@
             app.modalItem = item;
             app.modalQty = 1;
             $('itemModalQty').textContent = '1';
-            $('itemModalTitle').textContent = t('add_title', { name: item.name });
-            $('itemModalDesc').textContent = item.desc || '';
-            $('itemModalDesc').style.display = item.desc ? 'block' : 'none';
+            $('itemModalTitle').textContent = t('add_title', { name: iname(item) });
+            $('itemModalDesc').textContent = idesc(item) || '';
+            $('itemModalDesc').style.display = idesc(item) ? 'block' : 'none';
             var ph = $('itemModalPhoto');
             if (item.photo) { ph.src = item.photo; ph.style.display = 'block'; } else { ph.removeAttribute('src'); ph.style.display = 'none'; }
 
@@ -690,7 +713,7 @@
                 if (!item) return;
                 var meats = meatList(item);
                 var idx = l.meat ? Math.max(0, meats.indexOf(l.meat)) : 0;
-                var label = item.name + (l.meat ? ' (' + l.meat + ')' : '') + (l.option ? ' (' + l.option + ')' : '');
+                var label = iname(item) + (l.meat ? ' (' + l.meat + ')' : '') + (l.option ? ' (' + l.option + ')' : '');
                 var pi = priceInfo(item, idx);
                 lines.push({ line: l, item: item, label: label, unit: pi.cents / 100, deal: pi.deal, soldOut: item.soldOut });
             });
@@ -709,6 +732,7 @@
             var tt = cartTotals();
             $('cartCountBadge').textContent = t(tt.count === 1 ? 'item' : 'items', { n: tt.count });
             $('cartTotalBadge').textContent = money(tt.total);
+            if (isHost()) syncHost();
             $('btn-view-cart').parentNode.style.display = app.limp ? 'none' : '';
             if ($('cartModal').style.display === 'flex') renderCartModal();
         }
@@ -720,7 +744,22 @@
             renderPayChoice();
             renderWhen();
             renderRewardRow();
-            $('cartModalTotal').textContent = money(Math.max(0, tt.total - rewardCents() / 100));
+            // Group order: guests only add their own items; the host's checkout includes everyone's.
+            var guest = isGuest(), host = isHost(), others = host ? othersLines() : [];
+            $('cartModal').classList.toggle('as-guest', guest);
+            var othersTotal = others.reduce(function (sum, x) { return sum + x.unit * x.line.qty; }, 0);
+            $('groupOthers').style.display = others.length ? 'block' : 'none';
+            if (others.length) {
+                var byPerson = {}; others.forEach(function (x) { (byPerson[x.person] = byPerson[x.person] || []).push(x); });
+                $('groupOthers').innerHTML = '<div class="go-h">' + esc(t('group_also')) + '</div>' + Object.keys(byPerson).map(function (n) {
+                    return '<div class="go-row"><b>' + esc(n) + '</b><span>' + esc(byPerson[n].map(function (x) { return x.line.qty + '× ' + x.label; }).join(', ')) + '</span><span class="go-amt">' + money(byPerson[n].reduce(function (a, x) { return a + x.unit * x.line.qty; }, 0)) + '</span></div>';
+                }).join('');
+            }
+            $('groupStart').style.display = !app.group && !app.limp && !window.__FT_DEMO ? 'block' : 'none'; // a group needs other phones: not in the one-browser demo
+            var me = gMine();
+            if (guest) $('btn-place-order').textContent = me && me.items.length ? t('group_update') : t('group_add', { name: gData().host });
+            else if (host && !app.placing) $('btn-place-order').textContent = t('group_place', { n: gData().people.filter(function (x) { return x.items.length; }).length || 1 });
+            $('cartModalTotal').textContent = money(Math.max(0, tt.total + othersTotal - rewardCents() / 100));
             $('cartItemsList').innerHTML = tt.lines.map(function (x) {
                 return '<div class="flex justify-between items-center bg-zinc-950 p-3 rounded-xl border border-zinc-800 text-sm gap-2">' +
                     '<div class="min-w-0"><div class="font-bold truncate">' + esc(x.label) + '</div>' +
@@ -771,7 +810,137 @@
         function setCartNote(msg) { setCartError(msg); $('cartError').classList.add('is-note'); }
 
         /* ---------- placing an order ---------- */
+        /* ---------- group order: one link, everyone adds their own items, one pickup ---------- */
+        var GROUP_KEY = 'ok_group_' + location.host;
+        function gKey() {
+            var k = '';
+            try { k = localStorage.getItem('ok_gkey') || ''; } catch (e) {}
+            if (!/^[A-Za-z0-9_-]{16,64}$/.test(k)) {
+                var a = new Uint8Array(16); (window.crypto || window.msCrypto).getRandomValues(a);
+                k = Array.prototype.map.call(a, function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
+                try { localStorage.setItem('ok_gkey', k); } catch (e) {}
+            }
+            return k;
+        }
+        function gSave(token) { try { if (token) localStorage.setItem(GROUP_KEY, JSON.stringify({ token: token, at: Date.now() })); else localStorage.removeItem(GROUP_KEY); } catch (e) {} }
+        function gSaved() { try { var g = JSON.parse(localStorage.getItem(GROUP_KEY) || 'null'); return g && Date.now() - g.at < 6 * 3600000 ? g.token : null; } catch (e) { return null; } }
+        function gData() { return app.group && app.group.data; }
+        function inGroup() { var d = gData(); return !!(d && d.status === 'open'); }
+        function isHost() { return inGroup() && gData().isHost; }
+        function isGuest() { return inGroup() && !gData().isHost; }
+        function gMine() { var d = gData(); return d ? d.people.filter(function (x) { return x.mine; })[0] : null; }
+        // Everyone else's items, priced from the live menu (the host's checkout includes them).
+        function othersLines() {
+            var d = gData(), out = [];
+            if (!d) return out;
+            d.people.filter(function (x) { return !x.mine; }).forEach(function (person) {
+                person.items.forEach(function (l) {
+                    var item = app.menu.find(function (m) { return m.id === l.id; });
+                    if (!item) return;
+                    var meats = meatList(item), idx = l.meat ? Math.max(0, meats.indexOf(l.meat)) : 0;
+                    out.push({ person: person.name, line: l, item: item, label: l.label, unit: priceInfo(item, idx).cents / 100, soldOut: item.soldOut });
+                });
+            });
+            return out;
+        }
+        function loadGroup() {
+            if (!app.group) return Promise.resolve();
+            return fetch('/api/group/' + encodeURIComponent(app.group.token) + '?key=' + gKey(), { cache: 'no-store' })
+                .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+                .then(function (res) {
+                    if (!res.ok) { app.group = null; gSave(null); renderGroup(); return; }
+                    var was = app.group.data;
+                    app.group.data = res.d;
+                    // Placed: a guest's items are in the group's order now, so their own cart empties.
+                    var mine = res.d.people.filter(function (x) { return x.mine; })[0];
+                    if (res.d.status === 'placed' && (!was || was.status === 'open') && !res.d.isHost && mine && mine.items.length && app.cart.length) { app.cart = []; updateCartUI(); }
+                    renderGroup();
+                    if ($('cartModal').style.display === 'flex') renderCartModal();
+                }).catch(function () {});
+        }
+        function groupSummary(person) { return person.items.map(function (l) { return l.qty + '× ' + l.label; }).join(', '); }
+        function renderGroup() {
+            var bar = $('groupBar'), d = gData();
+            if (!d) { bar.style.display = 'none'; return; }
+            var people = d.people.filter(function (x) { return x.items.length; }), n = people.length;
+            var head, btns = '';
+            if (d.status === 'placed') {
+                head = '<b>' + esc(d.isHost ? t('group_you_placed') : t('group_placed', { name: d.host })) + '</b>' + (d.order ? ' · ' + esc(t('ticket', { n: d.order.ticket })) + ' · ' + esc(t('st_' + d.order.status)) : '');
+                btns = '<button data-action="group-leave">' + esc(t('group_done')) + '</button>';
+            } else if (d.status !== 'open') {
+                head = '<b>' + esc(t('group_ended')) + '</b>';
+                btns = '<button data-action="group-leave">' + esc(t('group_done')) + '</button>';
+            } else if (d.isHost) {
+                head = '<b>' + esc(t('group_yours')) + '</b> · ' + esc(t('group_people', { n: n }));
+                btns = '<button data-action="group-share">' + esc(t('group_share')) + '</button>';
+            } else {
+                var me = gMine();
+                head = '<b>' + esc(t('group_theirs', { name: d.host })) + '</b> · ' + esc(me && me.items.length ? t('group_in') : t('group_pick', { name: d.host }));
+            }
+            bar.innerHTML = '<div class="group-head"><span>' + head + '</span>' + btns + '</div>' +
+                (people.length ? '<details class="group-list"' + (app.groupOpen ? ' open' : '') + '><summary>' + esc(t('group_whos_in', { n: n })) + '</summary>' + people.map(function (x) {
+                    return '<div><b>' + esc(x.name) + (x.mine ? ' (' + esc(t('group_you')) + ')' : '') + '</b> ' + esc(groupSummary(x)) + '</div>';
+                }).join('') + '</details>' : '');
+            bar.style.display = 'block';
+        }
+        function startGroup() {
+            var name = $('customerName').value.trim();
+            if (!name) { setCartError(t('group_name_first')); $('customerName').focus(); return; }
+            fetch('/api/group', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name, key: gKey(), items: app.cart }) })
+                .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+                .then(function (res) {
+                    if (!res.ok) { setCartError(res.d.error || t('order_failed')); return; }
+                    app.group = { token: res.d.token, data: res.d.group }; gSave(res.d.token);
+                    try { localStorage.setItem('ft_name', name); } catch (e) {}
+                    renderGroup(); renderCartModal(); shareGroup();
+                }).catch(function () { setCartError(t('connection')); });
+        }
+        function groupLink() { return location.origin + '/?g=' + encodeURIComponent(app.group.token); }
+        function shareGroup() {
+            var url = groupLink(), text = t('group_share_text', { name: gData().host, truck: app.vendor.businessName });
+            if (navigator.share) { navigator.share({ title: app.vendor.businessName, text: text, url: url }).catch(function () {}); return; }
+            try { navigator.clipboard.writeText(url).then(function () { setCartNote(t('group_copied')); }); } catch (e) { prompt(t('group_copy'), url); }
+        }
+        // A guest's items go to the group (replacing what they sent before).
+        function sendMine() {
+            var name = $('customerName').value.trim();
+            if (!name) { setCartError(t('group_name_first')); $('customerName').focus(); return; }
+            try { localStorage.setItem('ft_name', name); } catch (e) {}
+            var btn = $('btn-place-order'); btn.disabled = true;
+            fetch('/api/group/' + encodeURIComponent(app.group.token) + '/me', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: gKey(), name: name, items: app.cart, allergy: $('customerAllergy').value.trim() }) })
+                .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+                .then(function (res) {
+                    btn.disabled = false;
+                    if (!res.ok) { setCartError(res.d.error || t('order_failed')); loadGroup(); return; }
+                    app.group.data = res.d; renderGroup(); renderCartModal();
+                    setCartNote(t('group_added', { name: res.d.host }));
+                }).catch(function () { btn.disabled = false; setCartError(t('connection')); });
+        }
+        // The host's own items follow their cart as they change it.
+        function syncHost() {
+            clearTimeout(app.hostSync);
+            app.hostSync = setTimeout(function () {
+                if (!isHost()) return;
+                fetch('/api/group/' + encodeURIComponent(app.group.token) + '/me', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key: gKey(), name: gData().host, items: app.cart }) }).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) { if (d) { app.group.data = d; renderGroup(); } }).catch(function () {});
+            }, 700);
+        }
+        // Everyone's allergies on the one ticket, by name, so the kitchen confirms them all.
+        function groupAllergy() {
+            var d = gData(), mine = $('customerAllergy').value.trim(), name = $('customerName').value.trim() || (d && d.host) || '';
+            var list = (mine ? [name + ': ' + mine] : []).concat(d ? d.people.filter(function (x) { return !x.mine && x.allergy; }).map(function (x) { return x.name + ': ' + x.allergy; }) : []);
+            return list.join('; ').slice(0, 120);
+        }
+        function groupNotes() {
+            var d = gData(), name = $('customerName').value.trim() || (d && d.host) || '';
+            var mine = app.cart.length ? [name + ': ' + cartLines().map(function (x) { return x.line.qty + '× ' + x.label; }).join(', ')] : [];
+            var others = d ? d.people.filter(function (x) { return !x.mine && x.items.length; }).map(function (x) { return x.name + ': ' + groupSummary(x); }) : [];
+            return mine.concat(others).join(' · ');
+        }
+
         function placeOrder() {
+            if (isGuest()) { sendMine(); return; }
             if (app.placing) return;
             var tt = cartTotals();
             if (!tt.lines.length) return;
@@ -785,7 +954,12 @@
 
             var name = $('customerName').value.trim();
             var notes = $('customerNotes').value.trim();
-            var summary = tt.lines.map(function (x) { return x.line.qty + 'x ' + x.label; }).join(', ');
+            var group = isHost(), others = group ? othersLines() : [];
+            if (others.some(function (x) { return x.soldOut; })) { setCartError(t('sold_out_in_cart')); app.placing = false; btn.disabled = false; renderPayChoice(); return; }
+            if (group) notes = (t('group_note') + ' ' + groupNotes() + (notes ? ' · ' + notes : '')).slice(0, 600);
+            var allLines = tt.lines.concat(others);
+            var allTotal = tt.total + others.reduce(function (sum, x) { return sum + x.unit * x.line.qty; }, 0);
+            var summary = allLines.map(function (x) { return x.line.qty + 'x ' + x.label; }).join(', ');
             try { if (name) localStorage.setItem('ft_name', name); } catch (e) {}
             var phone = app.vendor.smsReady ? $('customerPhone').value.trim() : '';
             var consent = app.vendor.smsReady && $('smsConsent').checked;
@@ -793,7 +967,7 @@
             var payNow = willPayNow();
             if (app.later && !app.pickupAt) { setCartError(t('pick_time')); app.placing = false; btn.disabled = false; renderPayChoice(); return; }
             // One key per cart: a second tap or a retry after a dropped signal can't create a second order.
-            var sig = JSON.stringify(tt.lines.map(function (x) { return [x.line.id, x.line.qty, x.line.meat || '', x.line.option || '']; })) + '|' + name + '|' + notes + '|' + payNow + '|' + $('customerAllergy').value.trim();
+            var sig = JSON.stringify(allLines.map(function (x) { return [x.line.id, x.line.qty, x.line.meat || '', x.line.option || '']; })) + '|' + name + '|' + notes + '|' + payNow + '|' + $('customerAllergy').value.trim();
             if (!app.orderKey || app.orderKeySig !== sig) {
                 app.orderKeySig = sig;
                 app.orderKey = (window.crypto && crypto.randomUUID) ? crypto.randomUUID().replace(/-/g, '') : (Date.now().toString(36) + Math.random().toString(36).slice(2, 14));
@@ -809,15 +983,17 @@
                     clientKey: app.orderKey,
                     device: deviceId(),
                     // What they were shown. If a deal ended in the meantime, the server asks before charging more.
-                    seenTotal: Math.max(Math.round(tt.total * 100 - rewardCents()) / 100, app.acceptedTotal || 0),
+                    seenTotal: Math.max(Math.round(allTotal * 100 - rewardCents()) / 100, app.acceptedTotal || 0),
+                    groupToken: group ? app.group.token : undefined,
+                    groupKey: group ? gKey() : undefined,
                     cardToken: cardToken() || undefined,
                     useReward: app.useReward && !!rewardCents() || undefined,
                     pickupAt: app.later && app.pickupAt ? app.pickupAt : undefined,
-                    allergy: $('customerAllergy').value.trim() || undefined,
+                    allergy: (group ? groupAllergy() : $('customerAllergy').value.trim()) || undefined,
                     payNow: payNow,
                     customerPhone: phone || undefined,
                     smsConsent: consent || undefined,
-                    items: tt.lines.map(function (x) { return { id: x.line.id, qty: x.line.qty, meat: x.line.meat || undefined, option: x.line.option || undefined }; })
+                    items: allLines.map(function (x) { return { id: x.line.id, qty: x.line.qty, meat: x.line.meat || undefined, option: x.line.option || undefined }; })
                 })
             }).then(function (r) {
                 return r.json().catch(function () { return {}; }).then(function (body) { return { ok: r.ok, status: r.status, body: body }; });
@@ -862,7 +1038,7 @@
                 var skew = res.body.now ? Date.now() - res.body.now : 0; // phone clock vs server clock
                 if (!app.tracked.some(function (o) { return o.token === res.body.token; }))
                     app.tracked.unshift({
-                        token: res.body.token, tag: res.body.tag, ticket: res.body.ticket, name: name || 'Guest', summary: summary, total: res.body.total, status: res.body.status, paid: false,
+                        token: res.body.token, tag: res.body.tag, ticket: res.body.ticket, name: name || 'Guest', summary: summary, total: res.body.total, status: res.body.status, paid: false, placedAt: Date.now(),
                         changeAt: res.body.changeUntil ? res.body.changeUntil + skew : 0,
                         pickupAt: res.body.pickupAt || null,
                         lines: app.cart.map(function (l) { return { key: l.key, id: l.id, meat: l.meat || '', option: l.option || '', qty: l.qty }; }),
@@ -877,6 +1053,7 @@
                     return 'redirect';
                 }
                 rememberOrder(app.cart);
+                if (app.group) setTimeout(loadGroup, 300);
                 app.cart = [];
                 $('customerNotes').value = ''; $('customerAllergy').value = '';
                 closeCartModal();
@@ -1160,11 +1337,33 @@
                     '<div class="text-[11px] text-zinc-500 mt-0.5 truncate">' + esc(o.summary) + '</div>' +
                     '<span class="inline-block mt-2 px-2.5 py-1 rounded-full text-xs font-medium border ' + STATUS_STYLE[st] + '">' + esc(t('st_' + st)) + '</span>' +
                     (o.paid ? ' <span class="inline-block mt-2 ml-1 px-2 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">' + esc(t('paid_badge')) + '</span>' : '') +
-                    '</div><span class="text-xs font-mono text-zinc-400">' + money(o.total) + '</span></div>' + changeRow(o) + '</div>';
+                    '</div><span class="text-xs font-mono text-zinc-400">' + money(o.total) + '</span></div>' + changeRow(o) + fbRow(o) + '</div>';
             }).join('');
             renderAlertOffer();
             keepAwake();
         }
+        /* ---------- private feedback: 👍 / 👎 after pickup, only the truck sees it ---------- */
+        function canRate(o) { return (o.status === 'Ready' || o.status === 'Fulfilled') && !o.fbGone && (!o.placedAt || Date.now() - o.placedAt < 3 * 864e5); }
+        function fbRow(o) {
+            if (!canRate(o) || o.fbDone) return o.fbDone ? '<div class="fb-row fb-done">' + esc(t('fb_thanks')) + '</div>' : '';
+            if (!o.rated) {
+                return '<div class="fb-row"><span>' + esc(t('fb_ask')) + '</span><span class="fb-votes">' +
+                    '<button data-action="fb-vote" data-token="' + esc(o.token) + '" data-v="1" aria-label="' + esc(t('fb_up')) + '">👍</button>' +
+                    '<button data-action="fb-vote" data-token="' + esc(o.token) + '" data-v="-1" aria-label="' + esc(t('fb_down')) + '">👎</button></span>' +
+                    '<small>' + esc(t('fb_private')) + '</small></div>';
+            }
+            var up = o.rated > 0, tags = (window.DayCore ? (up ? DayCore.TAGS_UP : DayCore.TAGS_DOWN) : []), picked = o.fbTags || [];
+            return '<div class="fb-row fb-more"><span>' + esc(t(up ? 'fb_more_up' : 'fb_more_down')) + '</span><div class="fb-tags">' +
+                tags.map(function (g) { return '<button data-action="fb-tag" data-token="' + esc(o.token) + '" data-tag="' + esc(g) + '" aria-pressed="' + (picked.indexOf(g) >= 0) + '">' + esc(t('tag_' + g.replace(/\s+/g, '_').toLowerCase()) || g) + '</button>'; }).join('') + '</div>' +
+                (up ? '' : '<input class="fb-comment" data-fb-comment="' + esc(o.token) + '" maxlength="300" placeholder="' + esc(t('fb_comment_ph')) + '" value="' + esc(o.fbComment || '') + '">') +
+                '<button data-action="fb-send" data-token="' + esc(o.token) + '" class="fb-send">' + esc(t('fb_send')) + '</button></div>';
+        }
+        function sendFeedback(o, done) {
+            return fetch('/api/feedback/order/' + encodeURIComponent(o.token), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ vote: o.rated, tags: o.fbTags || [], comment: o.fbComment || '' }) })
+                .then(function (r) { if (r.status === 404 || r.status === 409) o.fbGone = !done; if (done) o.fbDone = true; saveTracked(); renderTracker(); })
+                .catch(function () {});
+        }
+
         function changeRow(o) {
             var left = changeLeft(o);
             if (!left) return '';
@@ -1345,7 +1544,8 @@
                         renderStatus();
                         break;
                     // The server sends a tag, never the secret token. Older saved orders without a tag catch up via refreshTracked().
-                    case 'ORDER_STATUS': if (p.tag) applyStatus(function (o) { return o.tag === p.tag; }, p.status); break;
+                    case 'ORDER_STATUS': if (p.tag) applyStatus(function (o) { return o.tag === p.tag; }, p.status); if (app.group && gData() && gData().order) loadGroup(); break;
+                    case 'GROUP': if (app.group) loadGroup(); break;
                 }
             };
         }
@@ -1423,12 +1623,23 @@
                     updateCartUI();
                     break;
                 case 'place-order': placeOrder(); break;
+                case 'group-start': startGroup(); break;
+                case 'group-share': shareGroup(); break;
+                case 'group-leave': app.group = null; gSave(null); renderGroup(); if ($('cartModal').style.display === 'flex') renderCartModal(); break;
                 case 'add-usual': addUsual(); break;
                 case 'when': app.later = el.getAttribute('data-v') === 'later'; if (app.later) loadSlots(); renderCartModal(); break;
                 case 'slot': app.pickupAt = +el.getAttribute('data-at'); setCartError(''); renderWhen(); break;
                 case 'card-keep': app.cardSaving = true; renderCard(); var ce = $('cardEmail'); if (ce) ce.focus(); break;
                 case 'enable-alert': enableAlert(); break;
                 case 'order-cancel': cancelOrder(el.getAttribute('data-token'), false); break;
+                case 'fb-vote': case 'fb-tag': case 'fb-send':
+                    var fo = app.tracked.find(function (x) { return x.token === el.getAttribute('data-token'); });
+                    if (!fo) break;
+                    var ci = document.querySelector('[data-fb-comment="' + fo.token + '"]'); if (ci) fo.fbComment = ci.value.slice(0, 300);
+                    if (a === 'fb-vote') { fo.rated = +el.getAttribute('data-v'); fo.fbTags = []; sendFeedback(fo, false); }
+                    else if (a === 'fb-tag') { var g = el.getAttribute('data-tag'); fo.fbTags = fo.fbTags || []; var gi = fo.fbTags.indexOf(g); if (gi >= 0) fo.fbTags.splice(gi, 1); else fo.fbTags.push(g); saveTracked(); renderTracker(); }
+                    else sendFeedback(fo, true);
+                    break;
                 case 'order-change': cancelOrder(el.getAttribute('data-token'), true); break;
                 case 'close-success': $('successModal').style.display = 'none'; show('tracker'); break;
                 case 'toggle-hours': app.hoursOpen = !app.hoursOpen; renderHours(); break;
@@ -1471,6 +1682,9 @@
                 var adopt = new URLSearchParams(location.search).get('card');
                 if (adopt && /^[A-Za-z0-9_-]{16,64}$/.test(adopt)) { app.vendor = res.d; setCardToken(adopt); history.replaceState(null, '', location.pathname); }
                 applyVendor(res.d);
+                var gq = new URLSearchParams(location.search).get('g');
+                if (gq && /^[A-Za-z0-9_-]{6,40}$/.test(gq)) { gSave(gq); history.replaceState(null, '', location.pathname); }
+                if (gSaved()) { app.group = { token: gSaved(), data: null }; loadGroup(); }
                 loadTracked();
                 updateTrackButtons();
                 show('landing');

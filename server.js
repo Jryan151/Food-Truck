@@ -29,6 +29,9 @@ const rewards = require('./rewards');
 const crm = require('./crm');
 const limp = require('./limp');
 const watch = require('./watch');
+const daily = require('./daily');
+const feedback = require('./feedback');
+const group = require('./group');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -78,6 +81,9 @@ app.use('/api/catering', catering.router);
 app.use('/api/schedule', schedule.router);
 app.use('/api/rewards', rewards.router);
 app.use('/api/crm', crm.router);
+app.use('/api/day', daily.router);
+app.use('/api/feedback', feedback.router);
+app.use('/api/group', group.router);
 app.use('/api', api.router);
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 
@@ -290,6 +296,7 @@ core.ensureSchema()
     // The line keeps aging between taps: refresh the wait customers see once a minute.
     setInterval(() => core.refreshAllWaits().catch(() => {}), 60 * 1000).unref();
     limp.start();
+    daily.start(); // sold-out history, day summaries
     // Email that couldn't go out (mail service down) is retried here.
     setInterval(() => auth.retryMail().catch((e) => console.error('mail retry:', e.message)), 60 * 1000).unref();
   })

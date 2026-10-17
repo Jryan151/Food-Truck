@@ -12,6 +12,7 @@ const core = require('./core');
 const auth = require('./auth');
 const Q = require('./public/catering-quote.js');
 const crm = require('./crm');
+const daily = require('./daily');
 const { run, get, all } = core;
 const { requireVendor, requireRole, rateLimit, sendMail, mailLater, escHtml, EMAIL_RE } = auth;
 
@@ -191,7 +192,7 @@ router.post('/request', requireVendor, limitRequest, async (req, res) => {
   }).catch(() => {});
   // To the owner: everything needed to accept in one tap.
   if (v.email) {
-    mailLater({
+    daily.ownerMail(v, { // after closing time this waits for the morning (quiet hours)
       to: v.email, replyTo: host.email,
       subject: `New catering request: ${fmtDate(date)}, ${quote.guests} guests, ${Q.money(quote.totalCents)}`,
       text: `${host.name}${host.company ? ' (' + host.company + ')' : ''} requested ${when} for ${quote.guests} guests (${pkg.name}), ${Q.money(quote.totalCents)}.\nIt's inside all your rules. Accept or decline within 24 hours: ${pageUrl(req, '/catering/manage')}\nReply to this email to reach the host.`,
@@ -296,7 +297,7 @@ router.post('/booking/:token/cancel', requireVendor, async (req, res) => {
   if (!r.changes) return res.status(409).json({ error: 'This booking can’t be canceled here. Reply to your confirmation email to reach the truck.' });
   const b = await get('SELECT * FROM catering_bookings WHERE public_token = ?', [String(req.params.token)]);
   crm.catering.canceled(b);
-  if (v.email) mailLater({ to: v.email, replyTo: b.host_email, subject: `Catering request withdrawn: ${fmtDate(b.event_date)}`, text: `${b.host_name} withdrew their request for ${fmtDate(b.event_date)}. The date is free again.`, html: `<p>${escHtml(b.host_name)} withdrew their request for ${escHtml(fmtDate(b.event_date))}. The date is free again.</p>` }).catch(() => {});
+  if (v.email) daily.ownerMail(v, { to: v.email, replyTo: b.host_email, subject: `Catering request withdrawn: ${fmtDate(b.event_date)}`, text: `${b.host_name} withdrew their request for ${fmtDate(b.event_date)}. The date is free again.`, html: `<p>${escHtml(b.host_name)} withdrew their request for ${escHtml(fmtDate(b.event_date))}. The date is free again.</p>` }).catch(() => {});
   res.json({ ok: true });
 });
 

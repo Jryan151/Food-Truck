@@ -450,3 +450,31 @@ truck addresses, and emails `ADMIN_EMAIL` if any has under 14 days left. Set `AD
    `LITESTREAM_ACCESS_KEY_ID=...` and `LITESTREAM_SECRET_ACCESS_KEY=...`, then
    `sudo systemctl enable --now litestream`. Check with `litestream snapshots /var/www/foodtruck/database.sqlite`.
 3. Read `RUNBOOK.md` once now, and fill in the three logins at the bottom on your own copy.
+
+## The owner's day, the kitchen screen, group orders
+
+Nothing to install and no new settings. New files: `daily.js`, `feedback.js`, `group.js`, `zip.js`, `public/day-core.js`.
+The tables are added on start (database change 3, with a copy saved first).
+
+- **Day summary:** one email a day (orders, top item, busiest and slowest hour, what customers said, what sold out,
+  tomorrow's weather and prep nudges). Owners choose next morning, right after close, or off (Settings → Your day).
+  The same summary is the card at the top of the kitchen screen in the morning.
+- **Quiet hours:** from closing time (or a set hour) until morning, no email to the owner. Catering requests and the
+  like wait until morning; "no kitchen screen is open" alerts are dropped at night.
+- **Weather heads-up:** owners type a city or ZIP; forecasts come from Open-Meteo (free, no key). The server needs to
+  reach `geocoding-api.open-meteo.com` and `api.open-meteo.com` over HTTPS (normal outbound internet).
+- **Prep nudges:** the first time each item sells out each day is remembered; three of the last four same weekdays
+  becomes "You sold out of birria by 1:10 PM the last three Fridays. Prep more, or set a limit?"
+- **Private feedback:** after pickup customers can tap 👍 or 👎 (with an optional reason). Owners see patterns in
+  Insights → What customers say. No names are kept with it.
+- **Regulars:** the kitchen ticket shows "★ 4th visit · usually “no onions”" (matched by the phone, or the punch card).
+- **Saved menus:** Inventory → Saved menus. Switch to the festival menu in one tap; the menu that was on is kept.
+- **Export everything:** Insights → Export → "Download everything (.zip)".
+- **Share today's spot:** Settings → Your Ordering Page → an Instagram-ready image of today's location and hours.
+- **Learns the week:** Start service offers where the truck usually is on that weekday.
+- **This screen (per PIN):** text size, rush view, glove mode (tap or swipe a ticket, 3 seconds to undo), station
+  (show only the grill's items), a Bluetooth Ready button (any button that types a key), and a different sound for
+  each kind of event. Saved to each crew member's PIN, so any tablet they sign in on is set up their way.
+- **Group order:** "Ordering for a group? Send everyone a link" in the cart. Everyone adds their own items on their
+  own phone; the host places one order with who-gets-what and everyone's allergies on the ticket.
+- **Spanish menu:** item editor → "En español" for the owner's own Spanish name and description.

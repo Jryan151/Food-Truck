@@ -18,6 +18,7 @@
     <link rel="stylesheet" href="/theme.css">
     <script src="/insights-core.js"></script>
     <script src="/deals-core.js"></script>
+    <script src="/day-core.js"></script>
     <script src="/qr.js"></script>
     <script src="/logo.js"></script>
     <style>
@@ -95,7 +96,7 @@
                     <button data-action="logout" class="text-xs text-rose-400 hover:text-rose-300 ml-1">Log out</button>
                 </div>
             </div>
-            <div class="mt-3 flex gap-2">
+            <div class="mt-3 flex gap-2" data-quiet>
                 <a href="/" target="_blank" rel="noopener" id="viewPageLink" class="flex-1 text-center bg-zinc-900 border border-zinc-800 hover:border-zinc-600 text-zinc-200 text-xs font-semibold py-2 rounded-xl transition">👀 View my customer page ↗</a>
                 <button data-action="install" id="installBtn" class="bg-zinc-900 border border-zinc-800 hover:border-zinc-600 text-zinc-200 text-xs font-semibold py-2 px-3 rounded-xl" style="display:none;">📲 Install app</button>
             </div>
@@ -116,7 +117,7 @@
 
             <!-- Orders -->
             <div id="ownerTabOrders" class="space-y-4">
-                <div id="setupCard" class="bg-zinc-900 border border-emerald-500/30 rounded-xl p-4" data-owner style="display:none;">
+                <div id="setupCard" class="bg-zinc-900 border border-emerald-500/30 rounded-xl p-4" data-owner data-quiet style="display:none;">
                     <div class="flex justify-between items-center mb-2">
                         <h3 class="font-bold text-sm text-zinc-100">🚀 Get ready for your first customers <span id="setupCount" class="text-zinc-500 font-normal text-xs"></span></h3>
                         <button data-action="dismiss-setup" class="text-[10px] text-zinc-500 hover:text-zinc-300">Hide</button>
@@ -124,6 +125,8 @@
                     <div class="h-1 bg-zinc-800 rounded-full mb-3 overflow-hidden"><div id="setupBar" class="h-full bg-emerald-500 transition-all" style="width:0%"></div></div>
                     <div id="setupList" class="space-y-1.5"></div>
                 </div>
+                <div id="rushBar" class="rush-bar" role="status" style="display:none"></div>
+                <div id="briefCard" class="brief" data-owner data-quiet style="display:none" role="region" aria-label="Your day"></div>
                 <button data-action="enable-sound" id="soundPrompt" class="w-full bg-amber-500/10 border border-amber-500/40 text-amber-400 text-xs font-bold py-3 rounded-xl" style="display:none;">🔇 Tap here to turn on new-order sounds</button>
                 <div class="flex justify-between items-center gap-2 mb-1">
                     <h3 class="font-semibold text-sm text-zinc-400" style="white-space:nowrap">Tickets</h3>
@@ -133,8 +136,9 @@
                         <button data-action="refresh-orders" class="text-xs text-zinc-300 hover:underline">Refresh ↻</button>
                     </div>
                 </div>
-                <div id="awakeNote" class="text-[10px] text-zinc-500 -mt-2" style="display:none;">☀️ Screen will stay on while this page is open.</div>
-                <div id="whoNote" class="text-[10px] text-zinc-500" style="display:none;"></div>
+                <div id="awakeNote" class="text-[10px] text-zinc-500 -mt-2" data-quiet style="display:none;">☀️ Screen will stay on while this page is open.</div>
+                <div id="whoNote" class="text-[10px] text-zinc-500" data-quiet style="display:none;"></div>
+                <div id="undoBar" class="undo-bar" role="status" style="display:none"></div>
                 <div id="order-filter-tabs" class="flex gap-2 mb-3 bg-zinc-950 p-1.5 rounded-xl border border-zinc-800/50 w-max">
                     <button data-action="filter" data-filter="Active" id="filterActive" class="px-4 py-1.5 rounded-lg text-[11px] font-bold bg-zinc-100 text-zinc-950 shadow transition">Active</button>
                     <button data-action="filter" data-filter="Fulfilled" id="filterFulfilled" class="px-4 py-1.5 rounded-lg text-[11px] font-bold text-zinc-400 hover:text-zinc-200 transition">Fulfilled</button>
@@ -159,6 +163,17 @@
                     <div id="outChips" class="flex flex-wrap gap-1.5"></div>
                 </div>
                 <div id="ownerMenuList" class="space-y-3 relative"></div>
+
+                <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" data-owner id="menusBox">
+                    <h3 class="font-bold text-sm text-zinc-100 border-b border-zinc-800 pb-2 mb-3">Saved menus</h3>
+                    <p class="text-[11px] text-zinc-500 mb-3">Build a menu for an event once and switch to it in one tap, this year and next. Switching back is one tap too, and the menu that’s on now is always kept.</p>
+                    <div id="menusList" class="space-y-2"></div>
+                    <div class="flex gap-2 mt-3">
+                        <input id="menuSaveName" maxlength="40" placeholder="Save the menu that’s on now as…" class="flex-1 min-w-0 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200">
+                        <button data-action="menu-save" class="bg-zinc-100 text-zinc-950 px-4 rounded-lg text-xs font-bold">Save</button>
+                    </div>
+                    <div id="menusMsg" class="text-[11px] mt-2" role="status"></div>
+                </div>
 
                 <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" data-owner id="dealsBox">
                     <div class="flex items-center justify-between gap-2 border-b border-zinc-800 pb-2 mb-3">
@@ -237,6 +252,8 @@
                     </div>
                     <p class="text-[10px] text-zinc-500 mt-2">Share this link on social media, and print a QR sign for your window.</p>
                     <button data-action="open-qr" class="mt-3 w-full bg-zinc-100 hover:bg-white text-zinc-950 py-2.5 rounded-lg text-xs font-bold">🖨️ Print QR code sign</button>
+                    <button data-action="open-spot" id="spotBtn" class="mt-2 w-full border border-zinc-700 text-zinc-200 py-2.5 rounded-lg text-xs font-bold">📸 Share today’s spot</button>
+                    <p class="text-[10px] text-zinc-500 mt-1">A clean image of today’s location and hours with your order link, ready for Instagram.</p>
                     <a href="/now" id="nowLink" target="_blank" rel="noopener" class="mt-2 block w-full text-center border border-zinc-700 text-zinc-200 py-2.5 rounded-lg text-xs font-bold">📺 Now-serving screen for a TV or tablet ↗</a>
                     <p class="text-[10px] text-zinc-500 mt-1">Shows ready ticket numbers big enough to read from the line, plus a QR code to order ahead.</p>
                 </div>
@@ -263,6 +280,28 @@
                     <div id="crewNoteMsg" class="text-[11px] text-center mt-2" style="display:none;"></div>
                 </div>
 
+                <!-- Your day: one summary instead of a stream of notifications -->
+                <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" data-owner id="dayBox">
+                    <h3 class="font-bold text-sm text-zinc-100 mb-1 border-b border-zinc-800 pb-2">Your day</h3>
+                    <p class="text-[11px] text-zinc-500 mt-3 mb-3">One summary a day instead of a stream of notifications: orders, top item, busiest and slowest hour, what customers said, what sold out, and tomorrow’s weather.</p>
+                    <div class="flex items-center justify-between gap-3">
+                        <div class="text-xs font-bold text-zinc-200">Day summary by email</div>
+                        <select id="sumWhen" class="bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200"><option value="morning">Next morning</option><option value="close">Right after close</option><option value="off">Off</option></select>
+                    </div>
+                    <div class="flex items-center justify-between gap-3 mt-4">
+                        <div class="min-w-0"><div class="text-xs font-bold text-zinc-200">Quiet hours</div><div class="text-[10px] text-zinc-500">No emails to you overnight. Anything that comes in waits for the morning.</div></div>
+                        <button data-action="quiet-toggle" id="quietSwitch" aria-label="Quiet hours on or off" class="switch"></button>
+                    </div>
+                    <div id="quietRow" class="grid grid-cols-2 gap-2 mt-2">
+                        <label class="text-[10px] text-zinc-400">From<select id="quietFrom" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200 mt-1"><option value="close">Closing time</option><option value="20:00">8 PM</option><option value="21:00">9 PM</option><option value="22:00">10 PM</option><option value="23:00">11 PM</option></select></label>
+                        <label class="text-[10px] text-zinc-400">Until<select id="quietUntil" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200 mt-1"><option value="06:00">6 AM</option><option value="07:00">7 AM</option><option value="08:00">8 AM</option><option value="09:00">9 AM</option><option value="10:00">10 AM</option></select></label>
+                    </div>
+                    <label class="block text-xs font-bold text-zinc-200 mt-4" for="wxPlace">Weather heads-up for</label>
+                    <div class="text-[10px] text-zinc-500 mb-1.5">“Rain likely tomorrow. Shorten hours or prep less?” City and state, or a ZIP.</div>
+                    <div class="flex gap-2"><input id="wxPlace" maxlength="80" placeholder="Tempe, AZ" class="flex-1 min-w-0 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200"><button data-action="day-save" class="bg-zinc-100 text-zinc-950 px-4 rounded-lg text-xs font-bold">Save</button></div>
+                    <div id="dayMsg" class="text-[11px] mt-2" role="status"></div>
+                </div>
+
                 <!-- Catering lives in its own space -->
                 <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" data-owner id="cateringBox">
                     <h3 class="font-bold text-sm text-zinc-100 mb-1 border-b border-zinc-800 pb-2">Catering</h3>
@@ -283,6 +322,37 @@
                             <button type="button" data-action="theme" data-mode="night">Night</button>
                         </div>
                     </div>
+                </div>
+
+                <!-- This screen: set up the way each person works; saved to their PIN -->
+                <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" id="screenBox">
+                    <h3 class="font-bold text-sm text-zinc-100 mb-1 border-b border-zinc-800 pb-2">This screen</h3>
+                    <p class="text-[11px] text-zinc-400 mt-3 mb-3" id="screenWho">Set it up the way you work.</p>
+                    <div class="text-xs font-bold text-zinc-200 mb-1.5">Text size</div>
+                    <div class="theme-seg" role="group" aria-label="Text size">
+                        <button type="button" data-action="pref" data-k="text" data-v="normal">Normal</button>
+                        <button type="button" data-action="pref" data-k="text" data-v="large">Large</button>
+                        <button type="button" data-action="pref" data-k="text" data-v="xl">Extra large</button>
+                    </div>
+                    <div class="text-xs font-bold text-zinc-200 mt-4 mb-0.5">Rush view</div>
+                    <div class="text-[10px] text-zinc-500 mb-1.5">Only tickets when it’s busy: no checklist, cards or tips. Auto turns on at 5 tickets in the line.</div>
+                    <div class="theme-seg" role="group" aria-label="Rush view">
+                        <button type="button" data-action="pref" data-k="rush" data-v="auto">Auto</button>
+                        <button type="button" data-action="pref" data-k="rush" data-v="on">Always</button>
+                        <button type="button" data-action="pref" data-k="rush" data-v="off">Off</button>
+                    </div>
+                    <div class="flex items-center justify-between gap-3 mt-4">
+                        <div class="min-w-0"><div class="text-xs font-bold text-zinc-200">Glove mode</div><div class="text-[10px] text-zinc-500">Tap anywhere on a ticket, or swipe it right, to move it along. Three seconds to undo.</div></div>
+                        <button data-action="pref-toggle" data-k="glove" id="gloveSwitch" aria-label="Glove mode on or off" class="switch"></button>
+                    </div>
+                    <div class="text-xs font-bold text-zinc-200 mt-4 mb-0.5">Station</div>
+                    <div class="text-[10px] text-zinc-500 mb-1.5">Show only these on this screen’s tickets, like the grill or the fryer. None picked: everything.</div>
+                    <div id="stationChips" class="flex flex-wrap gap-1.5"></div>
+                    <div class="flex items-center justify-between gap-3 mt-4">
+                        <div class="min-w-0"><div class="text-xs font-bold text-zinc-200">Ready button</div><div class="text-[10px] text-zinc-500" id="bumpState">A cheap Bluetooth button by the window marks the oldest ticket Ready, like a bump bar.</div></div>
+                        <button data-action="bump-learn" id="bumpLearn" class="shrink-0 border border-zinc-700 text-zinc-100 px-3 py-2 rounded-lg text-[11px] font-bold">Set up</button>
+                    </div>
+                    <button data-action="test-sounds" class="mt-4 w-full border border-zinc-800 text-zinc-300 py-2 rounded-lg text-[11px] font-semibold">Hear the sounds: new order · canceled · crew note · scheduled order due</button>
                 </div>
 
                 <!-- Plan & billing -->
@@ -489,6 +559,17 @@
                     <div id="cmpPair" class="mt-4"></div>
                 </div>
 
+                <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" id="fbBox">
+                    <h3 class="font-bold text-sm text-zinc-100">What customers say</h3>
+                    <p class="text-[11px] text-zinc-500 mt-1">After pickup, customers can tap 👍 or 👎. Only you see it, shown as patterns so one bad day doesn’t shout louder than a trend.</p>
+                    <div class="theme-seg mt-3" role="group" aria-label="Look back">
+                        <button data-action="fb-days" data-days="7" aria-pressed="false">7 days</button>
+                        <button data-action="fb-days" data-days="30" aria-pressed="true">30 days</button>
+                        <button data-action="fb-days" data-days="90" aria-pressed="false">90 days</button>
+                    </div>
+                    <div id="fbBody" class="mt-3"></div>
+                </div>
+
                 <div id="exportBox" class="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
                     <h3 class="font-bold text-sm text-zinc-300 mb-1">⬇️ Export orders</h3>
                     <p class="text-[10px] text-zinc-500 mb-3">A spreadsheet (CSV) of every order in the dates you pick — opens in Excel, Numbers or Google Sheets.</p>
@@ -497,6 +578,11 @@
                         <div><label class="block text-[10px] text-zinc-400 mb-1" for="exportTo">To</label><input type="date" id="exportTo" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200"></div>
                     </div>
                     <button data-action="export-csv" class="mt-3 w-full bg-zinc-100 hover:bg-white text-zinc-950 py-2.5 rounded-lg text-xs font-bold">Download CSV</button>
+                    <div class="mt-4 pt-3 border-t border-zinc-800">
+                        <div class="text-xs font-bold text-zinc-200">Everything, in one download</div>
+                        <p class="text-[10px] text-zinc-500 mt-0.5 mb-2">Your menu, every order, clients, followers, schedule, catering bookings and feedback, as spreadsheets in one .zip. It’s your data: take it anywhere.</p>
+                        <button data-action="export-all" id="exportAll" class="block w-full text-center border border-zinc-700 text-zinc-200 py-2.5 rounded-lg text-xs font-bold">Download everything (.zip)</button>
+                    </div>
                     <div id="exportMsg" class="text-[11px] text-center mt-2" style="display:none;"></div>
                     <button data-action="clear-history" class="w-full bg-zinc-950 border border-zinc-800 text-rose-400 py-2 rounded-lg text-xs font-semibold mt-4">Clear order history</button>
                 </div>
@@ -564,6 +650,11 @@
             <div>
                 <label class="block text-xs text-zinc-400 mb-1">Description</label>
                 <textarea id="editDesc" maxlength="300" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200 h-16 resize-none"></textarea>
+                <details id="editEsBox" class="mt-2">
+                    <summary class="text-[11px] text-zinc-400 cursor-pointer">En español (optional): how it reads when a customer’s phone is in Spanish</summary>
+                    <input type="text" id="editNameEs" maxlength="80" placeholder="Nombre en español" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200 mt-2">
+                    <textarea id="editDescEs" maxlength="300" placeholder="Descripción en español" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200 h-16 resize-none mt-2"></textarea>
+                </details>
             </div>
             <div class="grid grid-cols-3 gap-2">
                 <div><label class="block text-[10px] text-zinc-400 mb-1">Reg. Price ($)</label><input type="number" step="0.01" min="0" inputmode="decimal" id="editPrice" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2 text-sm text-zinc-200"></div>
@@ -598,6 +689,18 @@
     </div>
 
     <!-- QR sign (printable) -->
+    <div id="spotModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto" style="display:none;" role="dialog" aria-label="Share today’s spot">
+        <div class="w-full max-w-sm">
+            <img id="spotImg" alt="Today’s spot, ready to post" class="w-full rounded-2xl border border-zinc-800 bg-zinc-950" style="aspect-ratio:4/5">
+            <p class="text-[11px] text-zinc-400 mt-2 text-center">Sized for an Instagram post. Tap Share to send it straight to Instagram, or save it.</p>
+            <div class="flex gap-2 mt-3">
+                <button data-action="spot-share" id="spotShare" class="flex-1 bg-zinc-100 text-zinc-950 font-semibold py-3 rounded-xl text-sm">Share</button>
+                <button data-action="spot-download" class="flex-1 border border-zinc-700 text-zinc-100 font-semibold py-3 rounded-xl text-sm">Save image</button>
+                <button data-action="close-spot" class="px-4 bg-zinc-800 text-zinc-200 font-semibold py-3 rounded-xl text-sm">Close</button>
+            </div>
+        </div>
+    </div>
+
     <div id="qrModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto" style="display:none;">
         <div class="w-full max-w-sm">
             <div id="qrSheet" class="bg-white text-zinc-950 rounded-2xl p-8 text-center shadow-2xl">
@@ -759,16 +862,21 @@
             var p = $('soundPrompt'); if (!p) return;
             p.style.display = (app.me && !soundReady()) ? 'block' : 'none';
         }
-        function beep() {
-            try { if (navigator.vibrate) navigator.vibrate(200); } catch (e) {}
+        // A different sound for each kind of event, so the kitchen knows what happened without looking:
+        // new order rises, a cancel falls, a crew note is one soft tone, a scheduled order coming due taps three times.
+        var SOUNDS = { 'new': [[880, 0, 0.16], [1320, 0.16, 0.22]], cancel: [[523, 0, 0.18], [349, 0.18, 0.3]], note: [[660, 0, 0.35]], due: [[988, 0, 0.09], [988, 0.15, 0.09], [988, 0.3, 0.12]] };
+        function beep(kind) {
+            try { if (navigator.vibrate) navigator.vibrate(kind === 'cancel' ? [100, 80, 100] : 200); } catch (e) {}
             if (!app.sound) return;
             try {
                 var ctx = ensureAudio(); if (!ctx) return;
-                var o = ctx.createOscillator(), g = ctx.createGain();
-                o.connect(g); g.connect(ctx.destination); o.frequency.value = 880;
-                g.gain.setValueAtTime(0.15, ctx.currentTime);
-                g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
-                o.start(); o.stop(ctx.currentTime + 0.4);
+                (SOUNDS[kind] || SOUNDS['new']).forEach(function (n) {
+                    var o = ctx.createOscillator(), g = ctx.createGain(), t0 = ctx.currentTime + n[1];
+                    o.connect(g); g.connect(ctx.destination); o.frequency.value = n[0];
+                    g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.16, t0 + 0.015);
+                    g.gain.exponentialRampToValueAtTime(0.001, t0 + n[2]);
+                    o.start(t0); o.stop(t0 + n[2] + 0.02);
+                });
             } catch (e) {}
         }
         // Any tap anywhere unlocks audio for the rest of the session.
@@ -844,6 +952,7 @@
             if (isOwner()) buildHoursEditor();
             switchTab('Orders');
             Promise.all([loadOrders(), loadMenu(), loadState(), isOwner() ? loadLocations() : null]).then(function () { renderSettings(); renderSetup(); });
+            loadBrief();
             startLive();
         }
 
@@ -851,6 +960,7 @@
             return api('GET', '/api/auth/me').then(function (r) {
                 if (!r.ok) return false;
                 app.me = r.data; app.role = r.data.role;
+                applyPrefs(r.data.prefs || null);
                 var who = $('whoNote');
                 if (who) { who.style.display = r.data.staffName ? 'block' : 'none'; who.textContent = r.data.staffName ? 'Signed in as ' + r.data.staffName + ' · everything you tap is recorded with your name' : ''; }
                 return true;
@@ -926,8 +1036,8 @@
                     : 'bg-zinc-900 border border-zinc-800 text-zinc-300 font-semibold py-2 rounded-xl text-[10px] transition';
             });
             if (name === 'Orders') { app.newCount = 0; renderBadge(); loadOrders(); }
-            if (name === 'Menu') { loadMenu(); setFlag('menu'); if (isOwner()) loadDeals(); }
-            if (name === 'Settings') { renderSettings(); if (isOwner()) { loadLocations().then(function () { renderSettings(); loadSchedule(); }); loadFollowers(); loadRewards(); loadCrew(); loadPayments(); loadSms(); } }
+            if (name === 'Menu') { loadMenu(); setFlag('menu'); if (isOwner()) { loadDeals(); loadMenus(); } }
+            if (name === 'Settings') { renderSettings(); if (isOwner()) { loadLocations().then(function () { renderSettings(); loadSchedule(); }); loadFollowers(); loadRewards(); loadCrew(); loadPayments(); loadSms(); loadDay(); } }
             if (name === 'Analytics') loadAnalytics();
             if (name === 'Guide') renderGuide();
         }
@@ -1038,7 +1148,8 @@
             var prep = app.filter === 'Active' ? app.orders.filter(function (o) { return o.status === 'Preparing' && isDue(o); }) : [];
             if (prep.length < 2) { bar.style.display = 'none'; return; }
             var totals = {}, order = [];
-            prep.forEach(function (o) { (o.items || []).forEach(function (i) { var k = baseName(i); if (!totals[k]) { totals[k] = 0; order.push(k); } totals[k] += i.qty; }); });
+            prep.forEach(function (o) { stationItems(o).forEach(function (i) { var k = baseName(i); if (!totals[k]) { totals[k] = 0; order.push(k); } totals[k] += i.qty; }); });
+            if (!order.length) { bar.style.display = 'none'; return; }
             order.sort(function (a, b) { return totals[b] - totals[a]; });
             bar.innerHTML = '<div class="text-[10px] font-bold tracking-widest text-zinc-500 mb-1.5">COOK NOW · ACROSS ' + prep.length + ' ORDERS</div><div class="flex flex-wrap gap-2">' +
                 order.map(function (k) { return '<span class="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm"><b class="font-mono">× ' + totals[k] + '</b> ' + esc(k) + '</span>'; }).join('') + '</div>';
@@ -1047,7 +1158,7 @@
         // Finish together: items with shorter cook times start later, so the whole order is ready at once.
         function finishTogether(o) {
             if (o.status !== 'Preparing') return '';
-            var lines = (o.items || []).map(function (i) { var m = menuItem(i.id); return { name: baseName(i), prep: m ? Number(m.prep) || 0 : 0 }; });
+            var lines = stationItems(o).map(function (i) { var m = menuItem(i.id); return { name: baseName(i), prep: m ? Number(m.prep) || 0 : 0 }; });
             var max = Math.max.apply(null, lines.map(function (l) { return l.prep; }).concat([0]));
             var later = lines.filter(function (l) { return l.prep < max; });
             if (!later.length || lines.length < 2) return '';
@@ -1073,6 +1184,7 @@
         setInterval(function () { if (app.me && app.tab === 'Orders' && app.filter === 'Active' && app.orders.length && !document.hidden) renderOrders(); }, 15000);
 
         function renderOrders() {
+            renderRush();
             var active = 'px-4 py-1.5 rounded-lg text-[11px] font-bold bg-zinc-100 text-zinc-950 shadow transition';
             var inactive = 'px-4 py-1.5 rounded-lg text-[11px] font-bold text-zinc-400 hover:text-zinc-200 transition';
             ['Active', 'Fulfilled', 'Canceled'].forEach(function (f) { $('filter' + f).className = (f === app.filter) ? active : inactive; });
@@ -1089,7 +1201,7 @@
             app.orders.forEach(function (o) {
                 if (!o.fireAt) return;
                 if (!isDue(o)) app.dueSeen[o.id] = 'later';
-                else if (app.dueSeen[o.id] === 'later') { app.dueSeen[o.id] = 'due'; beep(); speakOrder(o); }
+                else if (app.dueSeen[o.id] === 'later') { app.dueSeen[o.id] = 'due'; beep('due'); speakOrder(o); }
             });
             var shown = app.orders.filter(function (o) { return later.indexOf(o) < 0; });
             c.innerHTML = (shown.length ? '' : '<div class="text-center text-zinc-500 py-6 text-xs bg-zinc-900 border border-zinc-800 rounded-xl">Nothing to cook right now.</div>') + shown.map(function (o) {
@@ -1109,8 +1221,11 @@
                         '<button data-action="order" data-act="ready" data-id="' + o.id + '" class="flex-1 ' + (lockReady ? 'bg-zinc-800 text-zinc-500' : 'bg-blue-600 hover:bg-blue-500 text-white') + ' py-2 rounded-lg text-xs font-bold shadow-lg transition"' + (lockReady ? ' disabled' : '') + '>' + (ready ? 'Marked Ready ✓' : needAck ? 'Allergy first' : needCheck ? 'Check first' : 'Mark Ready') + '</button>' +
                         '<button data-action="order" data-act="fulfill" data-id="' + o.id + '" class="flex-1 ' + (needAck ? 'bg-zinc-800 text-zinc-500' : 'bg-emerald-600 hover:bg-emerald-500 text-white') + ' py-2 rounded-lg text-xs font-bold shadow-lg"' + (needAck ? ' disabled' : '') + '>Fulfill ✓</button></div>';
                 }
-                var items = (o.items || []).map(function (i) { return esc(i.qty + 'x ' + i.name); }).join('<br>');
-                return '<div class="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex flex-col gap-3 relative"' + (age ? ' style="border-left:6px solid ' + age.color + '"' : '') + '>' +
+                var mine = stationItems(o), other = (o.items || []).length - mine.length;
+                var items = mine.map(function (i) { return esc(i.qty + 'x ' + i.name); }).join('<br>') +
+                    (other ? '<div class="other-station">+ ' + other + ' item' + (other === 1 ? '' : 's') + ' for another station</div>' : '');
+                if (!mine.length) items = '<div class="other-station">Nothing for this station</div>';
+                return '<div data-ticket="' + o.id + '" class="ticket bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex flex-col gap-3 relative' + (!mine.length ? ' ticket-dim' : '') + '"' + (age ? ' style="border-left:6px solid ' + age.color + '"' : '') + '>' +
                     '<div class="flex justify-between items-start gap-3"><div class="min-w-0">' +
                     '<span class="text-xs font-mono font-bold">#' + esc(o.ticket) + ' (' + esc(o.name) + ') ' +
                     (age ? '<span class="font-bold" style="color:' + age.color + '" title="Waiting time">' + age.label + '</span>' : '<span class="text-zinc-500 font-normal">' + esc(fmtTime(o.createdAt)) + '</span>') + '</span>' +
@@ -1122,6 +1237,7 @@
                     (o.textMe ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-300 border border-blue-500/30">📱 texts when ready</span>' : '') +
                     (o.rewardCents ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full border border-zinc-500 text-zinc-200">🎁 PUNCH CARD −' + money(o.rewardCents / 100) + '</span>' : '') +
                     (o.pickupAt ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full border border-zinc-300 text-zinc-100">🕑 PICKUP ' + esc(fmtTime(o.pickupAt)) + '</span>' : '') +
+                    (o.regular ? '<span class="reg-tag">★ ' + esc(o.regular.label) + (o.regular.usual ? ' · usually “' + esc(o.regular.usual) + '”' : '') + '</span>' : '') +
                     '</div>' +
                     (o.notes ? '<div class="text-[11px] text-zinc-400 mt-1 whitespace-pre-line">Note: ' + esc(o.notes) + '</div>' : '') +
                     '<div class="text-[10px] ' + color + ' mt-1 font-semibold">' + esc(o.status) + (o.saved ? ' <span class="saved-tag">saved on tablet</span>' : '') +
@@ -1176,7 +1292,7 @@
         /* ---------- inventory ---------- */
         function loadMenu() {
             return api('GET', '/api/owner/menu').then(function (r) {
-                if (r.ok) { app.menu = r.data.menu || []; app.out = r.data.out || []; renderMenuList(); renderOut(); if (app.tab === 'Orders' && app.orders.length) renderOrders(); } // tickets use menu cook times
+                if (r.ok) { app.menu = r.data.menu || []; app.out = r.data.out || []; renderMenuList(); renderOut(); renderScreenBox(); if (app.tab === 'Orders' && app.orders.length) renderOrders(); } // tickets use menu cook times
             });
         }
         // Same grouping as the customer page: categories in the order they first appear.
@@ -1280,6 +1396,8 @@
             $('editTitle').textContent = item ? 'Live Editor' : 'Add Menu Item';
             $('editName').value = item ? item.name : '';
             $('editDesc').value = item ? item.desc : '';
+            $('editNameEs').value = item ? item.nameEs || '' : ''; $('editDescEs').value = item ? item.descEs || '' : '';
+            $('editEsBox').open = !!(item && (item.nameEs || item.descEs));
             $('editPrice').value = item ? item.price.toFixed(2) : '';
             $('editSalePrice').value = item && item.salePrice ? item.salePrice.toFixed(2) : '';
             $('editPrep').value = item ? item.prep : 3;
@@ -1303,6 +1421,8 @@
             var body = {
                 name: $('editName').value.trim(),
                 desc: $('editDesc').value.trim(),
+                nameEs: $('editNameEs').value.trim(),
+                descEs: $('editDescEs').value.trim(),
                 price: parseFloat($('editPrice').value) || 0,
                 salePrice: parseFloat($('editSalePrice').value) || null,
                 prep: parseInt($('editPrep').value, 10) || 3,
@@ -1410,11 +1530,21 @@
                 if (!r.ok) return;
                 var stop = (r.data.stops || []).filter(function (s) { return s.day === r.data.today; })[0];
                 var saved = (app.locations && app.locations.active || []).some(function (l) { return stop && l.name === stop.location; });
-                if (!stop || !saved || stop.location === app.state.location) return;
+                if (!stop || !saved || stop.location === app.state.location) return usualSpot();
                 app.startSpot = stop.location;
                 $('startSpotText').textContent = 'Set location to ' + stop.location + ' (today’s schedule, ' + stop.label + ')';
                 $('startSpotRow').style.display = 'flex';
             });
+            // No schedule for today? It learns the week: where the truck usually is on this day.
+            function usualSpot() {
+                api('GET', '/api/owner/insights/usual-spot').then(function (r) {
+                    var known = (app.locations && app.locations.active || []).some(function (l) { return l.name === r.data.location; });
+                    if (!r.ok || !r.data.location || !known || r.data.location === app.state.location || app.startSpot) return;
+                    app.startSpot = r.data.location;
+                    $('startSpotText').textContent = 'Set location to ' + r.data.location + ' (where you were ' + r.data.why + ')';
+                    $('startSpotRow').style.display = 'flex';
+                });
+            }
             if (isOwner()) api('GET', '/api/owner/insights/forecast').then(function (r) {
                 if (!r.ok || !r.data.days) return;
                 var f = r.data;
@@ -1680,7 +1810,200 @@
         var centsShort = function (c) { var d = (Number(c) || 0) / 100; return d >= 1000 ? '$' + (d / 1000).toFixed(d >= 10000 ? 0 : 1) + 'k' : '$' + Math.round(d); };
         function hourName(h) { return I ? I.hourLabel(h) : String(h); }
         function insState() { return app.ins || (app.ins = { range: 'day', anchor: '', location: '*', cmpDays: 90, pick: null, hour: null }); }
-        function loadAnalytics() { loadInsights(); loadCompare(); }
+        function loadAnalytics() { loadInsights(); loadCompare(); loadFeedback(); }
+
+        /* ---------- this screen: each PIN remembers its setup ---------- */
+        var PREF_DEFAULTS = { text: 'normal', rush: 'auto', glove: false, station: [], bumpKey: null };
+        app.prefs = Object.assign({}, PREF_DEFAULTS);
+        try { Object.assign(app.prefs, JSON.parse(localStorage.getItem('ok_prefs') || '{}')); } catch (e) {}
+        function applyPrefs(server) {
+            if (server) {
+                Object.assign(app.prefs, server);
+                if (typeof server.sound === 'boolean') { app.sound = server.sound; renderSound(); }
+                if (typeof server.speak === 'boolean') { app.speak = server.speak; renderSpeak(); }
+                if (server.theme && window.OKTheme && OKTheme.get() !== server.theme) { OKTheme.set(server.theme); markTheme(); }
+            }
+            try { localStorage.setItem('ok_prefs', JSON.stringify(app.prefs)); } catch (e) {}
+            document.documentElement.style.fontSize = { normal: '', large: '18px', xl: '20px' }[app.prefs.text] || '';
+            document.body.classList.toggle('glove', !!app.prefs.glove);
+            renderScreenBox();
+            if (app.me) renderOrders();
+        }
+        function savePref(k, v) {
+            app.prefs[k] = v; applyPrefs();
+            var body = {}; body[k] = v;
+            if (app.me && !window.__FT_DEMO) api('PUT', '/api/auth/prefs', body);
+        }
+        function renderScreenBox() {
+            if (!$('screenBox')) return;
+            document.querySelectorAll('[data-action="pref"]').forEach(function (b) { b.setAttribute('aria-pressed', String(app.prefs[b.getAttribute('data-k')] === b.getAttribute('data-v'))); });
+            $('gloveSwitch').classList.toggle('on', !!app.prefs.glove); $('gloveSwitch').setAttribute('aria-pressed', String(!!app.prefs.glove));
+            var cats = [];
+            (app.menu || []).forEach(function (m) { var c = (m.category || '').trim() || 'Menu'; if (cats.indexOf(c) < 0) cats.push(c); });
+            $('stationChips').innerHTML = cats.map(function (c) { return '<button type="button" class="station-chip" data-action="station" data-cat="' + esc(c) + '" aria-pressed="' + (app.prefs.station.indexOf(c) >= 0) + '">' + esc(c) + '</button>'; }).join('') || '<span class="text-[10px] text-zinc-500">Add categories to your menu items to use stations.</span>';
+            var k = app.prefs.bumpKey;
+            $('bumpState').textContent = app.learning ? 'Press your button now…' : k ? 'Set: the “' + (k.key === ' ' ? 'Space' : k.key) + '” key marks the oldest ticket Ready (or picks up the oldest Ready one).' : 'A cheap Bluetooth button by the window marks the oldest ticket Ready, like a bump bar.';
+            $('bumpLearn').textContent = app.learning ? 'Cancel' : k ? 'Forget' : 'Set up';
+            if (app.me) $('screenWho').textContent = app.me.role === 'owner' ? 'Set it up the way you work. Saved to your login, so any device you use is set up the same way.' : app.me.staffName ? 'Saved to ' + app.me.staffName + '’s PIN, so any tablet you sign in on is set up the same way.' : 'Saved on this tablet (the shared PIN isn’t anyone in particular).';
+        }
+        function stationItems(o) {
+            var st = app.prefs.station || [];
+            if (!st.length) return o.items || [];
+            return (o.items || []).filter(function (i) { var m = menuItem(i.id); return st.indexOf(((m && m.category) || '').trim() || 'Menu') >= 0; });
+        }
+        // Rush view: only tickets when it's busy.
+        function renderRush() {
+            var line = app.filter === 'Active' ? app.orders.filter(function (o) { return o.status === 'Preparing' && isDue(o); }).length : 0;
+            var on = app.prefs.rush === 'on' || (app.prefs.rush === 'auto' && line >= 5 && !app.rushSkip);
+            if (line < 3) app.rushSkip = false;
+            document.body.classList.toggle('rush', on);
+            $('rushBar').style.display = on ? 'flex' : 'none';
+            if (on) $('rushBar').innerHTML = '<span><b>Rush view</b> · ' + line + ' in the line. Only tickets until it calms down.</span>' + (app.prefs.rush === 'auto' ? '<button data-action="rush-skip">Show everything</button>' : '');
+        }
+        // Glove mode and the Ready button: the next step for a ticket, with a few seconds to undo.
+        function nextStep(o) {
+            if (!o) return null;
+            if (o.status === 'Ready') return 'fulfill';
+            if (o.status === 'Preparing' && isDue(o) && !(o.allergy && !o.allergyAck) && !o.checkFirst) return 'ready';
+            return null;
+        }
+        function soon(id, act) {
+            var o = app.orders.find(function (x) { return x.id === id; }); if (!o || !act) return;
+            if (app.undo) { clearTimeout(app.undo.timer); orderAction(app.undo.id, app.undo.act); }
+            var left = 3;
+            var show = function () { $('undoBar').innerHTML = '<span>#' + esc(o.ticket) + ' ' + esc(o.name) + ' → <b>' + (act === 'ready' ? 'Ready' : 'Picked up') + '</b> in ' + left + '</span><button data-action="undo-tap">Undo</button>'; $('undoBar').style.display = 'flex'; };
+            show();
+            app.undo = { id: id, act: act, timer: null };
+            var tick = function () {
+                left--;
+                if (left > 0) { show(); app.undo.timer = setTimeout(tick, 1000); return; }
+                var u = app.undo; app.undo = null; $('undoBar').style.display = 'none';
+                orderAction(u.id, u.act);
+            };
+            app.undo.timer = setTimeout(tick, 1000);
+        }
+        function undoTap() { if (!app.undo) return; clearTimeout(app.undo.timer); app.undo = null; $('undoBar').style.display = 'none'; }
+        function gloveTap(id) {
+            var o = app.orders.find(function (x) { return x.id === id; });
+            var act = nextStep(o);
+            if (!act) { if (o && o.allergy && !o.allergyAck) toast('Confirm the allergy first.'); else if (o && o.checkFirst) toast('Check this big order with the customer first.'); return; }
+            soon(id, act);
+        }
+        function bump() {
+            if (app.tab !== 'Orders' || app.filter !== 'Active') return;
+            var prep = app.orders.filter(function (o) { return nextStep(o) === 'ready'; }).sort(function (a, b) { return (a.fireAt || a.createdAt) - (b.fireAt || b.createdAt); });
+            var ready = app.orders.filter(function (o) { return o.status === 'Ready'; }).sort(function (a, b) { return a.updatedAt - b.updatedAt; });
+            var o = prep[0] || ready[0];
+            if (o) soon(o.id, nextStep(o)); else beep('note');
+        }
+        document.addEventListener('keydown', function (e) {
+            if (!app.me) return;
+            var t = e.target, typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+            if (app.learning) {
+                if (e.key === 'Escape') { app.learning = false; renderScreenBox(); return; }
+                e.preventDefault(); app.learning = false; savePref('bumpKey', { key: e.key, code: e.code }); toast('Ready button set. Press it to mark the oldest ticket Ready.'); return;
+            }
+            var k = app.prefs.bumpKey;
+            if (!typing && k && (e.code ? e.code === k.code : e.key === k.key)) { e.preventDefault(); bump(); }
+        });
+        // Swipe a ticket right (glove mode).
+        (function () {
+            var sx = 0, sy = 0, id = null;
+            document.addEventListener('touchstart', function (e) { var tk = e.target.closest && e.target.closest('[data-ticket]'); id = tk && app.prefs.glove ? +tk.getAttribute('data-ticket') : null; if (id) { sx = e.touches[0].clientX; sy = e.touches[0].clientY; } }, { passive: true });
+            document.addEventListener('touchend', function (e) {
+                if (!id) return;
+                var t = e.changedTouches[0], dx = t.clientX - sx, dy = Math.abs(t.clientY - sy);
+                if (dx > 80 && dy < 50) { app.swiped = Date.now(); gloveTap(id); }
+                id = null;
+            }, { passive: true });
+        })();
+
+        applyPrefs();
+
+        /* ---------- your day: the morning card, quiet hours, weather ---------- */
+        function briefKey() { return 'ok_brief_' + location.host; }
+        function loadBrief() {
+            if (!isOwner()) return;
+            api('GET', '/api/day/owner/brief').then(function (r) { if (r.ok) { app.brief = r.data; renderBrief(); } });
+        }
+        function renderBrief() {
+            var b = app.brief, card = $('briefCard'); if (!b || !card) return;
+            var seen = ''; try { seen = localStorage.getItem(briefKey()) || ''; } catch (e) {}
+            var parts = [];
+            if (b.summary && b.summary.orders && seen !== b.today) {
+                var s = b.summary, when = s.day === b.today ? 'Today so far' : s.weekday;
+                parts.push('<div class="brief-sum"><div class="brief-k">' + esc(when) + '</div>' + (s.lines || []).map(function (l, i) { return '<div class="' + (i ? 'brief-l' : 'brief-h') + '">' + esc(l) + '</div>'; }).join('') + '</div>');
+            }
+            (b.nudges || []).slice(0, 2).forEach(function (n) {
+                parts.push('<div class="brief-nudge"><span>' + esc(n.text) + '</span><button data-action="brief-stock" data-id="' + n.itemId + '">Set a count</button></div>');
+            });
+            if (b.weather) parts.push('<div class="brief-wx brief-' + esc(b.weather.kind) + '">' + esc(b.weather.text) + '</div>');
+            if (!parts.length) { card.style.display = 'none'; return; }
+            card.innerHTML = parts.join('') + (b.summary && b.summary.orders && seen !== b.today ? '<button data-action="brief-done" class="brief-done">Got it</button>' : '');
+            card.style.display = 'block';
+        }
+        function loadDay() {
+            return api('GET', '/api/day/owner/settings').then(function (r) { if (r.ok) { app.day = r.data; renderDay(); } });
+        }
+        function renderDay() {
+            var d = app.day; if (!d) return;
+            $('sumWhen').value = d.quiet.summary;
+            $('quietSwitch').classList.toggle('on', !!d.quiet.on); $('quietSwitch').setAttribute('aria-pressed', String(!!d.quiet.on));
+            $('quietRow').style.display = d.quiet.on ? '' : 'none';
+            $('quietFrom').value = d.quiet.from; $('quietUntil').value = d.quiet.until;
+            if (document.activeElement !== $('wxPlace')) $('wxPlace').value = d.weather ? d.weather.name : '';
+        }
+        function saveDay(extra) {
+            var d = app.day; if (!d) return;
+            var body = Object.assign({ quiet: { on: d.quiet.on, from: $('quietFrom').value, until: $('quietUntil').value, summary: $('sumWhen').value } }, extra || {});
+            say('dayMsg', 'Saving…', true);
+            return api('PUT', '/api/day/owner/settings', body).then(function (r) {
+                if (!r.ok) { say('dayMsg', r.data.error || 'Couldn’t save.'); return; }
+                app.day = r.data; renderDay();
+                say('dayMsg', extra && extra.weather !== undefined ? (r.data.weather ? 'Weather for ' + r.data.weather.name + '.' : 'Weather heads-up off.') : 'Saved.', true);
+                loadBrief();
+            });
+        }
+        /* ---------- saved menus ---------- */
+        function loadMenus() { return api('GET', '/api/owner/menus').then(function (r) { if (r.ok) { app.menus = r.data.menus; renderMenus(); } }); }
+        function renderMenus() {
+            var l = app.menus || [];
+            $('menusList').innerHTML = l.length ? l.map(function (m) {
+                return '<div class="saved-menu"><div class="min-w-0"><b>' + esc(m.name) + '</b>' + (m.current ? ' <span class="on-now">On now</span>' : '') +
+                    '<div>' + m.count + ' item' + (m.count === 1 ? '' : 's') + ' · ' + esc(m.items.slice(0, 4).join(', ')) + (m.items.length > 4 ? '…' : '') + '</div></div>' +
+                    '<div class="saved-menu-btns">' + (m.current ? '' : '<button data-action="menu-use" data-mid="' + esc(m.id) + '">Use</button>') +
+                    '<button data-action="menu-del" data-mid="' + esc(m.id) + '" aria-label="Delete ' + esc(m.name) + '">✕</button></div></div>';
+            }).join('') : '<div class="text-[11px] text-zinc-500">No saved menus yet. Save the one that’s on now, like “Regular”, then build your festival menu and save that too.</div>';
+        }
+        function menuAct(kind, id) {
+            var m = (app.menus || []).filter(function (x) { return x.id === id; })[0];
+            if (kind === 'use' && m && !confirm('Switch to “' + m.name + '”? Customers see it right away.')) return;
+            if (kind === 'del' && m && !confirm('Delete the saved menu “' + m.name + '”? (The menu that’s on now doesn’t change.)')) return;
+            var req = kind === 'save' ? api('POST', '/api/owner/menus', { name: $('menuSaveName').value }) : kind === 'use' ? api('POST', '/api/owner/menus/' + id + '/use') : api('DELETE', '/api/owner/menus/' + id);
+            req.then(function (r) {
+                if (!r.ok) { say('menusMsg', r.data.error || 'Couldn’t do that.'); return; }
+                app.menus = r.data.menus; renderMenus();
+                if (kind === 'save') { $('menuSaveName').value = ''; say('menusMsg', 'Saved.', true); }
+                if (kind === 'use') { say('menusMsg', 'Switched to “' + m.name + '”.' + (r.data.kept ? ' The menu that was on is saved as “' + r.data.kept + '”.' : ''), true); loadMenu(); }
+                if (kind === 'del') say('menusMsg', '', true);
+            });
+        }
+
+        function loadFeedback() {
+            app.fbDays = app.fbDays || 30;
+            document.querySelectorAll('[data-action="fb-days"]').forEach(function (bt) { bt.setAttribute('aria-pressed', String(+bt.getAttribute('data-days') === app.fbDays)); });
+            var seq = app.fbSeq = (app.fbSeq || 0) + 1;
+            api('GET', '/api/feedback/owner?days=' + app.fbDays).then(function (r) {
+                if (seq !== app.fbSeq || !r.ok) return;
+                var f = r.data, box = $('fbBody');
+                if (!f.total) { box.innerHTML = '<div class="text-[11px] text-zinc-500">No ratings yet in the last ' + f.days + ' days. They show up on the customer’s order screen after pickup.</div>'; return; }
+                var trend = f.prevHappyPct === null ? '' : ' <span class="fb-trend">' + (f.happyPct >= f.prevHappyPct ? '▲ ' : '▼ ') + Math.abs(f.happyPct - f.prevHappyPct) + ' pts vs the ' + f.days + ' days before</span>';
+                box.innerHTML = '<div class="fb-score"><b>' + f.happyPct + '%</b> happy' + trend + '</div>' +
+                    '<div class="text-[11px] text-zinc-500">👍 ' + f.up + ' · 👎 ' + f.down + ' · from ' + f.total + ' of ' + f.orders + ' orders</div>' +
+                    (f.patterns.length ? '<div class="fb-pats">' + f.patterns.map(function (p) { return '<div class="fb-pat ' + p.tone + '">' + esc(p.text) + '</div>'; }).join('') + '</div>' : '<div class="text-[11px] text-zinc-400 mt-2">No pattern stands out. One-off complaints aren’t shown as patterns.</div>') +
+                    (f.comments.length ? '<h4 class="ins-h">In their words</h4>' + f.comments.map(function (c) { return '<div class="fb-c"><span>' + (c.vote > 0 ? '👍' : '👎') + '</span> “' + esc(c.comment) + '” <small>' + esc(new Date(c.at).toLocaleDateString([], { month: 'short', day: 'numeric' })) + (c.items.length ? ' · ' + esc(c.items.join(', ')) : '') + '</small></div>'; }).join('') : '');
+            });
+        }
         function loadInsights() {
             var st = insState();
             var q = '?range=' + st.range + (st.anchor ? '&anchor=' + st.anchor : '') + (st.location !== '*' ? '&location=' + encodeURIComponent(st.location) : '');
@@ -1764,7 +2087,8 @@
                     '<div class="fc-big">~' + f.orders + ' orders · ~' + centsShort(f.cents) + '</div>' +
                     (f.busiestHour !== null ? '<div class="ins-s">Busiest around ' + esc(hourName(f.busiestHour)) + '</div>' : '') +
                     '<div class="fc-bars">' + bars + '</div><div class="fc-axis"><span>' + esc(hourName(lo)) + '</span><span>' + esc(hourName(hi)) + '</span></div>' +
-                    (f.prep.length ? '<div class="ins-k" style="margin-top:10px">Prep list</div><div class="fc-prep">' + f.prep.map(function (x) { return '<span><b>' + x.qty + '</b> ' + esc(x.name) + '</span>'; }).join('') + '</div>' : '');
+                    (f.prep.length ? '<div class="ins-k" style="margin-top:10px">Prep list</div><div class="fc-prep">' + f.prep.map(function (x) { return '<span><b>' + x.qty + '</b> ' + esc(x.name) + '</span>'; }).join('') + '</div>' : '') +
+                    (f.nudges && f.nudges.length ? f.nudges.slice(0, 3).map(function (n) { return '<div class="brief-nudge" style="margin-top:10px"><span>' + esc(n.text) + '</span><button data-action="brief-stock" data-id="' + n.itemId + '">Set a count</button></div>'; }).join('') : '');
                 box.style.display = 'block';
             });
         }
@@ -1900,18 +2224,18 @@
                 var p = msg.payload || {};
                 switch (msg.type) {
                     case 'ORDER_NEW':
-                        beep(); setFlag('test'); speakOrder(p);
+                        beep('new'); setFlag('test'); speakOrder(p);
                         if (app.tab !== 'Orders') { app.newCount++; renderBadge(); }
                         if (app.filter === 'Active' && !app.orders.some(function (o) { return o.id === p.id; })) { app.orders.push(p); if (app.tab === 'Orders') renderOrders(); }
                         break;
                     case 'ORDER_UPDATE':
                         loadOrders();
-                        if (p.byCustomer && p.status === 'Canceled') { beep(); toast('Ticket #' + p.ticket + ' (' + p.name + ') was canceled by the customer.'); }
+                        if (p.byCustomer && p.status === 'Canceled') { beep('cancel'); toast('Ticket #' + p.ticket + ' (' + p.name + ') was canceled by the customer.'); }
                         break;
                     case 'WAIT': app.state.wait = p; renderSettings(); break;
                     case 'STATE': app.state = { status: p.status, rush: p.rush, location: p.location || '', paused: !!p.paused, wait: p.wait, pace: p.pace, sched: p.sched, crewNote: app.state.crewNote, crewNoteAt: app.state.crewNoteAt }; renderSettings(); break;
                     case 'SESSION_ENDED': stopLive(); sessionEnded('You were signed out. Ask the owner for your PIN.'); break;
-                    case 'CREW_NOTE': app.state.crewNote = p.note || ''; app.state.crewNoteAt = p.at || 0; renderCrewNote(); if (p.note) beep(); break;
+                    case 'CREW_NOTE': app.state.crewNote = p.note || ''; app.state.crewNoteAt = p.at || 0; renderCrewNote(); if (p.note) beep('note'); break;
                     case 'PAUSED': app.state.paused = !!p.paused; renderSettings(); break;
                     case 'HOURS_UPDATE': if (app.pub) { app.pub.hours = p.hours; app.pub.timezone = p.timezone; } renderSetup(); break;
                     case 'STORE_STATUS': app.state.status = p.status; renderSettings(); break;
@@ -2033,6 +2357,75 @@
             $('qrModal').style.display = 'flex';
             setFlag('share');
         }
+        /* ---------- share today's spot: one tap, a clean image of where and when ---------- */
+        function todayHours() {
+            var I2 = window.InsightsCore, tz = (app.pub && app.pub.timezone) || '', h = app.pub && app.pub.hours;
+            var wd = I2 ? I2.parts(Date.now(), I2.validTz(tz || 'UTC')).wd : new Date().getDay();
+            var d = h && h[wd];
+            if (!d || d.closed) return '';
+            var t = function (x) { var a = x.split(':'); var hh = +a[0], mm = a[1]; return (hh % 12 || 12) + (mm !== '00' ? ':' + mm : '') + (hh < 12 ? ' AM' : ' PM'); };
+            return t(d.open) + ' – ' + t(d.close);
+        }
+        function spotCanvas(where, hours) {
+            var v = app.me.vendor, W = 1080, H = 1350, c = document.createElement('canvas'); c.width = W; c.height = H;
+            var x = c.getContext('2d'), F = 'Manrope, -apple-system, Segoe UI, Roboto, sans-serif';
+            var g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#16161a'); g.addColorStop(1, '#0a0a0b');
+            x.fillStyle = g; x.fillRect(0, 0, W, H);
+            x.strokeStyle = 'rgba(214,216,222,0.22)'; x.lineWidth = 3; x.strokeRect(48, 48, W - 96, H - 96);
+            function fit(text, size, weight, maxW) { var sz = size; do { x.font = weight + ' ' + sz + 'px ' + F; sz -= 4; } while (x.measureText(text).width > maxW && sz > 28); }
+            function wrap(text, size, weight, maxW, y, lh, color, lines) {
+                x.fillStyle = color; x.font = weight + ' ' + size + 'px ' + F;
+                var words = String(text).split(/\s+/), line = '', out = [];
+                var dash = String(text).split(' — ');
+                // "Downtown Plaza — 5th & Main" breaks at the dash when that fits, not mid-name.
+                if (dash.length === 2 && x.measureText(dash[0] + ' —').width <= maxW && x.measureText(dash[1]).width <= maxW && x.measureText(text).width > maxW) out = [dash[0] + ' —', dash[1]];
+                else {
+                    words.forEach(function (w) { var tst = line ? line + ' ' + w : w; if (x.measureText(tst).width > maxW && line) { out.push(line); line = w; } else line = tst; });
+                    if (line) out.push(line);
+                }
+                out.slice(0, lines).forEach(function (l, i) { x.fillText(l, W / 2, y + i * lh); });
+                return y + Math.min(out.length, lines) * lh;
+            }
+            x.textAlign = 'center'; x.textBaseline = 'alphabetic';
+            if (v.emoji) { x.font = '110px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif'; x.fillText(v.emoji, W / 2, 230); }
+            x.fillStyle = '#f4f4f5'; fit(v.businessName, 92, '800', W - 200); x.fillText(v.businessName, W / 2, v.emoji ? 350 : 290);
+            x.fillStyle = '#a1a1aa'; x.font = '700 34px ' + F;
+            var day = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: (app.pub && app.pub.timezone) || undefined });
+            x.fillText('TODAY · ' + day.toUpperCase(), W / 2, 450);
+            x.fillStyle = 'rgba(214,216,222,0.35)'; x.fillRect(W / 2 - 60, 490, 120, 3);
+            var y = wrap(where, 74, '800', W - 220, 600, 86, '#f4f4f5', 2);
+            if (hours) { x.fillStyle = '#d4d4d8'; x.font = '600 50px ' + F; x.fillText(hours, W / 2, y + 26); }
+            // QR to order ahead, anchored to the bottom so it never meets the text above
+            try {
+                var q = QR.encode(pageUrl()), n = q.size + 8, px = Math.max(4, Math.floor(210 / n)), size = px * n, qx = (W - size) / 2, qy = H - 100 - 64 - 56 - size;
+                x.fillStyle = '#ffffff'; x.fillRect(qx, qy, size, size); x.fillStyle = '#0a0a0b';
+                for (var r = 0; r < q.size; r++) for (var col = 0; col < q.size; col++) if (q.modules[r][col]) x.fillRect(qx + (col + 4) * px, qy + (r + 4) * px, px, px);
+                x.fillStyle = '#e4e4e7'; x.font = '700 36px ' + F; x.fillText('Order ahead · skip the line', W / 2, qy + size + 56);
+            } catch (e) {}
+            x.fillStyle = '#a1a1aa'; x.font = '600 30px ' + F; x.fillText(pageUrl().replace(/^https?:\/\//, '').replace(/\/$/, ''), W / 2, H - 100);
+            return c;
+        }
+        function openSpot() {
+            var where = app.state.location;
+            if (!where) { alert('Pick today’s location first (Settings → Location Manager), then share.'); return; }
+            var draw = function () {
+                app.spotCanvas = spotCanvas(where, todayHours());
+                $('spotImg').src = app.spotCanvas.toDataURL('image/png');
+                $('spotShare').style.display = navigator.canShare ? '' : 'none';
+                $('spotModal').style.display = 'flex';
+            };
+            // The image uses the page's font: make sure it's loaded before drawing.
+            if (document.fonts && document.fonts.load) Promise.all([document.fonts.load('800 80px Manrope'), document.fonts.load('600 40px Manrope')]).then(draw, draw); else draw();
+        }
+        function spotFile(cb) { app.spotCanvas.toBlob(function (b) { cb(new File([b], (app.me.vendor.slug || 'truck') + '-today.png', { type: 'image/png' })); }, 'image/png'); }
+        function shareSpot() {
+            spotFile(function (f) {
+                if (navigator.canShare && navigator.canShare({ files: [f] })) navigator.share({ files: [f], title: app.me.vendor.businessName, text: 'Today: ' + app.state.location }).catch(function () {});
+                else downloadSpot();
+            });
+        }
+        function downloadSpot() { var a = document.createElement('a'); a.download = (app.me.vendor.slug || 'truck') + '-today.png'; a.href = app.spotCanvas.toDataURL('image/png'); document.body.appendChild(a); a.click(); a.remove(); }
+
         function downloadQr() {
             var svg = $('qrCode').querySelector('svg'); if (!svg) return;
             var img = new Image(), data = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg.outerHTML);
@@ -2263,15 +2656,20 @@
             if (e.target && e.target.id === 'insLocation') { insState().location = e.target.value; loadInsights(); }
             if (e.target && e.target.id === 'slotCap') { putState({ slotCap: +e.target.value }); return; }
             if (e.target && e.target.id === 'paceLimit') { putState({ paceLimit: +e.target.value }); return; }
+            if (e.target && ['sumWhen', 'quietFrom', 'quietUntil'].indexOf(e.target.id) >= 0) { saveDay(); return; }
             if (e.target && e.target.id === 'schLoc') { $('schLocNew').style.display = e.target.value === '__new' ? 'block' : 'none'; if (e.target.value === '__new') $('schLocNew').focus(); }
         });
 
         document.addEventListener('click', function (e) {
+            if (app.prefs.glove && !e.target.closest('button, a, input, select, textarea, label')) {
+                var tk = e.target.closest('[data-ticket]');
+                if (tk && Date.now() - (app.swiped || 0) > 500 && app.filter === 'Active') { gloveTap(+tk.getAttribute('data-ticket')); return; }
+            }
             var el = e.target.closest('[data-action]'); if (!el) return;
             var a = el.getAttribute('data-action');
             var id = parseInt(el.getAttribute('data-id'), 10);
             switch (a) {
-                case 'theme': if (window.OKTheme) { OKTheme.set(el.getAttribute('data-mode')); markTheme(); } break;
+                case 'theme': if (window.OKTheme) { OKTheme.set(el.getAttribute('data-mode')); markTheme(); savePref('theme', el.getAttribute('data-mode')); } break;
                 case 'show-pin': $('emailForm').style.display = 'none'; $('pinForm').style.display = 'block'; break;
                 case 'show-email': $('pinForm').style.display = 'none'; $('emailForm').style.display = 'block'; break;
                 case 'forgot':
@@ -2290,9 +2688,11 @@
                     break;
                 case 'toggle-sound':
                     app.sound = !app.sound; try { localStorage.setItem('ft_sound', app.sound ? 'on' : 'off'); } catch (er) {}
-                    renderSound(); if (app.sound) beep(); renderSoundPrompt(); break;
+                    savePref('sound', app.sound);
+                    renderSound(); if (app.sound) beep('new'); renderSoundPrompt(); break;
                 case 'toggle-speak':
                     app.speak = !app.speak; try { localStorage.setItem('ok_speak', app.speak ? 'on' : 'off'); } catch (er) {}
+                    savePref('speak', app.speak);
                     renderSpeak();
                     if (app.speak && window.speechSynthesis) { try { window.speechSynthesis.speak(new SpeechSynthesisUtterance('New orders will be read aloud.')); } catch (er) {} }
                     break;
@@ -2341,6 +2741,22 @@
                 case 'sch-add': addStop(); break;
                 case 'rw-toggle': if (app.rw) saveRewards(!app.rw.on); break;
                 case 'rw-save': if (app.rw) saveRewards(); break;
+                case 'quiet-toggle': if (app.day) { app.day.quiet.on = !app.day.quiet.on; renderDay(); saveDay(); } break;
+                case 'day-save': saveDay({ weather: $('wxPlace').value.trim() }); break;
+                case 'brief-done': try { localStorage.setItem(briefKey(), app.brief.today); } catch (er) {} renderBrief(); break;
+                case 'brief-stock': switchTab('Menu'); setTimeout(function () { var row = document.querySelector('[data-stock="' + el.getAttribute('data-id') + '"]'); if (row) { row.scrollIntoView({ block: 'center' }); row.focus(); } }, 400); break;
+                case 'fb-days': app.fbDays = +el.getAttribute('data-days'); loadFeedback(); break;
+                case 'menu-save': menuAct('save'); break;
+                case 'pref': savePref(el.getAttribute('data-k'), el.getAttribute('data-v')); break;
+                case 'pref-toggle': savePref(el.getAttribute('data-k'), !app.prefs[el.getAttribute('data-k')]); break;
+                case 'station': var sc = el.getAttribute('data-cat'), sl = (app.prefs.station || []).slice(), si = sl.indexOf(sc); if (si >= 0) sl.splice(si, 1); else sl.push(sc); savePref('station', sl); break;
+                case 'bump-learn': if (app.learning) app.learning = false; else if (app.prefs.bumpKey) savePref('bumpKey', null); else app.learning = true; renderScreenBox(); break;
+                case 'test-sounds': ensureAudio(); ['new', 'cancel', 'note', 'due'].forEach(function (k, i) { setTimeout(function () { beep(k); }, i * 900); }); break;
+                case 'undo-tap': undoTap(); break;
+                case 'rush-skip': app.rushSkip = true; renderOrders(); break;
+                case 'export-all': if (window.__FT_DEMO) toast('In your own portal this downloads everything as a .zip.'); else location.href = '/api/owner/export.zip'; break;
+                case 'menu-use': menuAct('use', el.getAttribute('data-mid')); break;
+                case 'menu-del': menuAct('del', el.getAttribute('data-mid')); break;
                 case 'sch-del': app.schAsk = +el.getAttribute('data-id'); renderSchedule(); break;
                 case 'sch-keep': app.schAsk = null; renderSchedule(); break;
                 case 'sch-all': app.schAll = !app.schAll; renderSchedule(); break;
@@ -2386,6 +2802,10 @@
                 case 'remove-photo': app.editPhoto = ''; renderEditPhoto(); break;
                 case 'save-hours': saveHours(); break;
                 case 'open-qr': openQr(); break;
+                case 'open-spot': openSpot(); break;
+                case 'spot-share': shareSpot(); break;
+                case 'spot-download': downloadSpot(); break;
+                case 'close-spot': $('spotModal').style.display = 'none'; break;
                 case 'print-qr': window.print(); break;
                 case 'download-qr': downloadQr(); break;
                 case 'close-qr': $('qrModal').style.display = 'none'; break;

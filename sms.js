@@ -103,12 +103,12 @@ async function heartbeatMail(v, order) {
   if (Date.now() - last < HEARTBEAT_EVERY_MS) return;
   lastHeartbeat.set(v.id, Date.now());
   const url = auth.vendorUrl(v.slug, '/owner.html');
-  await auth.mailLater({
+  await require('./daily').ownerMail(v, {
     to: v.email,
     subject: `Order #${order.ticket} came in and no kitchen screen is open`,
     text: `${order.name} ordered ${order.summary} ($${Number(order.total).toFixed(2)}). No kitchen screen is open right now, so nobody may have seen it.${url ? '\n\nOpen your kitchen screen: ' + url : ''}\n\nYou'll get at most one of these every 15 minutes.`,
     html: `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:520px;margin:0 auto;color:#111"><h2 style="margin:0 0 8px">Order #${order.ticket} is waiting</h2><p>${auth.escHtml(order.name)} ordered ${auth.escHtml(order.summary)} ($${Number(order.total).toFixed(2)}).</p><p>No kitchen screen is open right now, so nobody may have seen it.</p>${url ? `<p><a href="${url}" style="display:inline-block;background:#111;color:#fff;padding:12px 18px;border-radius:10px;text-decoration:none;font-weight:700">Open the kitchen screen</a></p>` : ''}<p style="color:#777;font-size:12px">You’ll get at most one of these every 15 minutes.</p></div>`,
-  }, { staleAfterMs: 10 * 60 * 1000 }).catch(() => {}); // a late "nobody's watching" alert only confuses
+  }, { staleAfterMs: 10 * 60 * 1000, dropIfQuiet: true }).catch(() => {}); // a late "nobody's watching" alert only confuses
 }
 
 /** Call when the kitchen taps Mark Ready. */

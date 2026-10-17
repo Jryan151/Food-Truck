@@ -20,6 +20,9 @@ const Deals = require('./public/deals-core');
 const rewards = require('./rewards');
 const inventory = require('./inventory');
 const limp = require('./limp');
+const daily = require('./daily');
+const { zip } = require('./zip');
+const group = require('./group');
 const { run, get, all } = core;
 const { requireVendor, requireRole, getSession, rateLimit } = auth;
 
@@ -292,7 +295,7 @@ router.post('/orders', limitOrders, requireVendor, async (req, res) => {
   }
 
   const name = String(b.customerName || '').trim().slice(0, 40) || 'Guest';
-  const notes = String(b.notes || '').trim().slice(0, 300);
+  const notes = String(b.notes || '').trim().slice(0, b.groupToken ? 600 : 300); // a group order lists who gets what
   const allergy = String(b.allergy || '').trim().slice(0, 120) || null;
 
   // How they're paying. Free trucks (and Pro trucks without Stripe connected) are window-only.
@@ -339,6 +342,9 @@ router.post('/orders', limitOrders, requireVendor, async (req, res) => {
     return true;
   };
   if (await sameOrder()) return;
+  // A group order: only the host can place it, and only once.
+  const grp = await group.forOrder(v.id, b.groupToken, b.groupKey);
+  if (grp.error) return res.status(409).json({ error: grp.error, groupGone: true });
 
   // Now spend the reward for real (atomically) and give the customer a card if they don't have one yet.
   const rw = await rewards.atOrder(v, { cardToken, useReward, items });
@@ -375,6 +381,7 @@ router.post('/orders', limitOrders, requireVendor, async (req, res) => {
   }
   const orderRow = await get('SELECT * FROM orders WHERE id = ?', [r.lastID]);
   core.logOrderEvent(v.id, orderRow.id, 'placed', 'customer');
+  if (grp.group) await group.placed(v.id, grp.group, orderRow.id);
   if (stockJson) inventory.announce(v.id, Object.keys(st.taken)).catch(() => {});
   const reply = {
     ticket: orderRow.ticket_no,
@@ -405,7 +412,7 @@ router.post('/orders', limitOrders, requireVendor, async (req, res) => {
 
   // The kitchen screen hears it at once; texts and emails go on their own, so a slow or broken text or
   // mail service never holds up the customer's order.
-  sms.notifyNewOrder(v.id, orderShape(orderRow)).catch(() => {});
+  kitchenShape(orderRow).then((shaped) => sms.notifyNewOrder(v.id, shaped)).catch(() => {});
   core.refreshWait(v.id);
   res.status(201).json(reply);
 });
@@ -415,13 +422,14 @@ router.get('/orders/track', requireVendor, async (req, res) => {
   const tokens = String(req.query.tokens || '').split(',').map((t) => t.trim()).filter(Boolean).slice(0, 20);
   if (!tokens.length) return res.json({ orders: [] });
   const rows = await all(
-    `SELECT ticket_no, public_token, customer_name, status, payment_status, created_at, pickup_at FROM orders
-     WHERE vendor_id = ? AND public_token IN (${tokens.map(() => '?').join(',')})`,
+    `SELECT o.ticket_no, o.public_token, o.customer_name, o.status, o.payment_status, o.created_at, o.pickup_at, f.vote FROM orders o
+     LEFT JOIN order_feedback f ON f.order_id = o.id
+     WHERE o.vendor_id = ? AND o.public_token IN (${tokens.map(() => '?').join(',')})`,
     [req.tenant.vendor.id, ...tokens]
   );
   res.json({
     now: Date.now(),
-    orders: rows.map((o) => ({ ticket: o.ticket_no, token: o.public_token, name: o.customer_name, status: o.status, payment: o.payment_status, changeUntil: changeUntil(o), pickupAt: o.pickup_at || null })),
+    orders: rows.map((o) => ({ ticket: o.ticket_no, token: o.public_token, name: o.customer_name, status: o.status, payment: o.payment_status, changeUntil: changeUntil(o), pickupAt: o.pickup_at || null, rated: o.vote || 0, createdAt: o.created_at })),
   });
 });
 
@@ -470,6 +478,26 @@ router.post('/orders/:token/cancel', limitOrders, requireVendor, async (req, res
 const staffOrOwner = [requireVendor, requireRole('owner', 'staff')];
 const ownerOnly = [requireVendor, requireRole('owner')];
 
+/* ----- Regulars recognized: "4th visit · usually no onions" -----
+   Matched by the phone the order came from (a random id the page keeps) or the punch card. Shown from
+   the 3rd visit on. "Usually" is a note they've left on most of their recent orders. */
+const ord = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th');
+async function regularOf(o) {
+  const dev = o.device && o.device.startsWith('d:') ? o.device : null;
+  if (!dev && !o.card_id) return null;
+  const prior = await all(
+    `SELECT notes FROM orders WHERE vendor_id = ? AND id < ? AND status IN ('Fulfilled','Ready') AND created_at > ?
+       AND ((? IS NOT NULL AND device = ?) OR (? IS NOT NULL AND card_id = ?)) ORDER BY created_at DESC LIMIT 30`,
+    [o.vendor_id, o.id, Date.now() - 365 * 864e5, dev, dev, o.card_id || null, o.card_id || null]);
+  if (prior.length < 2) return null;
+  const counts = {};
+  prior.slice(0, 10).forEach((p) => { const n = String(p.notes || '').trim().toLowerCase().replace(/[.!]+$/, ''); if (n && n.length <= 60) counts[n] = (counts[n] || 0) + 1; });
+  const top = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+  const usual = top && counts[top] >= 2 && counts[top] >= Math.ceil(Math.min(prior.length, 10) / 2) ? top : null;
+  return { visit: prior.length + 1, label: ord(prior.length + 1) + ' visit', usual };
+}
+async function kitchenShape(o) { const s = orderShape(o); s.regular = await regularOf(o); return s; }
+
 router.get('/owner/orders', staffOrOwner, async (req, res) => {
   const filter = String(req.query.status || 'Active');
   const vid = req.tenant.vendor.id;
@@ -480,7 +508,8 @@ router.get('/owner/orders', staffOrOwner, async (req, res) => {
     rows = await all("SELECT * FROM orders WHERE vendor_id = ? AND status IN ('Preparing','Ready') ORDER BY created_at ASC LIMIT 200", [vid]);
   }
   // `now` lets the kitchen screen time orders by the server's clock, since tablet clocks drift.
-  res.json({ orders: rows.map(orderShape), now: Date.now() });
+  const orders = filter === 'Fulfilled' || filter === 'Canceled' ? rows.map(orderShape) : await Promise.all(rows.map(kitchenShape));
+  res.json({ orders, now: Date.now() });
 });
 
 // A tap made while the kitchen tablet had no signal arrives later with the time it was really made,
@@ -790,6 +819,64 @@ router.put('/owner/menu-order', ownerOnly, async (req, res) => {
   res.json({ menu: await ownerMenu(v.id) });
 });
 
+/* ----- Saved menus: build a festival menu once, switch to it every year, switch back after ----- */
+const MAX_SAVED_MENUS = 12;
+const savedMenus = (v) => { try { return JSON.parse(v.menus_json || '[]') || []; } catch (e) { return []; } };
+const menuSig = (items) => JSON.stringify(core.normalizeMenu(items).map(({ soldOut, ...rest }) => rest));
+function menusOut(v) {
+  const cur = menuSig(core.parseMenu(v.menu_data));
+  return savedMenus(v).map((m) => ({ id: m.id, name: m.name, count: m.items.length, savedAt: m.savedAt, usedAt: m.usedAt || null, current: menuSig(m.items) === cur, items: m.items.slice(0, 40).map((i) => i.name) }));
+}
+async function storeMenus(vendorId, list) { await run('UPDATE vendors SET menus_json = ?, updated_at = ? WHERE id = ?', [JSON.stringify(list), Date.now(), vendorId]); }
+
+router.get('/owner/menus', ownerOnly, async (req, res) => {
+  res.json({ menus: menusOut(await get('SELECT * FROM vendors WHERE id = ?', [req.tenant.vendor.id])), max: MAX_SAVED_MENUS });
+});
+
+router.post('/owner/menus', ownerOnly, async (req, res) => {
+  const v = await get('SELECT * FROM vendors WHERE id = ?', [req.tenant.vendor.id]);
+  const name = String((req.body || {}).name || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+  if (!name) return res.status(400).json({ error: 'Give this menu a name, like “Street fair”.' });
+  const items = core.parseMenu(v.menu_data);
+  if (!items.length) return res.status(400).json({ error: 'Your menu is empty.' });
+  const list = savedMenus(v).filter((m) => m.name.toLowerCase() !== name.toLowerCase());
+  if (list.length >= MAX_SAVED_MENUS) return res.status(400).json({ error: `You can keep ${MAX_SAVED_MENUS} saved menus. Delete one first.` });
+  list.unshift({ id: core.randomToken(6), name, items: items.map((i) => Object.assign({}, i, { soldOut: false })), savedAt: Date.now() });
+  await storeMenus(v.id, list);
+  res.status(201).json({ menus: menusOut(Object.assign(v, { menus_json: JSON.stringify(list) })) });
+});
+
+router.post('/owner/menus/:id/use', ownerOnly, async (req, res) => {
+  const v = await get('SELECT * FROM vendors WHERE id = ?', [req.tenant.vendor.id]);
+  let list = savedMenus(v);
+  const pick = list.find((m) => m.id === req.params.id);
+  if (!pick) return res.status(404).json({ error: 'That menu was deleted.' });
+  const cur = core.parseMenu(v.menu_data);
+  // Never lose the menu that's on now: if it isn't saved yet, save it first.
+  let kept = null;
+  if (cur.length && !list.some((m) => menuSig(m.items) === menuSig(cur))) {
+    const d = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: Insights.validTz(v.timezone) });
+    kept = { id: core.randomToken(6), name: `Menu before ${pick.name} (${d})`.slice(0, 40), items: cur.map((i) => Object.assign({}, i, { soldOut: false })), savedAt: Date.now() };
+    list = [kept].concat(list).slice(0, MAX_SAVED_MENUS + 1);
+  }
+  list = list.map((m) => (m.id === pick.id ? Object.assign({}, m, { usedAt: Date.now() }) : m));
+  await core.saveMenu(v.id, core.normalizeMenu(pick.items));
+  await storeMenus(v.id, list);
+  // Counts belong to items; items that aren't on this menu stop being counted.
+  const ids = core.parseMenu((await get('SELECT menu_data FROM vendors WHERE id = ?', [v.id])).menu_data).map((m) => m.id);
+  await run(`DELETE FROM item_stock WHERE vendor_id = ? AND item_id NOT IN (${ids.map(() => '?').join(',') || 'NULL'})`, [v.id, ...ids]);
+  await inventory.broadcastMenu(v.id);
+  const fresh = await get('SELECT * FROM vendors WHERE id = ?', [v.id]);
+  res.json({ menus: menusOut(fresh), menu: await ownerMenu(v.id, req), kept: kept ? kept.name : null });
+});
+
+router.delete('/owner/menus/:id', ownerOnly, async (req, res) => {
+  const v = await get('SELECT * FROM vendors WHERE id = ?', [req.tenant.vendor.id]);
+  const list = savedMenus(v).filter((m) => m.id !== req.params.id);
+  await storeMenus(v.id, list);
+  res.json({ menus: menusOut(Object.assign(v, { menus_json: JSON.stringify(list) })) });
+});
+
 router.delete('/owner/menu/:id', ownerOnly, async (req, res) => {
   const v = await get('SELECT * FROM vendors WHERE id = ?', [req.tenant.vendor.id]);
   const menu = core.parseMenu(v.menu_data);
@@ -846,6 +933,40 @@ router.get('/owner/orders/export.csv', ownerOnly, async (req, res) => {
 });
 
 /* ----- locations ----- */
+/* ----- Their data, their exit: everything in one download ----- */
+const limitExport = rateLimit({ windowMs: 15 * 60 * 1000, max: 6 });
+router.get('/owner/export.zip', ownerOnly, limitExport, async (req, res) => {
+  const v = await get('SELECT * FROM vendors WHERE id = ?', [req.tenant.vendor.id]);
+  const tz = Insights.validTz(v.timezone);
+  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+  const when = (ms) => (ms ? fmt.format(new Date(ms)).replace(',', '') : '');
+  const csv = (head, rows) => '\ufeff' + [head].concat(rows).map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
+  const menu = core.parseMenu(v.menu_data);
+  const orders = await all('SELECT * FROM orders WHERE vendor_id = ? ORDER BY created_at ASC', [v.id]);
+  const clients = await all('SELECT * FROM crm_clients WHERE vendor_id = ? AND merged_into IS NULL ORDER BY name', [v.id]).catch(() => []);
+  const followers = await all('SELECT email, locations, confirmed_at, created_at FROM followers WHERE vendor_id = ? AND confirmed_at IS NOT NULL', [v.id]).catch(() => []);
+  const stops = await all('SELECT * FROM schedule_stops WHERE vendor_id = ? ORDER BY day, start_time', [v.id]).catch(() => []);
+  const bookings = await all('SELECT * FROM catering_bookings WHERE vendor_id = ? ORDER BY event_date', [v.id]).catch(() => []);
+  const fb = await all('SELECT f.vote, f.tags, f.comment, f.at, o.ticket_no FROM order_feedback f JOIN orders o ON o.id = f.order_id WHERE f.vendor_id = ? ORDER BY f.at', [v.id]).catch(() => []);
+  const files = [
+    { name: 'README.txt', data: `Everything from ${v.business_name} on Online Kitchen, exported ${when(Date.now())} (${tz}).\r\n\r\nmenu.csv and menu.json: your menu (menu.json can be imported back).\r\norders.csv: every order.\r\nclients.csv: catering clients and partners.\r\nfollowers.csv: people who follow your truck by email (they opted in).\r\nschedule.csv: your stops.\r\ncatering.csv: catering bookings.\r\nfeedback.csv: customer ratings (no names).\r\n\r\nThe .csv files open in Excel, Numbers or Google Sheets.\r\n` },
+    { name: 'menu.json', data: JSON.stringify(menu.map(({ soldOut, ...m }) => m), null, 2) },
+    { name: 'menu.csv', data: csv(['Category', 'Item', 'Description', 'Price', 'Sale price', 'Food cost', 'Prep minutes', 'Choices', 'Options', 'Ingredients'],
+      menu.map((m) => [m.category, m.name, m.desc, m.price.toFixed(2), m.salePrice ? m.salePrice.toFixed(2) : '', m.cost != null ? Number(m.cost).toFixed(2) : '', m.prep, m.meats, (m.options || []).join('; '), (m.ingredients || []).join('; ')])) },
+    { name: 'orders.csv', data: csv(['Ticket', `Date & time (${tz})`, 'Customer', 'Items', 'Notes', 'Allergy', 'Total', 'Payment', 'Status', 'Location', 'Pickup time'],
+      orders.map((r) => { const o = orderShape(r); return [o.ticket, when(o.createdAt), o.name, o.summary, o.notes, o.allergy, o.total.toFixed(2), o.payment, o.status, r.location || '', when(o.pickupAt)]; })) },
+    { name: 'clients.csv', data: csv(['Name', 'Company', 'Kind', 'Email', 'Phone', 'Email consent', 'Unsubscribed', 'Notes'],
+      clients.map((c) => [c.name, c.company, c.kind, c.email, c.phone, c.email_ok ? 'yes' : 'no', c.unsubscribed_at ? when(c.unsubscribed_at) : '', c.notes])) },
+    { name: 'followers.csv', data: csv(['Email', 'Spots (empty = all)', 'Confirmed'], followers.map((f) => [f.email, (JSON.parse(f.locations || '[]') || []).join('; '), when(f.confirmed_at)])) },
+    { name: 'schedule.csv', data: csv(['Date', 'Start', 'End', 'Where', 'Address', 'Note'], stops.map((x) => [x.day, x.start_time, x.end_time, x.location, x.address || '', x.note || ''])) },
+    { name: 'catering.csv', data: csv(['Event date', 'Start', 'Guests', 'Host', 'Email', 'Phone', 'Company', 'Total', 'Status'],
+      bookings.map((b) => [b.event_date, b.start_time, b.guests, b.host_name, b.host_email, b.host_phone || '', b.company || '', (b.total_cents / 100).toFixed(2), b.status])) },
+    { name: 'feedback.csv', data: csv(['Ticket', 'When', 'Rating', 'Reasons', 'Comment'], fb.map((f) => [f.ticket_no, when(f.at), f.vote > 0 ? 'up' : 'down', (JSON.parse(f.tags || '[]') || []).join('; '), f.comment || ''])) },
+  ];
+  res.set({ 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="${v.slug}-everything-${new Date().toISOString().slice(0, 10)}.zip"`, 'Cache-Control': 'no-store' });
+  res.send(zip(files));
+});
+
 router.get('/owner/locations', ownerOnly, async (req, res) => {
   const rows = await all('SELECT id, name, deleted FROM locations WHERE vendor_id = ? ORDER BY id', [req.tenant.vendor.id]);
   res.json({
@@ -987,7 +1108,35 @@ router.get('/owner/insights/forecast', ownerOnly, async (req, res) => {
   res.json(Object.assign(f, {
     date: day, weekday: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][wd],
     location, basis: useHere ? 'spot' : f.days ? 'weekday' : 'none',
+    nudges: await daily.nudgesFor(v, day), // "you sold out of birria by 1 PM the last 3 Fridays"
   }));
+});
+
+// Learns the week: where the truck usually is on this weekday (the last 4), so Start service can offer it.
+router.get('/owner/insights/usual-spot', ownerOnly, async (req, res) => {
+  const v = req.tenant.vendor;
+  const tz = Insights.validTz(v.timezone);
+  const p = Insights.parts(Date.now(), tz);
+  const rows = await all(`SELECT created_at, location FROM orders WHERE vendor_id = ? AND ${SOLD} AND created_at >= ? AND created_at < ? AND COALESCE(location, '') != ''`,
+    [v.id, Insights.zonedStart(p.y, p.m, p.d - 28, tz), Insights.zonedStart(p.y, p.m, p.d, tz)]);
+  const byDay = {};
+  for (const r of rows) {
+    const q = Insights.parts(r.created_at, tz);
+    if (q.wd !== p.wd) continue;
+    const k = Insights.dateKey(q);
+    byDay[k] = byDay[k] || {};
+    byDay[k][r.location] = (byDay[k][r.location] || 0) + 1;
+  }
+  const mains = Object.keys(byDay).sort().reverse().map((k) => Object.entries(byDay[k]).sort((a, b) => b[1] - a[1])[0][0]);
+  const count = {};
+  mains.forEach((l) => { count[l] = (count[l] || 0) + 1; });
+  const best = Object.keys(count).sort((a, b) => count[b] - count[a])[0];
+  let streak = 0;
+  while (streak < mains.length && mains[streak] === best) streak++;
+  const weekday = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][p.wd];
+  if (!best || count[best] < 2) return res.json({ location: null, weekday });
+  res.json({ location: best, weeks: count[best], streak, of: mains.length, weekday,
+    why: streak === count[best] ? `the last ${['', 'one', 'two', 'three', 'four'][streak]} ${weekday}s` : `${count[best]} of the last ${mains.length} ${weekday}s` });
 });
 
 router.get('/owner/insights/locations', ownerOnly, async (req, res) => {

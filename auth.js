@@ -91,17 +91,19 @@ async function deliverMail({ to, subject, html, text, replyTo, headers, idempote
    Every try carries the same idempotency key, so a message can't arrive twice. */
 const MAIL_BACKOFF_MIN = [1, 5, 15, 60, 60, 120, 240, 480];
 const MAIL_GIVE_UP_MS = 24 * 60 * 60 * 1000;
-async function mailLater(msg, { staleAfterMs } = {}) {
+async function mailLater(msg, { staleAfterMs, notBefore } = {}) {
   const key = msg.idempotencyKey || 'ml-' + crypto.randomBytes(12).toString('hex');
-  const r = await deliverMail(Object.assign({}, msg, { idempotencyKey: key }));
-  if (r.ok || !r.retry) return r.ok;
   const now = Date.now();
+  // Held for later (the owner's quiet hours): kept and sent when the time comes.
+  const hold = !!(notBefore && notBefore > now);
+  const r = hold ? { ok: false, retry: true, error: null } : await deliverMail(Object.assign({}, msg, { idempotencyKey: key }));
+  if (r.ok || !r.retry) return r.ok;
   const payload = JSON.stringify({ to: msg.to, subject: msg.subject, html: msg.html, text: msg.text, replyTo: msg.replyTo, headers: msg.headers });
   try {
-    await run('INSERT OR IGNORE INTO mail_outbox (idem_key, payload, next_at, stale_at, last_error, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-      [key, payload, now + MAIL_BACKOFF_MIN[0] * 60000, staleAfterMs ? now + staleAfterMs : null, r.error || null, now]);
+    await run('INSERT OR IGNORE INTO mail_outbox (idem_key, payload, next_at, stale_at, last_error, created_at, attempts) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [key, payload, hold ? notBefore : now + MAIL_BACKOFF_MIN[0] * 60000, staleAfterMs ? (hold ? notBefore : now) + staleAfterMs : null, r.error || null, hold ? notBefore : now, hold ? 0 : 1]);
   } catch (e) { console.error('mail outbox:', e.message); }
-  return false;
+  return hold;
 }
 
 /** Sends what's due. Each row is claimed before sending, so two runs can't send the same message. */
@@ -557,6 +559,38 @@ router.post('/logout', async (req, res) => {
   res.json({ ok: true });
 });
 
+/* ---------- each PIN remembers its kitchen screen ----------
+   Text size, sound, read aloud, day/night, station, glove mode, rush view and the ready button follow the
+   person, so signing in on any tablet sets it up their way. The shared PIN has no person: device only. */
+const PREF_KEYS = { text: ['normal', 'large', 'xl'], theme: ['auto', 'day', 'night'], rush: ['auto', 'on', 'off'] };
+function cleanPrefs(p) {
+  p = p && typeof p === 'object' ? p : {};
+  const out = {};
+  for (const [k, allowed] of Object.entries(PREF_KEYS)) if (allowed.includes(p[k])) out[k] = p[k];
+  for (const k of ['sound', 'speak', 'glove']) if (typeof p[k] === 'boolean') out[k] = p[k];
+  if (Array.isArray(p.station)) out.station = p.station.map((x) => String(x).slice(0, 40)).filter(Boolean).slice(0, 20);
+  if (p.bumpKey && typeof p.bumpKey === 'object') out.bumpKey = { key: String(p.bumpKey.key || '').slice(0, 30), code: String(p.bumpKey.code || '').slice(0, 30) };
+  else if (p.bumpKey === null) out.bumpKey = null;
+  return out;
+}
+async function prefsFor(s, v) {
+  try {
+    if (s.role === 'owner') return JSON.parse(v.owner_prefs_json || 'null');
+    if (s.staff_id) { const m = await get('SELECT prefs_json FROM staff_members WHERE id = ? AND vendor_id = ?', [s.staff_id, v.id]); return m ? JSON.parse(m.prefs_json || 'null') : null; }
+  } catch (e) { /* bad JSON: start fresh */ }
+  return null;
+}
+router.put('/prefs', async (req, res) => {
+  const s = await getSession(req);
+  if (!s) return res.status(401).json({ error: 'Not logged in' });
+  const v = req.tenant.vendor;
+  const merged = Object.assign({}, (await prefsFor(s, v)) || {}, cleanPrefs(req.body));
+  if (s.role === 'owner') await run('UPDATE vendors SET owner_prefs_json = ? WHERE id = ?', [JSON.stringify(merged), v.id]);
+  else if (s.staff_id) await run('UPDATE staff_members SET prefs_json = ? WHERE id = ? AND vendor_id = ?', [JSON.stringify(merged), s.staff_id, v.id]);
+  else return res.json({ prefs: merged, saved: false }); // shared PIN: this device only
+  res.json({ prefs: merged, saved: true });
+});
+
 router.get('/me', async (req, res) => {
   const s = await getSession(req);
   if (!s) return res.status(401).json({ error: 'Not logged in' });
@@ -566,6 +600,7 @@ router.get('/me', async (req, res) => {
     role: s.role,
     staffName: s.staff_name || '',   // the crew member signed in on this screen (named PINs)
     staffId: s.staff_id || null,
+    prefs: await prefsFor(s, v),     // their kitchen screen setup (null: none saved yet)
     vendor: {
       businessName: v.business_name,
       slug: v.slug,
