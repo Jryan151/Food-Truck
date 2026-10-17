@@ -40,6 +40,17 @@ router.get('/plans', (req, res) => {
   });
 });
 
+// For an uptime monitor (e.g. UptimeRobot): 200 only when the app and its database answer.
+router.get('/health', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try {
+    await get('SELECT 1 AS ok');
+    res.json({ ok: true, time: Date.now() });
+  } catch (e) {
+    res.status(503).json({ ok: false, error: 'database' });
+  }
+});
+
 router.get('/vendor-data', async (req, res) => {
   const t = req.tenant;
   res.set('Cache-Control', 'no-store');
@@ -170,16 +181,39 @@ router.post('/orders', limitOrders, requireVendor, async (req, res) => {
     if (!phone) return res.status(400).json({ error: 'Please enter a 10-digit US mobile number, or leave it blank.' });
   }
 
+  // Double-tap proof: the checkout sends its own key. If an order with that key already exists
+  // (a second tap, or a retry after the signal dropped), send back that same order instead of a new one.
+  const clientKey = /^[A-Za-z0-9_-]{8,64}$/.test(String(b.clientKey || '')) ? String(b.clientKey) : null;
+  const sameOrder = async () => {
+    const o = clientKey && (await get('SELECT * FROM orders WHERE vendor_id = ? AND client_key = ?', [v.id, clientKey]));
+    if (!o) return false;
+    if (o.payment_status === 'pending') {
+      res.status(409).json({ error: 'This order is already waiting for payment. Finish paying in the other tab, or refresh the page.' });
+      return true;
+    }
+    res.status(200).json({ ticket: o.ticket_no, token: o.public_token, tag: core.orderTag(o.public_token), status: o.status, total: o.total, estimatedMinutes: prepMinutes + (state.rush || 0), repeat: true });
+    return true;
+  };
+  if (await sameOrder()) return;
+
   // Atomic per-vendor ticket counter.
   const row = await get('UPDATE vendors SET next_ticket = COALESCE(next_ticket, 101) + 1 WHERE id = ? RETURNING next_ticket - 1 AS ticket', [v.id]);
   const now = Date.now();
   const token = core.randomToken(12);
-  const r = await run(
-    `INSERT INTO orders (vendor_id, ticket_no, public_token, customer_name, items_json, notes, total, status, payment_status, customer_phone, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [v.id, row.ticket, token, name, JSON.stringify(items), notes, total, payNow ? 'Pending' : 'Preparing', payNow ? 'pending' : 'window', phone, now, now]
-  );
+  let r;
+  try {
+    r = await run(
+      `INSERT INTO orders (vendor_id, ticket_no, public_token, customer_name, items_json, notes, total, status, payment_status, customer_phone, client_key, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [v.id, row.ticket, token, name, JSON.stringify(items), notes, total, payNow ? 'Pending' : 'Preparing', payNow ? 'pending' : 'window', phone, clientKey, now, now]
+    );
+  } catch (err) {
+    // Two taps arrived at the same instant: the first one won, so answer with its order.
+    if (err.code === 'SQLITE_CONSTRAINT' && clientKey && (await sameOrder())) return;
+    throw err;
+  }
   const orderRow = await get('SELECT * FROM orders WHERE id = ?', [r.lastID]);
+  core.logOrderEvent(v.id, orderRow.id, 'placed', 'customer');
   const reply = {
     ticket: orderRow.ticket_no,
     token,
@@ -258,6 +292,7 @@ router.patch('/owner/orders/:id', staffOrOwner, async (req, res) => {
     [next, Date.now(), id, v.id, ...from]
   );
   if (!row) return res.status(409).json({ error: 'That order cannot be changed.' });
+  core.logOrderEvent(v.id, row.id, next.toLowerCase(), req.session.role);
   if (next === 'Ready') sms.notifyReady(v, existing).catch(() => {});
   const order = orderShape(row);
   core.broadcast(v.id, 'ORDER_UPDATE', order, true);
@@ -530,6 +565,16 @@ router.get('/owner/analytics', ownerOnly, async (req, res) => {
     avgOrder: rows.length ? Math.round((revenue / rows.length) * 100) / 100 : 0,
     topItem: top ? top.name : null,
   });
+});
+
+// The service record for one order: every change, who made it, and when.
+router.get('/owner/orders/:id/history', staffOrOwner, async (req, res) => {
+  const v = req.tenant.vendor;
+  const id = parseInt(req.params.id, 10);
+  const o = await get('SELECT id, ticket_no, created_at FROM orders WHERE id = ? AND vendor_id = ?', [id, v.id]);
+  if (!o) return res.status(404).json({ error: 'Order not found.' });
+  const events = await all('SELECT event, actor, at FROM order_events WHERE order_id = ? AND vendor_id = ? ORDER BY at, id', [id, v.id]);
+  res.json({ ticket: o.ticket_no, events: events.length ? events : [{ event: 'placed', actor: 'customer', at: o.created_at }] });
 });
 
 router.delete('/owner/orders', ownerOnly, async (req, res) => {

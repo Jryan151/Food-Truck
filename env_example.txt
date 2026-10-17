@@ -7,6 +7,9 @@ PUBLIC_SCHEME=https
 # Long random string. Lets YOU list/suspend vendors via /api/admin/... (leave blank to disable)
 ADMIN_TOKEN=
 
+# Where serious server problems are emailed (for example, the nightly database check failing).
+ADMIN_EMAIL=
+
 # false = new signups go live immediately. true = subdomain (and SSL) only after they click an emailed link.
 # Turn on only after the email settings below work.
 REQUIRE_EMAIL_VERIFY=false

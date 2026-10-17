@@ -648,6 +648,12 @@
             var consent = app.vendor.smsReady && $('smsConsent').checked;
             if (phone && !consent) { setCartError(t('consent_needed')); app.placing = false; btn.disabled = false; renderPayChoice(); return; }
             var payNow = willPayNow();
+            // One key per cart: a second tap or a retry after a dropped signal can't create a second order.
+            var sig = JSON.stringify(tt.lines.map(function (x) { return [x.line.id, x.line.qty, x.line.meat || '', x.line.option || '']; })) + '|' + name + '|' + notes + '|' + payNow;
+            if (!app.orderKey || app.orderKeySig !== sig) {
+                app.orderKeySig = sig;
+                app.orderKey = (window.crypto && crypto.randomUUID) ? crypto.randomUUID().replace(/-/g, '') : (Date.now().toString(36) + Math.random().toString(36).slice(2, 14));
+            }
 
             fetch('/api/orders', {
                 method: 'POST',
@@ -656,6 +662,7 @@
                     customerName: name,
                     notes: notes,
                     website: $('website').value,
+                    clientKey: app.orderKey,
                     payNow: payNow,
                     customerPhone: phone || undefined,
                     smsConsent: consent || undefined,
@@ -669,7 +676,9 @@
                     if (res.status === 403 || res.status === 409 || res.status === 400) reloadVendor();
                     return;
                 }
-                app.tracked.unshift({ token: res.body.token, tag: res.body.tag, ticket: res.body.ticket, name: name || 'Guest', summary: summary, total: res.body.total, status: res.body.status, paid: false });
+                app.orderKey = null; // the next order gets a fresh key
+                if (!app.tracked.some(function (o) { return o.token === res.body.token; }))
+                    app.tracked.unshift({ token: res.body.token, tag: res.body.tag, ticket: res.body.ticket, name: name || 'Guest', summary: summary, total: res.body.total, status: res.body.status, paid: false });
                 saveTracked();
                 if (res.body.checkoutUrl) {
                     // Keep the cart in case they tap "back" on the payment page, then go to Stripe.

@@ -89,6 +89,7 @@ async function markPaid(orderRow, session) {
     [pi || null, Date.now(), orderRow.id]
   );
   if (!row) return null; // already handled
+  core.logOrderEvent(row.vendor_id, row.id, 'paid', 'customer');
   const order = core.orderShape(row);
   await sms.notifyNewOrder(row.vendor_id, order);
   core.broadcast(row.vendor_id, 'ORDER_STATUS', { tag: core.orderTag(row.public_token), status: row.status });

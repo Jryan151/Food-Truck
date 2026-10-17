@@ -231,10 +231,49 @@ function startupWarnings() {
   if (!sms.configured()) console.warn('ℹ️  Twilio is not set up: Pro text alerts are off.');
 }
 
+/* ---------- daily checks: database integrity and data retention ---------- */
+async function dailyChecks() {
+  try {
+    const result = await core.integrityCheck();
+    if (result !== 'ok') {
+      console.error('DATABASE INTEGRITY PROBLEM:', result);
+      report(new Error('Database integrity check failed: ' + result));
+      if (process.env.ADMIN_EMAIL) {
+        auth.sendMail({
+          to: process.env.ADMIN_EMAIL,
+          subject: 'Online Kitchen: database check found a problem',
+          text: `The nightly database check reported:\n\n${result}\n\nRestore the most recent good backup (see DEPLOY.md) and check the server's disk.`,
+          html: `<p>The nightly database check reported:</p><pre>${auth.escHtml(result)}</pre><p>Restore the most recent good backup (see DEPLOY.md) and check the server's disk.</p>`,
+        }).catch(() => {});
+      }
+    }
+    const r = await core.applyRetention();
+    if (r.ordersCleared || r.eventsRemoved) console.log('Retention:', r);
+  } catch (e) { console.error('Daily checks failed:', e.message); }
+}
+
+let httpServer = null;
 core.ensureSchema()
   .then(() => core.autoCloseOrders().catch(() => {}))
-  .then(() => app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT} (root domain: ${core.ROOT_DOMAIN})`);
-    startupWarnings();
-  }))
+  .then(() => {
+    httpServer = app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT} (root domain: ${core.ROOT_DOMAIN})`);
+      startupWarnings();
+    });
+    setTimeout(dailyChecks, 60 * 1000).unref();
+    setInterval(dailyChecks, 24 * 60 * 60 * 1000).unref();
+  })
   .catch((e) => { console.error('Startup failed:', e); report(e); process.exit(1); });
+
+/* ---------- graceful stop: requests in progress finish before the old version exits ----------
+   pm2 restart/reload sends SIGINT. Live kitchen screens reconnect to the new process by themselves. */
+function shutdown(signal) {
+  console.log(`${signal}: finishing requests in progress, then stopping.`);
+  if (!httpServer) process.exit(0);
+  httpServer.close(() => process.exit(0));
+  if (httpServer.closeIdleConnections) httpServer.closeIdleConnections();
+  core.closeAllStreams();
+  setTimeout(() => process.exit(0), 8000).unref();
+}
+process.once('SIGINT', () => shutdown('SIGINT'));
+process.once('SIGTERM', () => shutdown('SIGTERM'));

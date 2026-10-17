@@ -186,6 +186,11 @@ async function getState(vendorId) {
   return { status: s.status, rush: s.rush_minutes, location: s.active_location || '', paused: !!s.paused };
 }
 
+/** Adds a line to an order's service record. Never throws: the record must not block the kitchen. */
+function logOrderEvent(vendorId, orderId, event, actor) {
+  return run('INSERT INTO order_events (vendor_id, order_id, event, actor, at) VALUES (?, ?, ?, ?, ?)', [vendorId, orderId, event, actor, Date.now()]).catch((e) => console.error('order_events:', e.message));
+}
+
 /* ---------- one-time tokens (email verify, password reset, login handoff) ---------- */
 async function createToken(vendorId, kind, ttlMs) {
   const t = randomToken(24);
@@ -239,6 +244,12 @@ function disconnectVendor(vendorId) {
   if (!set) return;
   for (const c of set) { try { c.res.end(); } catch (e) {} }
   clients.delete(vendorId);
+}
+
+/** Ends every live connection (used when the server stops, so screens reconnect to the new one). */
+function closeAllStreams() {
+  for (const set of clients.values()) for (const c of set) { try { c.res.end(); } catch (e) {} }
+  clients.clear();
 }
 
 setInterval(() => {
@@ -336,8 +347,10 @@ async function ensureSchema() {
     ['stripe_session_id', 'TEXT'],
     ['stripe_payment_intent', 'TEXT'],
     ['customer_phone', 'TEXT'],                    // only kept until the order is closed
+    ['client_key', 'TEXT'],                        // the checkout's own key: a double tap can't make two orders
   ];
   for (const [c, d] of orderCols) await addColumn('orders', c, d);
+  await run('CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_client_key ON orders(vendor_id, client_key) WHERE client_key IS NOT NULL');
   await exec(`CREATE TABLE IF NOT EXISTS sms_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     vendor_id INTEGER NOT NULL,
@@ -363,6 +376,17 @@ async function ensureSchema() {
     id TEXT PRIMARY KEY,
     created_at INTEGER NOT NULL
   )`);
+  // Service record: every change to an order, who made it and when ("what happened to order 42?").
+  await exec(`CREATE TABLE IF NOT EXISTS order_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vendor_id INTEGER NOT NULL,
+    order_id INTEGER NOT NULL,
+    event TEXT NOT NULL,               -- placed, ready, fulfilled, canceled, paid, refunded, expired
+    actor TEXT NOT NULL,               -- customer, owner, staff, system
+    at INTEGER NOT NULL
+  )`);
+  await exec('CREATE INDEX IF NOT EXISTS idx_order_events_order ON order_events (order_id)');
+
   // Catering: one playbook per truck (JSON, cleaned by public/catering-quote.js) and its bookings.
   await exec(`CREATE TABLE IF NOT EXISTS catering_settings (
     vendor_id INTEGER PRIMARY KEY,
@@ -419,12 +443,33 @@ const PENDING_PAYMENT_MS = 60 * 60 * 1000; // a card checkout nobody finished
 
 async function autoCloseOrders() {
   const now = Date.now();
-  await run("UPDATE orders SET status = 'Fulfilled', customer_phone = NULL WHERE status = 'Ready' AND updated_at < ?", [now - READY_AUTO_CLOSE_MS]);
+  const closed = [];
+  closed.push(...(await all("UPDATE orders SET status = 'Fulfilled', customer_phone = NULL WHERE status = 'Ready' AND updated_at < ? RETURNING id, vendor_id, 'fulfilled' AS event", [now - READY_AUTO_CLOSE_MS])));
   // Paid orders are never auto-canceled (that would keep the money without making the food look like a refund);
   // they close as Fulfilled, and the owner can refund from their Stripe Dashboard if something went wrong.
-  await run("UPDATE orders SET status = 'Fulfilled', customer_phone = NULL WHERE status = 'Preparing' AND payment_status = 'paid' AND created_at < ?", [now - PREPARING_AUTO_CLOSE_MS]);
-  await run("UPDATE orders SET status = 'Canceled', customer_phone = NULL, updated_at = ? WHERE status = 'Preparing' AND payment_status != 'paid' AND created_at < ?", [now, now - PREPARING_AUTO_CLOSE_MS]);
-  await run("UPDATE orders SET status = 'Canceled', payment_status = 'expired', customer_phone = NULL, updated_at = ? WHERE status = 'Pending' AND created_at < ?", [now, now - PENDING_PAYMENT_MS]);
+  closed.push(...(await all("UPDATE orders SET status = 'Fulfilled', customer_phone = NULL WHERE status = 'Preparing' AND payment_status = 'paid' AND created_at < ? RETURNING id, vendor_id, 'fulfilled' AS event", [now - PREPARING_AUTO_CLOSE_MS])));
+  closed.push(...(await all("UPDATE orders SET status = 'Canceled', customer_phone = NULL, updated_at = ? WHERE status = 'Preparing' AND payment_status != 'paid' AND created_at < ? RETURNING id, vendor_id, 'canceled' AS event", [now, now - PREPARING_AUTO_CLOSE_MS])));
+  closed.push(...(await all("UPDATE orders SET status = 'Canceled', payment_status = 'expired', customer_phone = NULL, updated_at = ? WHERE status = 'Pending' AND created_at < ? RETURNING id, vendor_id, 'expired' AS event", [now, now - PENDING_PAYMENT_MS])));
+  for (const o of closed) logOrderEvent(o.vendor_id, o.id, o.event, 'system');
+  return closed.length;
+}
+
+/* ---------- nightly checks ---------- */
+/** SQLite's own check of the database file. Returns 'ok' or a description of the damage. */
+async function integrityCheck() {
+  const rows = await all('PRAGMA quick_check');
+  const msgs = rows.map((r) => Object.values(r)[0]);
+  return msgs.length === 1 && msgs[0] === 'ok' ? 'ok' : msgs.slice(0, 10).join('; ');
+}
+
+// Less stored means less to protect. Old orders keep their items and totals (for sales history),
+// but the customer's name and notes are cleared; old service-record lines are removed.
+const RETENTION_MS = 400 * 24 * 60 * 60 * 1000; // about 13 months, so last year's same week still compares
+async function applyRetention() {
+  const cutoff = Date.now() - RETENTION_MS;
+  const a = await run("UPDATE orders SET customer_name = 'Guest', notes = NULL, customer_phone = NULL WHERE created_at < ? AND (customer_name != 'Guest' OR notes IS NOT NULL OR customer_phone IS NOT NULL)", [cutoff]);
+  const b = await run('DELETE FROM order_events WHERE at < ?', [cutoff]);
+  return { ordersCleared: a.changes, eventsRemoved: b.changes };
 }
 
 /* ---------- order shape sent to the kitchen screen ---------- */
@@ -457,13 +502,13 @@ setInterval(() => { autoCloseOrders().catch((e) => console.error('Auto-close fai
 
 module.exports = {
   ROOT_DOMAIN, UPLOAD_DIR, raw, run, get, all, exec,
-  sha256, randomToken, orderTag,
+  sha256, randomToken, orderTag, logOrderEvent,
   MAX_ITEMS, PLANS, effectivePlan, features,
   RESERVED_SLUGS, validateSlug,
   DEFAULT_MENU, normalizeItem, normalizeMenu, normalizeOptions, parseMenu, saveMenu, num, PHOTO_RE,
   normalizeHours, parseHours, validTimezone,
   getState,
   createToken, consumeToken,
-  sseAdd, broadcast, disconnectVendor,
-  ensureSchema, autoCloseOrders, orderShape,
+  sseAdd, broadcast, disconnectVendor, closeAllStreams,
+  ensureSchema, autoCloseOrders, orderShape, integrityCheck, applyRetention,
 };
