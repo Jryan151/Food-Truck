@@ -13,7 +13,7 @@ const core = require('./core');
 const auth = require('./auth');
 const Insights = require('./public/insights-core');
 const { run, get, all } = core;
-const { requireVendor, requireRole, sendMail, mailConfigured, escHtml, EMAIL_RE } = auth;
+const { requireVendor, requireRole, sendMail, mailLater, mailConfigured, escHtml, EMAIL_RE } = auth;
 
 const router = express.Router();
 const ownerOnly = [requireVendor, requireRole('owner')];
@@ -545,7 +545,7 @@ router.post('/public/f', requireVendor, async (req, res) => {
     await run('UPDATE crm_clients SET paused_until = ? WHERE id = ?', [Date.now() + PAUSE_MS, m.client_id]);
     await run("UPDATE crm_outbox SET status = 'skipped', last_error = 'paused after feedback' WHERE client_id = ? AND status = 'queued'", [m.client_id]);
     const c = await get('SELECT * FROM crm_clients WHERE id = ?', [m.client_id]);
-    if (v.email) sendMail({ to: v.email, replyTo: c.email || undefined, subject: `${c.name || 'A client'} wasn’t happy with their event`, text: `${c.name || c.email} tapped 👎 after their event.${comment ? '\n\nThey wrote: ' + comment : ''}\n\nAutomatic messages to them are paused. A personal call or email works best. It's at the top of your Clients list.`, html: `<p><b>${escHtml(c.name || c.email)}</b> tapped 👎 after their event.</p>${comment ? `<p>They wrote: “${escHtml(comment)}”</p>` : ''}<p>Automatic messages to them are paused. A personal call or email works best. It's at the top of your Clients list.</p>` }).catch(() => {});
+    if (v.email) mailLater({ to: v.email, replyTo: c.email || undefined, subject: `${c.name || 'A client'} wasn’t happy with their event`, text: `${c.name || c.email} tapped 👎 after their event.${comment ? '\n\nThey wrote: ' + comment : ''}\n\nAutomatic messages to them are paused. A personal call or email works best. It's at the top of your Clients list.`, html: `<p><b>${escHtml(c.name || c.email)}</b> tapped 👎 after their event.</p>${comment ? `<p>They wrote: “${escHtml(comment)}”</p>` : ''}<p>Automatic messages to them are paused. A personal call or email works best. It's at the top of your Clients list.</p>` }).catch(() => {});
   } else {
     await run('UPDATE crm_clients SET paused_until = NULL WHERE id = ?', [m.client_id]);
   }

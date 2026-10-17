@@ -60,25 +60,70 @@ function rateLimit({ windowMs, max, key }) {
 
 const mailConfigured = () => !!(process.env.RESEND_API_KEY && process.env.MAIL_FROM);
 
-async function sendMail({ to, subject, html, text, replyTo, headers, idempotencyKey }) {
+async function sendMail(msg) { return (await deliverMail(msg)).ok; }
+
+// { ok } on success; { ok: false, retry: true } when trying again later can help (network, 5xx, 429).
+async function deliverMail({ to, subject, html, text, replyTo, headers, idempotencyKey }) {
   if (!mailConfigured()) {
     console.warn(`[MAIL NOT CONFIGURED — this email was NOT sent] to=${to} subject="${subject}"\n${text}\n`);
-    return false;
+    return { ok: false, retry: false };
   }
   try {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
+      signal: AbortSignal.timeout(15000), // a hung mail service is a failed try (retried), never a stuck request
       // The idempotency key makes a retry after a crash safe: the mail service sends it once.
       headers: Object.assign({ Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' }, idempotencyKey ? { 'Idempotency-Key': String(idempotencyKey).slice(0, 256) } : {}),
       // replyTo lets a customer's reply go straight to the truck owner.
       body: JSON.stringify(Object.assign({ from: process.env.MAIL_FROM, to: [to], subject, html, text }, replyTo ? { reply_to: replyTo } : {}, headers ? { headers } : {})),
     });
     if (!r.ok) console.error('Mail send failed:', r.status, await r.text());
-    return r.ok;
+    return { ok: r.ok, retry: !r.ok && (r.status >= 500 || r.status === 429), error: r.ok ? null : 'HTTP ' + r.status };
   } catch (e) {
     console.error('Mail send error:', e.message);
-    return false;
+    return { ok: false, retry: true, error: e.message };
   }
+}
+
+/* ---------- mail that must arrive ----------
+   One failed part never stops the car: if the mail service is down, the order, booking or alert still
+   goes through, and its email waits here and retries (1, 5, 15 minutes, then hourly) for up to a day.
+   Every try carries the same idempotency key, so a message can't arrive twice. */
+const MAIL_BACKOFF_MIN = [1, 5, 15, 60, 60, 120, 240, 480];
+const MAIL_GIVE_UP_MS = 24 * 60 * 60 * 1000;
+async function mailLater(msg, { staleAfterMs } = {}) {
+  const key = msg.idempotencyKey || 'ml-' + crypto.randomBytes(12).toString('hex');
+  const r = await deliverMail(Object.assign({}, msg, { idempotencyKey: key }));
+  if (r.ok || !r.retry) return r.ok;
+  const now = Date.now();
+  const payload = JSON.stringify({ to: msg.to, subject: msg.subject, html: msg.html, text: msg.text, replyTo: msg.replyTo, headers: msg.headers });
+  try {
+    await run('INSERT OR IGNORE INTO mail_outbox (idem_key, payload, next_at, stale_at, last_error, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [key, payload, now + MAIL_BACKOFF_MIN[0] * 60000, staleAfterMs ? now + staleAfterMs : null, r.error || null, now]);
+  } catch (e) { console.error('mail outbox:', e.message); }
+  return false;
+}
+
+/** Sends what's due. Each row is claimed before sending, so two runs can't send the same message. */
+async function retryMail() {
+  const now = Date.now();
+  await run("UPDATE mail_outbox SET status = 'stale' WHERE status = 'queued' AND stale_at IS NOT NULL AND stale_at < ?", [now]);
+  const due = await core.all("SELECT id FROM mail_outbox WHERE status = 'queued' AND next_at <= ? ORDER BY next_at LIMIT 25", [now]);
+  let sent = 0;
+  for (const { id } of due) {
+    // Claim: push next_at out first; only the run that moved it sends.
+    const row = await get("UPDATE mail_outbox SET next_at = ? WHERE id = ? AND status = 'queued' AND next_at <= ? RETURNING *", [now + 10 * 60000, id, now]);
+    if (!row) continue;
+    const r = await deliverMail(Object.assign(JSON.parse(row.payload), { idempotencyKey: row.idem_key }));
+    if (r.ok) { await run("UPDATE mail_outbox SET status = 'sent', sent_at = ?, attempts = attempts + 1 WHERE id = ?", [Date.now(), id]); sent++; continue; }
+    const giveUp = !r.retry || now - row.created_at > MAIL_GIVE_UP_MS;
+    const wait = MAIL_BACKOFF_MIN[Math.min(row.attempts, MAIL_BACKOFF_MIN.length - 1)] * 60000;
+    await run('UPDATE mail_outbox SET status = ?, attempts = attempts + 1, next_at = ?, last_error = ? WHERE id = ?', [giveUp ? 'failed' : 'queued', Date.now() + wait, r.error || null, id]);
+    if (giveUp) console.error(`Mail gave up after ${row.attempts + 1} tries: ${JSON.parse(row.payload).subject}`);
+  }
+  // Keep a week of history, no more.
+  await run("DELETE FROM mail_outbox WHERE status != 'queued' AND created_at < ?", [now - 7 * 864e5]);
+  return sent;
 }
 
 const escHtml = (s) => String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -565,5 +610,5 @@ router.post('/reset', limitLogin, async (req, res) => {
 
 module.exports = {
   router, tenant, requireVendor, requireRole, getSession, startSession, clearSessionCookie, requestToken,
-  rateLimit, sendMail, mailConfigured, escHtml, parseCookies, vendorUrl, EMAIL_RE, PIN_RE, cleanIG,
+  rateLimit, sendMail, mailLater, retryMail, mailConfigured, escHtml, parseCookies, vendorUrl, EMAIL_RE, PIN_RE, cleanIG,
 };

@@ -13,7 +13,7 @@ const auth = require('./auth');
 const Q = require('./public/catering-quote.js');
 const crm = require('./crm');
 const { run, get, all } = core;
-const { requireVendor, requireRole, rateLimit, sendMail, escHtml, EMAIL_RE } = auth;
+const { requireVendor, requireRole, rateLimit, sendMail, mailLater, escHtml, EMAIL_RE } = auth;
 
 const router = express.Router();
 const ownerOnly = [requireVendor, requireRole('owner')];
@@ -180,7 +180,7 @@ router.post('/request', requireVendor, limitRequest, async (req, res) => {
   const when = `${fmtDate(date)} at ${fmtTime(startTime)}`;
   const holdUntil = new Date(now + HOLD_MS);
   // To the host: what they asked for, the locked quote, and one link for everything.
-  sendMail({
+  mailLater({
     to: host.email, replyTo: v.email || undefined,
     subject: `Your catering request with ${v.business_name} for ${fmtDate(date)}`,
     text: `Thanks, ${host.name}. ${v.business_name} has your request for ${when}, ${quote.guests} guests (${pkg.name}).\n\nTotal: ${Q.money(quote.totalCents)}. The date is held for 24 hours while ${v.business_name} confirms.\n\nEverything about your booking: ${link}\n\nReply to this email to reach ${v.business_name} directly.`,
@@ -191,7 +191,7 @@ router.post('/request', requireVendor, limitRequest, async (req, res) => {
   }).catch(() => {});
   // To the owner: everything needed to accept in one tap.
   if (v.email) {
-    sendMail({
+    mailLater({
       to: v.email, replyTo: host.email,
       subject: `New catering request: ${fmtDate(date)}, ${quote.guests} guests, ${Q.money(quote.totalCents)}`,
       text: `${host.name}${host.company ? ' (' + host.company + ')' : ''} requested ${when} for ${quote.guests} guests (${pkg.name}), ${Q.money(quote.totalCents)}.\nIt's inside all your rules. Accept or decline within 24 hours: ${pageUrl(req, '/catering/manage')}\nReply to this email to reach the host.`,
@@ -269,7 +269,7 @@ router.post('/custom', requireVendor, limitRequest, async (req, res) => {
   });
   if (!ok) return res.status(502).json({ error: 'We couldn’t send that just now. Please try again in a minute.' });
   crm.catering.asked(v.id, { email, name, phone: b.hostPhone }, message);
-  sendMail({
+  mailLater({
     to: email, replyTo: v.email,
     subject: `${v.business_name} got your catering question`,
     text: `Thanks, ${name}. ${v.business_name} got your message and will reply to this email address.\n\nYour message:\n${message}`,
@@ -296,7 +296,7 @@ router.post('/booking/:token/cancel', requireVendor, async (req, res) => {
   if (!r.changes) return res.status(409).json({ error: 'This booking can’t be canceled here. Reply to your confirmation email to reach the truck.' });
   const b = await get('SELECT * FROM catering_bookings WHERE public_token = ?', [String(req.params.token)]);
   crm.catering.canceled(b);
-  if (v.email) sendMail({ to: v.email, replyTo: b.host_email, subject: `Catering request withdrawn: ${fmtDate(b.event_date)}`, text: `${b.host_name} withdrew their request for ${fmtDate(b.event_date)}. The date is free again.`, html: `<p>${escHtml(b.host_name)} withdrew their request for ${escHtml(fmtDate(b.event_date))}. The date is free again.</p>` }).catch(() => {});
+  if (v.email) mailLater({ to: v.email, replyTo: b.host_email, subject: `Catering request withdrawn: ${fmtDate(b.event_date)}`, text: `${b.host_name} withdrew their request for ${fmtDate(b.event_date)}. The date is free again.`, html: `<p>${escHtml(b.host_name)} withdrew their request for ${escHtml(fmtDate(b.event_date))}. The date is free again.</p>` }).catch(() => {});
   res.json({ ok: true });
 });
 
@@ -360,7 +360,7 @@ async function decide(req, res, accept) {
   const link = pageUrl(req, `/catering/b/${b.public_token}`);
   const reason = String((req.body || {}).message || '').trim().slice(0, 400);
   if (accept) {
-    sendMail({
+    mailLater({
       to: b.host_email, replyTo: v.email || undefined,
       subject: `Confirmed: ${v.business_name} on ${fmtDate(b.event_date)}`,
       text: `Good news, ${b.host_name}: ${v.business_name} confirmed ${fmtDate(b.event_date)} at ${fmtTime(b.start_time)} for ${b.guests} guests. Total ${Q.money(b.total_cents)}.\n${d.finalCountDays ? `Final guest count is due ${d.finalCountDays} days before the event.\n` : ''}${reason ? '\n' + reason + '\n' : ''}\nYour booking: ${link}\nReply to this email to reach ${v.business_name}.`,
@@ -370,7 +370,7 @@ async function decide(req, res, accept) {
         <p><a href="${link}">Your booking</a></p><p style="color:#666">Reply to this email to reach ${escHtml(v.business_name)}.</p>`,
     }).catch(() => {});
   } else {
-    sendMail({
+    mailLater({
       to: b.host_email, replyTo: v.email || undefined,
       subject: `${v.business_name} can’t make ${fmtDate(b.event_date)}`,
       text: `Sorry, ${b.host_name}: ${v.business_name} can't take your event on ${fmtDate(b.event_date)}.${reason ? '\n\n' + reason : ''}\n\nReply to this email to ask about another date.`,
@@ -390,7 +390,7 @@ async function expireHolds() {
     const r = await run("UPDATE catering_bookings SET status = 'expired', updated_at = ? WHERE id = ? AND status = 'requested'", [now, b.id]);
     if (!r.changes) continue;
     crm.catering.expired(b);
-    sendMail({
+    mailLater({
       to: b.host_email, replyTo: b.owner_email || undefined,
       subject: `Your hold with ${b.business_name} for ${fmtDate(b.event_date)} has ended`,
       text: `${b.business_name} hasn't confirmed your request for ${fmtDate(b.event_date)} yet, so the 24-hour hold has ended. They can still confirm if the date is free; reply to this email to check in.`,

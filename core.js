@@ -5,6 +5,7 @@
  */
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const fs = require('fs');
 const crypto = require('crypto');
 
 const ROOT_DOMAIN = (process.env.ROOT_DOMAIN || 'onlinekitchen.fyi').trim().toLowerCase();
@@ -309,8 +310,8 @@ async function pinLookup(vendorId, pin) {
 }
 
 /** Adds a line to an order's service record. Never throws: the record must not block the kitchen. */
-function logOrderEvent(vendorId, orderId, event, actor) {
-  return run('INSERT INTO order_events (vendor_id, order_id, event, actor, at) VALUES (?, ?, ?, ?, ?)', [vendorId, orderId, event, actor, Date.now()]).catch((e) => console.error('order_events:', e.message));
+function logOrderEvent(vendorId, orderId, event, actor, at) {
+  return run('INSERT INTO order_events (vendor_id, order_id, event, actor, at) VALUES (?, ?, ?, ?, ?)', [vendorId, orderId, event, actor, at || Date.now()]).catch((e) => console.error('order_events:', e.message));
 }
 
 /* ---------- one-time tokens (email verify, password reset, login handoff) ---------- */
@@ -369,7 +370,12 @@ function staffOnline(vendorId) {
 }
 
 /** staffOnly=true sends only to logged-in owner/staff screens (new orders contain customer names). */
+// Things that react to what the pages are told (the limp-mode menu file, for one).
+const broadcastHooks = [];
+function onBroadcast(fn) { broadcastHooks.push(fn); }
+
 function broadcast(vendorId, type, payload, staffOnly = false) {
+  for (const fn of broadcastHooks) { try { fn(vendorId, type); } catch (e) { /* a hook never breaks the page update */ } }
   const set = clients.get(vendorId);
   if (!set) return 0;
   const msg = `data: ${JSON.stringify({ type, payload })}\n\n`;
@@ -405,9 +411,48 @@ async function addColumn(table, col, def) {
   if (!cols.some((c) => c.name === col)) await run(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
 }
 
+/* ---------- versioned database changes ----------
+   Every change to the tables gets the next number here, with one line saying what it is. On startup,
+   if this code is newer than the database, a full copy of the database is saved first (backups/),
+   then the changes run, then the new number is recorded. Changes only ever add (tables, columns,
+   indexes), so older code still runs on a newer database: a rollback never needs a restore. */
+const SCHEMA_CHANGES = [
+  [1, 'Everything up to the first versioned release'],
+  [2, 'Durability: mail retry outbox; device and big-order check on orders'],
+];
+const SCHEMA_VERSION = SCHEMA_CHANGES[SCHEMA_CHANGES.length - 1][0];
+const BACKUP_DIR = process.env.BACKUP_DIR_LOCAL || path.join(path.dirname(DB_FILE === ':memory:' ? path.join(__dirname, 'x') : DB_FILE), 'backups');
+
+async function schemaVersion() {
+  await exec('CREATE TABLE IF NOT EXISTS schema_changes (version INTEGER PRIMARY KEY, what TEXT NOT NULL, applied_at INTEGER NOT NULL)');
+  const r = await get('SELECT MAX(version) AS v FROM schema_changes');
+  return (r && r.v) || 0;
+}
+
 async function ensureSchema() {
   await run('PRAGMA journal_mode = WAL').catch(() => {});
   await run('PRAGMA busy_timeout = 5000').catch(() => {});
+  const from = await schemaVersion();
+  const hasData = !!(await get("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'vendors'"));
+  if (from < SCHEMA_VERSION && hasData && DB_FILE !== ':memory:') {
+    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    const file = path.join(BACKUP_DIR, `before-v${SCHEMA_VERSION}-${new Date().toISOString().replace(/[:.]/g, '-')}.sqlite`);
+    await run(`VACUUM INTO '${file.replace(/'/g, "''")}'`); // a complete, consistent copy, taken while nothing else runs
+    console.log(`Database changes ${from} → ${SCHEMA_VERSION}: saved a copy first at ${file}`);
+    // Keep the last 10 of these; nightly backups (scripts/backup.sh) cover the rest.
+    fs.readdirSync(BACKUP_DIR).filter((f) => f.startsWith('before-v'))
+      .sort((a, b) => fs.statSync(path.join(BACKUP_DIR, b)).mtimeMs - fs.statSync(path.join(BACKUP_DIR, a)).mtimeMs).slice(10)
+      .forEach((f) => { try { fs.unlinkSync(path.join(BACKUP_DIR, f)); } catch (e) {} });
+  } else if (from > SCHEMA_VERSION) {
+    console.warn(`The database is at change ${from}, newer than this code (${SCHEMA_VERSION}). That's fine after a rollback: newer tables and columns are simply unused.`);
+  }
+  await applySchema();
+  for (const [v, what] of SCHEMA_CHANGES) {
+    if (v > from) await run('INSERT OR IGNORE INTO schema_changes (version, what, applied_at) VALUES (?, ?, ?)', [v, what, Date.now()]);
+  }
+}
+
+async function applySchema() {
 
   // Original table (unchanged), so existing databases keep working.
   await exec(`CREATE TABLE IF NOT EXISTS vendors (
@@ -532,6 +577,12 @@ async function ensureSchema() {
   await addColumn('orders', 'pickup_at', 'INTEGER');
   await addColumn('orders', 'fire_at', 'INTEGER');
   await addColumn('orders', 'stock_returned', 'INTEGER NOT NULL DEFAULT 0');
+  // Prank protection: which phone placed it (a hash of a random id the page keeps), and big unpaid
+  // orders the kitchen confirms with the customer before cooking.
+  await addColumn('orders', 'device', 'TEXT');
+  await addColumn('orders', 'check_first', 'INTEGER NOT NULL DEFAULT 0');
+  await addColumn('orders', 'check_ok_at', 'INTEGER');
+  await exec('CREATE INDEX IF NOT EXISTS idx_orders_device ON orders (vendor_id, device, status)');
   await exec(`CREATE TABLE IF NOT EXISTS reward_cards (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     vendor_id INTEGER NOT NULL,
@@ -609,6 +660,19 @@ async function ensureSchema() {
   )`);
   await exec('CREATE INDEX IF NOT EXISTS idx_crm_events_client ON crm_events (client_id, at)');
   await exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_crm_events_ref ON crm_events (vendor_id, type, ref) WHERE ref IS NOT NULL');
+  // Email that must arrive even if the mail service is briefly down: kept here and retried.
+  await exec(`CREATE TABLE IF NOT EXISTS mail_outbox (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    idem_key TEXT NOT NULL UNIQUE,          -- sent with every try, so the mail service delivers it once
+    payload TEXT NOT NULL,                  -- {to, subject, html, text, replyTo, headers}
+    status TEXT NOT NULL DEFAULT 'queued',  -- queued | sent | failed | stale
+    attempts INTEGER NOT NULL DEFAULT 1,
+    next_at INTEGER NOT NULL,
+    stale_at INTEGER,                       -- some messages are useless late (a "nobody's watching" alert)
+    last_error TEXT,
+    created_at INTEGER NOT NULL, sent_at INTEGER
+  )`);
+  await exec('CREATE INDEX IF NOT EXISTS idx_mail_outbox_due ON mail_outbox (status, next_at)');
   await exec(`CREATE TABLE IF NOT EXISTS crm_outbox (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     vendor_id INTEGER NOT NULL,
@@ -809,6 +873,7 @@ function orderShape(o) {
     textMe: !!o.customer_phone,
     allergy: o.allergy || '',
     allergyAck: !!o.allergy_ack_at,
+    checkFirst: !!o.check_first && !o.check_ok_at, // big unpaid order: confirm it's real before cooking
     rewardCents: o.reward_cents || 0,   // a punch-card free item on this ticket
     pickupAt: o.pickup_at || null,      // scheduled pickup time (null = as soon as possible)
     fireAt: o.fire_at || null,          // when the kitchen should start it
@@ -844,6 +909,6 @@ module.exports = {
   refreshAllWaits,
   WAIT_MAX,
   createToken, consumeToken,
-  sseAdd, broadcast, disconnectVendor, closeAllStreams,
-  ensureSchema, autoCloseOrders, orderShape, integrityCheck, applyRetention,
+  sseAdd, broadcast, onBroadcast, disconnectVendor, closeAllStreams,
+  ensureSchema, SCHEMA_VERSION, autoCloseOrders, orderShape, integrityCheck, applyRetention,
 };

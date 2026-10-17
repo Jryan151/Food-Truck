@@ -10,3 +10,5 @@ new/
 *.txt
 !env_example.txt
 *.save
+limp/
+backups/

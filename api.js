@@ -19,6 +19,7 @@ const schedule = require('./schedule');
 const Deals = require('./public/deals-core');
 const rewards = require('./rewards');
 const inventory = require('./inventory');
+const limp = require('./limp');
 const { run, get, all } = core;
 const { requireVendor, requireRole, getSession, rateLimit } = auth;
 
@@ -154,6 +155,13 @@ function waitFor(state, prepMinutes) {
   const live = state.wait && state.wait.minutes;
   return live ? Math.max(live, Math.min(prepMinutes, core.WAIT_MAX)) : own;
 }
+
+// Prank protection limits (unpaid orders waiting at once, and when a big unpaid order gets a quick check).
+const MAX_OPEN_PER_DEVICE = 3;
+const MAX_OPEN_PER_NETWORK = 8;
+const CHECK_TOTAL = 150;
+const CHECK_ITEMS = 20;
+const clientKeyOk = (b) => /^[A-Za-z0-9_-]{8,64}$/.test(String((b && b.clientKey) || ''));
 
 // Customers get a short window to cancel (or change: cancel and reorder) before the kitchen is
 // committed. Only orders paid at the window: a paid order needs a refund, so that's done in person.
@@ -301,9 +309,25 @@ router.post('/orders', limitOrders, requireVendor, async (req, res) => {
     if (!phone) return res.status(400).json({ error: 'Please enter a 10-digit US mobile number, or leave it blank.' });
   }
 
+  // Prank protection. Each phone may have a few unpaid orders waiting at once (a page that doesn't say
+  // which phone it is, like a script, shares a slightly larger limit with its whole network).
+  const devRaw = /^[A-Za-z0-9_-]{16,64}$/.test(String(b.device || '')) ? String(b.device) : null;
+  const device = devRaw ? 'd:' + core.sha256(devRaw).slice(0, 24) : 'ip:' + core.sha256(String(req.ip || '')).slice(0, 24);
+  if (!payNow && !nothingDue) {
+    const open = await get(`SELECT COUNT(*) AS n FROM orders WHERE vendor_id = ? AND device = ? AND status = 'Preparing' AND payment_status = 'window' AND created_at > ?`,
+      [v.id, device, Date.now() - 3 * 60 * 60 * 1000]);
+    const cap = devRaw ? MAX_OPEN_PER_DEVICE : MAX_OPEN_PER_NETWORK;
+    if (open.n >= cap && !(clientKeyOk(b) && (await get('SELECT 1 FROM orders WHERE vendor_id = ? AND client_key = ?', [v.id, String(b.clientKey)])))) {
+      return res.status(429).json({ error: `You already have ${open.n} orders waiting. Pick those up first, or order at the window.`, tooMany: true });
+    }
+  }
+  // Big orders paid at the window: the kitchen checks with the customer before cooking.
+  const qtyAll = items.reduce((n, it) => n + it.qty, 0);
+  const checkFirst = !payNow && !nothingDue && (due >= CHECK_TOTAL || qtyAll > CHECK_ITEMS) ? 1 : 0;
+
   // Double-tap proof: the checkout sends its own key. If an order with that key already exists
   // (a second tap, or a retry after the signal dropped), send back that same order instead of a new one.
-  const clientKey = /^[A-Za-z0-9_-]{8,64}$/.test(String(b.clientKey || '')) ? String(b.clientKey) : null;
+  const clientKey = clientKeyOk(b) ? String(b.clientKey) : null;
   const sameOrder = async () => {
     const o = clientKey && (await get('SELECT * FROM orders WHERE vendor_id = ? AND client_key = ?', [v.id, clientKey]));
     if (!o) return false;
@@ -336,9 +360,9 @@ router.post('/orders', limitOrders, requireVendor, async (req, res) => {
   let r;
   try {
     r = await run(
-      `INSERT INTO orders (vendor_id, ticket_no, public_token, customer_name, items_json, notes, total, status, payment_status, customer_phone, client_key, allergy, location, card_id, reward_cents, reward_every, stock_json, pickup_at, fire_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [v.id, row.ticket, token, name, JSON.stringify(items), notes, total, payNow ? 'Pending' : 'Preparing', payNow ? 'pending' : 'window', phone, clientKey, allergy, state.location || null, rw.cardId || null, rw.rewardCents || 0, rw.rewardEvery || null, stockJson,
+      `INSERT INTO orders (vendor_id, ticket_no, public_token, customer_name, items_json, notes, total, status, payment_status, customer_phone, client_key, allergy, location, card_id, reward_cents, reward_every, stock_json, device, check_first, pickup_at, fire_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [v.id, row.ticket, token, name, JSON.stringify(items), notes, total, payNow ? 'Pending' : 'Preparing', payNow ? 'pending' : 'window', phone, clientKey, allergy, state.location || null, rw.cardId || null, rw.rewardCents || 0, rw.rewardEvery || null, stockJson, device, checkFirst,
        // Start it so it's ready at pickup: the order's own cook time, at least 5 and at most 45 minutes ahead.
        pickupAt, pickupAt ? pickupAt - Math.min(45, Math.max(5, prepMinutes)) * 60000 : null, now, now]
     );
@@ -363,6 +387,7 @@ router.post('/orders', limitOrders, requireVendor, async (req, res) => {
     changeUntil: changeUntil(orderRow),
     now: Date.now(),
     rewardCents: rw.rewardCents,
+    checkFirst: !!checkFirst,
   };
   if (rw.token) reply.cardToken = rw.token; // a new punch card, kept on the customer's phone
 
@@ -378,7 +403,9 @@ router.post('/orders', limitOrders, requireVendor, async (req, res) => {
     }
   }
 
-  await sms.notifyNewOrder(v.id, orderShape(orderRow));
+  // The kitchen screen hears it at once; texts and emails go on their own, so a slow or broken text or
+  // mail service never holds up the customer's order.
+  sms.notifyNewOrder(v.id, orderShape(orderRow)).catch(() => {});
   core.refreshWait(v.id);
   res.status(201).json(reply);
 });
@@ -456,15 +483,36 @@ router.get('/owner/orders', staffOrOwner, async (req, res) => {
   res.json({ orders: rows.map(orderShape), now: Date.now() });
 });
 
+// A tap made while the kitchen tablet had no signal arrives later with the time it was really made,
+// so the service record and the kitchen's measured pace stay true. Up to 6 hours back, never ahead.
+const TAP_MAX_AGE = 6 * 60 * 60 * 1000;
+function tappedAt(b, order) {
+  const at = Number(b && b.at), now = Date.now();
+  if (!Number.isFinite(at) || at >= now || now - at > TAP_MAX_AGE) return now;
+  return Math.max(at, order ? order.created_at : 0);
+}
+
 router.patch('/owner/orders/:id', staffOrOwner, async (req, res) => {
   const v = req.tenant.vendor;
   const action = String((req.body || {}).action || '');
   // Allergies: the crew taps to confirm they saw it. Ready and Fulfill wait for that tap.
   if (action === 'ack-allergy') {
+    const o = await get('SELECT created_at FROM orders WHERE id = ? AND vendor_id = ?', [parseInt(req.params.id, 10), v.id]);
+    const at = tappedAt(req.body, o);
     const row = await get('UPDATE orders SET allergy_ack_at = ?, updated_at = ? WHERE id = ? AND vendor_id = ? AND allergy IS NOT NULL AND allergy_ack_at IS NULL RETURNING *',
-      [Date.now(), Date.now(), parseInt(req.params.id, 10), v.id]);
-    if (!row) return res.status(409).json({ error: 'That allergy was already confirmed.' });
-    core.logOrderEvent(v.id, row.id, 'allergy-confirmed', actorOf(req));
+      [at, Date.now(), parseInt(req.params.id, 10), v.id]);
+    if (!row) return res.status(409).json({ error: 'That allergy was already confirmed.', done: true });
+    core.logOrderEvent(v.id, row.id, 'allergy-confirmed', actorOf(req), at);
+    core.broadcast(v.id, 'ORDER_UPDATE', orderShape(row), true);
+    return res.json({ order: orderShape(row) });
+  }
+  if (action === 'ack-check') {
+    const o = await get('SELECT created_at FROM orders WHERE id = ? AND vendor_id = ?', [parseInt(req.params.id, 10), v.id]);
+    const at = tappedAt(req.body, o);
+    const row = await get('UPDATE orders SET check_ok_at = ?, updated_at = ? WHERE id = ? AND vendor_id = ? AND check_first = 1 AND check_ok_at IS NULL RETURNING *',
+      [at, Date.now(), parseInt(req.params.id, 10), v.id]);
+    if (!row) return res.status(409).json({ error: 'That order was already checked.', done: true });
+    core.logOrderEvent(v.id, row.id, 'checked', actorOf(req), at);
     core.broadcast(v.id, 'ORDER_UPDATE', orderShape(row), true);
     return res.json({ order: orderShape(row) });
   }
@@ -474,9 +522,17 @@ router.patch('/owner/orders/:id', staffOrOwner, async (req, res) => {
   const from = action === 'ready' ? ['Preparing'] : ACTIVE;
   const id = parseInt(req.params.id, 10);
   const existing = await get(`SELECT * FROM orders WHERE id = ? AND vendor_id = ? AND status IN (${from.map(() => '?').join(',')})`, [id, v.id, ...from]);
-  if (!existing) return res.status(409).json({ error: 'That order cannot be changed.' });
+  // `current` lets a tablet replaying taps from a signal drop tell "already done" from a real conflict.
+  const conflict = async () => {
+    const now = await get('SELECT status, ticket_no FROM orders WHERE id = ? AND vendor_id = ?', [id, v.id]);
+    return res.status(409).json({ error: 'That order cannot be changed.', current: now ? now.status : null, ticket: now ? now.ticket_no : null });
+  };
+  if (!existing) return conflict();
   if (action !== 'cancel' && existing.allergy && !existing.allergy_ack_at) {
     return res.status(409).json({ error: 'Confirm the allergy on this ticket first.', allergy: true });
+  }
+  if (action === 'ready' && existing.check_first && !existing.check_ok_at) {
+    return res.status(409).json({ error: 'Check this big order with the customer first.', check: true });
   }
 
   // Canceling an order that was paid online refunds the card first. If the refund fails, nothing changes.
@@ -486,12 +542,13 @@ router.patch('/owner/orders/:id', staffOrOwner, async (req, res) => {
     if (!rf.ok) return res.status(502).json({ error: rf.error });
   }
   const closing = next !== 'Ready';
+  const at = tappedAt(req.body, existing);
   const row = await get(
     `UPDATE orders SET status = ?, updated_at = ?${closing ? ', customer_phone = NULL' : ''} WHERE id = ? AND vendor_id = ? AND status IN (${from.map(() => '?').join(',')}) RETURNING *`,
-    [next, Date.now(), id, v.id, ...from]
+    [next, at, id, v.id, ...from]
   );
-  if (!row) return res.status(409).json({ error: 'That order cannot be changed.' });
-  core.logOrderEvent(v.id, row.id, next.toLowerCase(), actorOf(req));
+  if (!row) return conflict();
+  core.logOrderEvent(v.id, row.id, next.toLowerCase(), actorOf(req), at);
   await core.orderClosed(v.id, row.id, next.toLowerCase()); // punch card, stock: one place reacts to every status change
   if (next === 'Ready') sms.notifyReady(v, existing).catch(() => {});
   const order = orderShape(row);
@@ -969,6 +1026,7 @@ router.put('/owner/profile', ownerOnly, async (req, res) => {
     b.ownerName !== undefined ? String(b.ownerName).trim().slice(0, 60) : v.owner_name,
     Date.now(), v.id,
   ]);
+  core.broadcast(v.id, 'PROFILE', { businessName: name }, true);
   res.json({ ok: true });
 });
 
@@ -1126,6 +1184,7 @@ router.post('/owner/account/delete', ownerOnly, limitSensitive, async (req, res)
   // (No BEGIN/COMMIT: the app shares one SQLite connection, so a transaction here could swallow
   // other customers' requests. Every delete below is safe to repeat.)
   await run('DELETE FROM vendors WHERE id = ?', [v.id]);
+  limp.removeFor(v);
   for (const t of ['sessions', 'tokens', 'orders', 'locations', 'store_state']) {
     await run(`DELETE FROM ${t} WHERE vendor_id = ?`, [v.id]);
   }
@@ -1187,7 +1246,10 @@ router.post('/admin/vendors/:id', requireAdmin, async (req, res) => {
   }
   if (!sets.length) return res.status(400).json({ error: 'Nothing to change.' });
   params.push(parseInt(req.params.id, 10));
+  const before = await get('SELECT * FROM vendors WHERE id = ?', [parseInt(req.params.id, 10)]);
   const r = await run(`UPDATE vendors SET ${sets.join(', ')} WHERE id = ?`, params);
+  // Keep the limp-mode files in step: a suspended truck or an old domain shows nothing.
+  if (before) { limp.removeFor(before); limp.write(before.id).catch(() => {}); }
   res.json({ ok: r.changes > 0 });
 });
 

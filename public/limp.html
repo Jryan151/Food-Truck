@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Order at the window</title>
+    <meta name="robots" content="noindex">
+    <meta name="theme-color" content="#0a0a0b">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+    <script src="/theme.js"></script>
+    <link rel="stylesheet" href="/theme.css">
+    <link rel="stylesheet" href="/ok.css">
+    <style>
+        [hidden] { display: none !important; }
+        .lp-badge { border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); background: color-mix(in srgb, var(--warn) 10%, transparent); color: var(--warn); border-radius: 12px; padding: 9px 12px; font-size: 12px; font-weight: 700; text-align: center; }
+        .lp-where { font-size: 13px; color: var(--z300); margin-top: 6px; }
+        .lp-cat { font-size: 11px; font-weight: 700; letter-spacing: .12em; color: var(--z500); margin: 18px 0 6px; text-transform: uppercase; }
+        .lp-item { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--z900); }
+        .lp-item:first-of-type { border-top: 0; }
+        .lp-item b { font-size: 14px; color: var(--z100); }
+        .lp-item p { font-size: 12px; color: var(--z400); margin: 2px 0 0; }
+        .lp-item .p { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--z100); }
+        .lp-item.out { opacity: .5; }
+    </style>
+</head>
+<body>
+<!-- Served by the web server itself when the app can't be reached (see DEPLOY.md, "Limp mode").
+     It shows the truck's last saved public menu and checks back until online ordering returns. -->
+<main class="ok-wrap">
+    <div>
+        <h1 class="ok-h1" id="name" style="margin-bottom:4px">Order at the window</h1>
+        <div class="lp-where" id="where" hidden></div>
+    </div>
+    <div class="lp-badge" id="badge">Online ordering is down for a moment · Order at the window</div>
+    <p class="ok-lede" id="lede">We’ll switch back by ourselves when online ordering returns.</p>
+    <div id="menu"></div>
+</main>
+<script>
+(function () {
+    'use strict';
+    var $ = function (id) { return document.getElementById(id); };
+    var es = (navigator.language || '').slice(0, 2) === 'es';
+    var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+    var money = function (n) { return '$' + Number(n || 0).toFixed(2); };
+    if (es) {
+        $('badge').textContent = 'Pedidos en línea caídos por un momento · Pide en la ventanilla';
+        $('lede').textContent = 'Volveremos solos cuando regresen los pedidos en línea.';
+    }
+    fetch('/limp.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) {
+        if (!d || !d.menu) return;
+        document.title = d.businessName + (es ? ' · Pide en la ventanilla' : ' · Order at the window');
+        $('name').textContent = d.businessName;
+        if (d.state && d.state.location) { $('where').hidden = false; $('where').textContent = '📍 ' + d.state.location; }
+        if (d.state && d.state.status === 'closed') $('badge').textContent = es ? 'Cerrado ahora' : 'Closed right now';
+        var at = '';
+        try { at = new Date(d.at).toLocaleTimeString(es ? 'es' : 'en-US', { hour: 'numeric', minute: '2-digit', timeZone: d.timezone || undefined }); } catch (e) {}
+        $('lede').textContent = es
+            ? 'Este es el menú de las ' + at + '. Precios y disponibilidad pueden haber cambiado.'
+            : 'Here’s the menu as of ' + at + '. Prices and what’s left may have changed.';
+        var cats = [], by = {};
+        d.menu.forEach(function (m) { var c = m.category || ''; if (!by[c]) { by[c] = []; cats.push(c); } by[c].push(m); });
+        $('menu').innerHTML = cats.map(function (c) {
+            return (c ? '<div class="lp-cat">' + esc(c) + '</div>' : '<div class="lp-cat">' + (es ? 'Menú' : 'Menu') + '</div>') + by[c].map(function (m) {
+                var price = m.salePrice > 0 && m.salePrice < m.price ? m.salePrice : m.price;
+                return '<div class="lp-item' + (m.soldOut ? ' out' : '') + '"><div><b>' + esc(m.name) + '</b>' + (m.desc ? '<p>' + esc(m.desc) + '</p>' : '') + '</div>' +
+                    '<div class="p">' + (m.soldOut ? (es ? 'Agotado' : 'Sold out') : money(price)) + '</div></div>';
+            }).join('');
+        }).join('');
+    }).catch(function () { /* nothing saved: the badge says what to do */ });
+    // Back by itself: as soon as the app answers, open the real page.
+    setInterval(function () {
+        fetch('/api/health', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (h) { if (h && h.ok) location.reload(); }).catch(function () {});
+    }, 20000);
+})();
+</script>
+</body>
+</html>

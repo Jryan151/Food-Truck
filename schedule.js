@@ -11,7 +11,7 @@ const core = require('./core');
 const auth = require('./auth');
 const Insights = require('./public/insights-core');
 const { run, get, all } = core;
-const { requireVendor, requireRole, rateLimit, sendMail, mailConfigured, escHtml, EMAIL_RE } = auth;
+const { requireVendor, requireRole, rateLimit, mailLater, mailConfigured, escHtml, EMAIL_RE } = auth;
 
 const router = express.Router();
 const ownerOnly = [requireVendor, requireRole('owner')];
@@ -181,7 +181,7 @@ router.post('/follow', requireVendor, limitFollow, async (req, res) => {
   }
   const link = `${origin(req)}/schedule?follow=${token}`;
   const confirmed = existing && existing.confirmed_at;
-  sendMail({
+  mailLater({
     to: email,
     replyTo: v.email || undefined,
     subject: confirmed ? `Your ${v.business_name} updates` : `Confirm: follow ${v.business_name}`,
@@ -325,10 +325,11 @@ async function mailFollowers(req, v, list, subject, bodyFor) {
     await run('UPDATE followers SET token_hash = ? WHERE id = ?', [sha(token), f.id]);
     const manage = `${origin(req)}/schedule?follow=${token}`;
     const b = bodyFor(f);
-    await sendMail({
+    // "We're open near you" is no use tomorrow: retried for two hours at most.
+    await mailLater({
       to: f.email, replyTo: v.email || undefined, subject, text: b.text + `\n\nChange what you get or unfollow: ${manage}`, html: mailShell(v, b.html, manage),
       headers: { 'List-Unsubscribe': `<${origin(req)}/api/schedule/follow/${token}/unsubscribe>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
-    }).catch(() => {});
+    }, { staleAfterMs: 2 * 60 * 60 * 1000 }).catch(() => {});
   }
 }
 

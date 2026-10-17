@@ -27,6 +27,8 @@ const catering = require('./catering');
 const schedule = require('./schedule');
 const rewards = require('./rewards');
 const crm = require('./crm');
+const limp = require('./limp');
+const watch = require('./watch');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -201,6 +203,14 @@ app.get('/sw.js', (req, res) => {
   sendPage(res, 'sw.js');
 });
 app.get('/favicon.ico', (req, res) => sendPage(res, 'favicon.png'));
+// Limp mode: the truck's last-known public menu. Caddy serves this same file when the app is down.
+app.get('/limp.json', (req, res) => {
+  const body = limp.readFor(req.tenant.host);
+  res.set('Cache-Control', 'no-store');
+  if (!body) return res.status(404).json({ error: 'Not found' });
+  res.type('application/json').send(body);
+});
+app.get('/limp.html', (req, res) => sendPage(res, 'limp.html'));
 
 /* ---------- menu photos ---------- */
 const IMG_EXT = new Set(['.jpg', '.png', '.webp']);
@@ -253,7 +263,7 @@ async function dailyChecks() {
       console.error('DATABASE INTEGRITY PROBLEM:', result);
       report(new Error('Database integrity check failed: ' + result));
       if (process.env.ADMIN_EMAIL) {
-        auth.sendMail({
+        auth.mailLater({
           to: process.env.ADMIN_EMAIL,
           subject: 'Online Kitchen: database check found a problem',
           text: `The nightly database check reported:\n\n${result}\n\nRestore the most recent good backup (see DEPLOY.md) and check the server's disk.`,
@@ -263,6 +273,7 @@ async function dailyChecks() {
     }
     const r = await core.applyRetention();
     if (r.ordersCleared || r.eventsRemoved) console.log('Retention:', r);
+    await watch.daily(auth.mailLater);
   } catch (e) { console.error('Daily checks failed:', e.message); }
 }
 
@@ -278,6 +289,9 @@ core.ensureSchema()
     setInterval(dailyChecks, 24 * 60 * 60 * 1000).unref();
     // The line keeps aging between taps: refresh the wait customers see once a minute.
     setInterval(() => core.refreshAllWaits().catch(() => {}), 60 * 1000).unref();
+    limp.start();
+    // Email that couldn't go out (mail service down) is retried here.
+    setInterval(() => auth.retryMail().catch((e) => console.error('mail retry:', e.message)), 60 * 1000).unref();
   })
   .catch((e) => { console.error('Startup failed:', e); report(e); process.exit(1); });
 

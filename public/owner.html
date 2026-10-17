@@ -141,6 +141,7 @@
                     <button data-action="filter" data-filter="Canceled" id="filterCanceled" class="px-4 py-1.5 rounded-lg text-[11px] font-bold text-zinc-400 hover:text-zinc-200 transition">Canceled</button>
                 </div>
                 <button data-action="go-wait" id="waitChip" class="mb-3 text-[11px] font-semibold text-zinc-400 bg-zinc-950 border border-zinc-800 rounded-full px-3 py-1.5" style="display:none"></button>
+                <div id="offlineBar" class="offline-bar" role="status" style="display:none"></div>
                 <div id="crewNoteBar" class="rounded-xl p-3 mb-3 text-sm font-semibold" style="display:none;background:var(--ink);color:var(--on-ink)" role="status"></div>
                 <div id="batchBar" class="mb-3" style="display:none"></div>
                 <div class="space-y-3 relative" id="ownerOrdersList"></div>
@@ -647,12 +648,91 @@
             var opts = { method: method, headers: {}, cache: 'no-store' };
             if (body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
             return fetch(url, opts).then(function (r) {
-                return r.json().catch(function () { return {}; }).then(function (data) {
+                return r.json().catch(function () { return null; }).then(function (data) {
+                    // No JSON from a 5xx means our server never answered (the proxy did): same as no signal.
+                    if (data === null && r.status >= 500) { netDown(); return { ok: false, status: 0, data: { error: 'Connection problem. Please try again.' } }; }
+                    netUp();
                     if (r.status === 401 && app.me) { sessionEnded('Your session ended. Please log in again.'); }
-                    return { ok: r.ok, status: r.status, data: data };
+                    return { ok: r.ok, status: r.status, data: data || {} };
                 });
-            }).catch(function () { return { ok: false, status: 0, data: { error: 'Connection problem. Please try again.' } }; });
+            }).catch(function () { netDown(); return { ok: false, status: 0, data: { error: 'Connection problem. Please try again.' } }; });
         }
+
+        /* ---------- no signal: the kitchen keeps working ----------
+           Taps made without signal are saved on this tablet with the time they were made, shown at once,
+           and sent in order when signal returns. The last ticket list is kept too, so a reload with no
+           signal still shows the line. */
+        var TAPS_KEY = 'ok_taps_' + location.host, SNAP_KEY = 'ok_kitchen_' + location.host;
+        function readTaps() { try { return JSON.parse(localStorage.getItem(TAPS_KEY) || '[]') || []; } catch (e) { return []; } }
+        function writeTaps() { try { if (app.taps.length) localStorage.setItem(TAPS_KEY, JSON.stringify(app.taps)); else localStorage.removeItem(TAPS_KEY); } catch (e) {} renderOffline(); }
+        app.taps = readTaps();
+        function netDown() { if (!app.offSince) { app.offSince = Date.now(); renderOffline(); } }
+        function netUp() { if (app.offSince) { app.offSince = 0; renderOffline(); } if (app.taps.length) setTimeout(flushTaps, 0); }
+        function saveSnapshot() {
+            if (!app.me || app.filter !== 'Active' || window.__FT_DEMO) return;
+            try { localStorage.setItem(SNAP_KEY, JSON.stringify({ at: Date.now(), offset: app.clockOffset || 0, me: app.me, pub: app.pub, orders: app.orders, menu: app.menu, state: app.state })); } catch (e) {}
+        }
+        function readSnapshot() { try { var s = JSON.parse(localStorage.getItem(SNAP_KEY) || 'null'); return s && Date.now() - s.at < 18 * 3600000 ? s : null; } catch (e) { return null; } }
+        function forgetDevice() { try { localStorage.removeItem(SNAP_KEY); localStorage.removeItem(TAPS_KEY); } catch (e) {} app.taps = []; }
+        function tapWord(act) { return { ready: 'Ready', fulfill: 'Fulfilled', cancel: 'Canceled', 'ack-allergy': 'Allergy confirmed', 'ack-check': 'Checked' }[act] || act; }
+        // Show a saved tap on the ticket list as if it had gone through.
+        function applyTap(t) {
+            var i = -1;
+            app.orders.forEach(function (o, k) { if (o.id === t.id) i = k; });
+            if (i < 0) return;
+            var o = app.orders[i];
+            if (t.act === 'ack-allergy') o.allergyAck = true;
+            else if (t.act === 'ack-check') o.checkFirst = false;
+            else if (t.act === 'ready') o.status = 'Ready';
+            else if (app.filter === 'Active') app.orders.splice(i, 1);
+            o.saved = true;
+        }
+        function queueTap(id, act, at) {
+            var o = app.orders.find(function (x) { return x.id === id; });
+            var t = { id: id, act: act, at: at, ticket: o ? o.ticket : '' };
+            app.taps.push(t); applyTap(t); writeTaps(); renderOrders(); saveSnapshot();
+        }
+        function renderOffline() {
+            var bar = $('offlineBar'); if (!bar) return;
+            var n = app.taps.length, off = !!app.offSince;
+            if (!n && !off) { bar.style.display = 'none'; return; }
+            bar.style.display = 'block';
+            bar.className = 'offline-bar' + (off ? '' : ' sending');
+            bar.innerHTML = off
+                ? '<b>No signal since ' + esc(fmtTime(app.offSince)) + '.</b> Keep working: ' + (n ? n + ' tap' + (n === 1 ? ' is' : 's are') + ' saved on this tablet and will send by themselves.' : 'taps are saved on this tablet and send when signal returns.') +
+                  (app.snapAt ? ' Tickets as of ' + esc(fmtTime(app.snapAt)) + '.' : '')
+                : '<b>Sending ' + n + ' saved tap' + (n === 1 ? '' : 's') + '…</b>';
+        }
+        function flushTaps() {
+            if (app.flushing || !app.taps.length || !app.me) return;
+            app.flushing = true;
+            var sent = 0, notes = [];
+            (function next() {
+                var t = app.taps[0];
+                if (!t) return done();
+                api('PATCH', '/api/owner/orders/' + t.id, { action: t.act, at: t.at }).then(function (r) {
+                    if (r.status === 0) return done(true);            // still no signal: try again shortly
+                    if (r.status === 401) { app.flushing = false; return; }
+                    if (r.ok) sent++;
+                    else if (r.status === 409) {
+                        var cur = r.data.current, want = t.act === 'ready' ? ['Ready', 'Fulfilled'] : t.act === 'fulfill' ? ['Fulfilled'] : t.act === 'cancel' ? ['Canceled'] : null;
+                        // Already that way (the tap went through before the signal dropped): nothing to say.
+                        if (!(r.data.done || (want && want.indexOf(cur) >= 0))) notes.push('#' + (r.data.ticket || t.ticket) + ': not marked ' + tapWord(t.act) + (cur ? ', it was already ' + cur : '') + '.');
+                    } else notes.push('#' + t.ticket + ': ' + (r.data.error || 'not saved.'));
+                    app.taps.shift(); writeTaps();
+                    next();
+                });
+            })();
+            function done(again) {
+                app.flushing = false;
+                if (again) { setTimeout(flushTaps, 8000); return; }
+                if (sent) toast('Back online · ' + sent + ' saved tap' + (sent === 1 ? '' : 's') + ' sent.');
+                if (notes.length) setTimeout(function () { alert('While the tablet had no signal:\n\n' + notes.join('\n')); }, 300);
+                loadOrders();
+            }
+        }
+        window.addEventListener('online', function () { if (app.me) { flushTaps(); loadOrders(); } });
+        setInterval(function () { if (app.me && app.taps.length && !app.flushing) flushTaps(); else if (app.me && app.offSince && !document.hidden) loadOrders(); }, 10000);
         function say(id, msg, good) {
             var el = $(id); if (!el) return;
             el.textContent = msg || '';
@@ -724,7 +804,7 @@
             $('pinLabel').textContent = pinOnly ? 'Owner PIN' : 'Your crew PIN';
             $('btn-back-email').style.display = pinOnly ? 'none' : 'inline';
         }
-        function sessionEnded(msg) { showLogin(msg); }
+        function sessionEnded(msg) { forgetDevice(); showLogin(msg); }
 
         function applyPublic(d) {
             app.pub = d;
@@ -778,11 +858,26 @@
         }
 
         function boot() {
-            fetch('/api/vendor-data', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+            fetch('/api/vendor-data', { cache: 'no-store' }).then(function (r) {
+                if (r.status >= 500 && r.status !== 503) throw new Error('down');
+                return r.json().then(function (d) { return r.ok ? d : null; }, function () { throw new Error('down'); });
+            }).then(function (d) {
                 if (!d || d.isDemo) { document.body.innerHTML = '<div class="p-8 text-center text-zinc-400">We could not find this page.</div>'; return; }
                 applyPublic(d);
                 return loadMe().then(function (ok) { if (ok) enterDashboard(); else showLogin(); });
-            }).catch(function () { document.body.innerHTML = '<div class="p-8 text-center text-zinc-400">Could not load. Please refresh.</div>'; });
+            }).catch(function () {
+                var snap = readSnapshot();
+                if (!snap) { document.body.innerHTML = '<div class="p-8 text-center text-zinc-400">No signal, and nothing saved on this device yet. Please refresh when you have signal.</div>'; return; }
+                // No signal: open the kitchen as it was, keep taps on the tablet, and reload once the server answers.
+                applyPublic(snap.pub); app.me = snap.me; app.role = snap.me.role;
+                app.clockOffset = snap.offset; app.snapAt = snap.at; app.offSince = Date.now();
+                app.orders = snap.orders || []; app.menu = snap.menu || []; app.state = snap.state || app.state;
+                app.taps.forEach(applyTap);
+                enterDashboard(); renderOrders(); renderOffline();
+                var tries = setInterval(function () {
+                    fetch('/api/health', { cache: 'no-store' }).then(function (r) { if (r.ok) { clearInterval(tries); location.reload(); } }).catch(function () {});
+                }, 10000);
+            });
 
             fetch('/api/plans').then(function (r) { return r.json(); }).then(function (d) { if (d && d.pro) { app.proPrice = d.pro.price; app.beta = d.beta !== false; renderPlan(); if (app.pay) renderPayments(); if (app.smsSt) renderSms(); } }).catch(function () {});
 
@@ -914,7 +1009,8 @@
             return api('GET', '/api/owner/orders?status=' + encodeURIComponent(app.filter)).then(function (r) {
                 if (r.ok) {
                     if (r.data.now) app.clockOffset = r.data.now - Date.now(); // time tickets by the server's clock
-                    app.orders = r.data.orders || []; renderOrders(); if (app.orders.length) setFlag('test');
+                    app.orders = r.data.orders || []; app.taps.forEach(applyTap); app.snapAt = 0;
+                    renderOrders(); saveSnapshot(); if (app.orders.length) setFlag('test');
                 }
             });
         }
@@ -1001,15 +1097,16 @@
                 var color = app.filter === 'Fulfilled' ? 'text-emerald-400' : app.filter === 'Canceled' ? 'text-rose-400' : (ready ? 'text-blue-400' : 'text-amber-500');
                 var buttons = '', active = app.filter === 'Active';
                 var age = active ? ageInfo(o) : null;
-                var needAck = !!(o.allergy && !o.allergyAck);
+                var needAck = !!(o.allergy && !o.allergyAck), needCheck = !!o.checkFirst && active;
+                var check = !needCheck ? '' : '<button data-action="order" data-act="ack-check" data-id="' + o.id + '" class="check-first">BIG ORDER, PAYING AT THE WINDOW · check with ' + esc(o.name) + ' before cooking · tap when confirmed</button>';
                 var allergy = !o.allergy ? '' : needAck
                     ? '<button data-action="order" data-act="ack-allergy" data-id="' + o.id + '" class="w-full text-left rounded-lg px-3 py-2.5 text-xs font-extrabold" style="border:2px solid var(--bad);color:var(--bad);background:color-mix(in srgb, var(--bad) 10%, transparent)">⚠ ALLERGY: ' + esc(o.allergy).toUpperCase() + ' · tap to confirm</button>'
                     : '<div class="rounded-lg px-3 py-2 text-xs font-bold" style="border:1px solid var(--bad);color:var(--bad)">⚠ Allergy: ' + esc(o.allergy) + ' · confirmed</div>';
                 if (active) {
-                    var lockReady = ready || needAck;
+                    var lockReady = ready || needAck || needCheck;
                     buttons = '<div class="flex gap-2 pt-2 border-t border-zinc-800/80">' +
                         '<button data-action="order" data-act="cancel" data-id="' + o.id + '" class="bg-zinc-950 text-rose-400 border border-rose-500/30 px-3 py-2 rounded-lg text-xs font-medium">Cancel</button>' +
-                        '<button data-action="order" data-act="ready" data-id="' + o.id + '" class="flex-1 ' + (lockReady ? 'bg-zinc-800 text-zinc-500' : 'bg-blue-600 hover:bg-blue-500 text-white') + ' py-2 rounded-lg text-xs font-bold shadow-lg transition"' + (lockReady ? ' disabled' : '') + '>' + (ready ? 'Marked Ready ✓' : needAck ? 'Allergy first' : 'Mark Ready') + '</button>' +
+                        '<button data-action="order" data-act="ready" data-id="' + o.id + '" class="flex-1 ' + (lockReady ? 'bg-zinc-800 text-zinc-500' : 'bg-blue-600 hover:bg-blue-500 text-white') + ' py-2 rounded-lg text-xs font-bold shadow-lg transition"' + (lockReady ? ' disabled' : '') + '>' + (ready ? 'Marked Ready ✓' : needAck ? 'Allergy first' : needCheck ? 'Check first' : 'Mark Ready') + '</button>' +
                         '<button data-action="order" data-act="fulfill" data-id="' + o.id + '" class="flex-1 ' + (needAck ? 'bg-zinc-800 text-zinc-500' : 'bg-emerald-600 hover:bg-emerald-500 text-white') + ' py-2 rounded-lg text-xs font-bold shadow-lg"' + (needAck ? ' disabled' : '') + '>Fulfill ✓</button></div>';
                 }
                 var items = (o.items || []).map(function (i) { return esc(i.qty + 'x ' + i.name); }).join('<br>');
@@ -1027,8 +1124,10 @@
                     (o.pickupAt ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full border border-zinc-300 text-zinc-100">🕑 PICKUP ' + esc(fmtTime(o.pickupAt)) + '</span>' : '') +
                     '</div>' +
                     (o.notes ? '<div class="text-[11px] text-zinc-400 mt-1 whitespace-pre-line">Note: ' + esc(o.notes) + '</div>' : '') +
-                    '<div class="text-[10px] ' + color + ' mt-1 font-semibold">' + esc(o.status) + '</div></div>' +
-                    '<span class="font-bold text-emerald-400">' + money(o.total) + '</span></div>' + allergy + buttons + '</div>';
+                    '<div class="text-[10px] ' + color + ' mt-1 font-semibold">' + esc(o.status) + (o.saved ? ' <span class="saved-tag">saved on tablet</span>' : '') +
+                    ' <button data-action="order-history" data-id="' + o.id + '" class="hist-link">History</button></div>' +
+                    '<div id="hist-' + o.id + '" class="hist-box"' + (app.hist && app.hist[o.id] ? '>' + app.hist[o.id] : ' style="display:none">') + '</div></div>' +
+                    '<span class="font-bold text-emerald-400">' + money(o.total) + '</span></div>' + check + allergy + buttons + '</div>';
             }).join('') + (later.length ? '<div class="later-box"><div class="later-head">LATER · ' + later.length + ' SCHEDULED</div>' + later.map(laterRow).join('') + '</div>' : '');
         }
 
@@ -1036,10 +1135,33 @@
             var ord = app.orders.find(function (o) { return o.id === id; });
             var paid = ord && ord.payment === 'paid';
             if (act === 'cancel' && !confirm(paid ? 'Cancel this order and refund the customer\'s card in full?' : 'Cancel this order?')) return;
+            if (act === 'ack-check' && !confirm('Big order: ' + (ord ? ord.summary + ', ' + money(ord.total) : '') + '\n\nConfirmed with the customer that it’s real?')) return;
             if (act === 'ack-allergy' && !confirm('Allergy: ' + (ord ? ord.allergy : '') + '\n\nConfirm the kitchen has seen this and is preparing the order safely?')) return;
-            api('PATCH', '/api/owner/orders/' + id, { action: act }).then(function (r) {
+            var at = serverNow();
+            if (paid && act === 'cancel' && (app.offSince || app.taps.length)) { alert('Canceling a paid order refunds the card, so it needs signal. Try again once the tablet is back online.'); return; }
+            // Taps already waiting go first, so they reach the server in the order they were made.
+            if (app.taps.length) { queueTap(id, act, at); flushTaps(); return; }
+            api('PATCH', '/api/owner/orders/' + id, { action: act, at: at }).then(function (r) {
+                if (r.status === 0 && !(paid && act === 'cancel')) { queueTap(id, act, at); return; }
                 if (!r.ok) { alert(r.data.error || 'Could not update that order.'); loadOrders(); return; }
                 loadOrders();
+            });
+        }
+
+        // The service record: who did what to this order, and when.
+        var HIST_WORDS = { placed: 'Placed', ready: 'Marked Ready', fulfilled: 'Fulfilled', canceled: 'Canceled', paid: 'Paid online', refunded: 'Refunded', expired: 'Closed by itself', 'allergy-confirmed': 'Allergy confirmed', checked: 'Big order checked' };
+        function showHistory(id) {
+            var box = $('hist-' + id); if (!box) return;
+            app.hist = app.hist || {};
+            if (app.hist[id]) { delete app.hist[id]; box.style.display = 'none'; return; }  // tap again to close
+            box.style.display = 'block'; box.textContent = 'Loading…';
+            api('GET', '/api/owner/orders/' + id + '/history').then(function (r) {
+                if (!r.ok) { box.textContent = r.data.error || 'Couldn’t load the history.'; return; }
+                app.hist[id] = r.data.events.map(function (e) {
+                    var who = e.actor === 'customer' ? 'customer' : e.actor === 'system' ? 'automatically' : e.actor;
+                    return '<div><b>' + esc(fmtTime(e.at)) + '</b> ' + esc(HIST_WORDS[e.event] || e.event) + ' <span>· ' + esc(who) + '</span></div>';
+                }).join('');
+                var b2 = $('hist-' + id); if (b2) b2.innerHTML = app.hist[id];
             });
         }
 
@@ -1769,6 +1891,7 @@
             var wasDown = false;
             es.onopen = function () {
                 $('liveDot').className = 'w-2 h-2 rounded-full bg-emerald-500';
+                if (app.offSince || app.taps.length) { netUp(); flushTaps(); }
                 if (wasDown) { wasDown = false; loadOrders(); loadMenu(); loadState().then(renderSettings); }
             };
             es.onerror = function () { wasDown = true; $('liveDot').className = 'w-2 h-2 rounded-full bg-amber-500'; };
@@ -2156,7 +2279,9 @@
                     if (!em) { say('loginError', 'Enter your email above first, then tap “Forgot password?”.'); break; }
                     api('POST', '/api/auth/forgot', { email: em }).then(function () { say('loginError', 'If that email has an account, we sent a reset link.', true); });
                     break;
-                case 'logout': api('POST', '/api/auth/logout').then(function () { showLogin(); }); break;
+                case 'logout':
+                    if (app.taps.length && !confirm(app.taps.length + ' tap' + (app.taps.length === 1 ? ' hasn’t' : 's haven’t') + ' reached the server yet (no signal). Log out anyway and lose ' + (app.taps.length === 1 ? 'it' : 'them') + '?')) break;
+                    api('POST', '/api/auth/logout').then(function () { forgetDevice(); showLogin(); }); break;
                 case 'tab': switchTab(el.getAttribute('data-tab')); break;
                 case 'guide-go': guideGo(el.getAttribute('data-tab'), el.getAttribute('data-target')); break;
                 case 'enable-sound':
@@ -2182,6 +2307,7 @@
                 case 'refresh-orders': loadOrders(); break;
                 case 'filter': app.filter = el.getAttribute('data-filter'); loadOrders(); break;
                 case 'order': orderAction(id, el.getAttribute('data-act')); break;
+                case 'order-history': showHistory(id); break;
                 case 'add-item': openEdit(null); break;
                 case 'edit-item': openEdit(id); break;
                 case 'close-edit': closeEdit(); break;

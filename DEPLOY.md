@@ -356,3 +356,97 @@ New tables (`catering_settings`, `catering_bookings`) are created automatically.
 - Links in emails are signed with a key from `LINK_SECRET` if set, otherwise one generated on first start
   and kept in the database. Changing it later makes older unsubscribe and feedback links stop working.
 - Export: Clients → "Export all" downloads every client as a spreadsheet.
+
+## Durability: when the signal, the server or a service drops
+
+Nothing to install. New files: `limp.js`, `watch.js`, `public/limp.html`, `scripts/deploy.sh`,
+`scripts/rollback.sh`, `scripts/load-test.js`, `test/order-path.test.js`, `RUNBOOK.md`.
+
+**Limp mode (customers).** If the app can't be reached, the order page shows the truck's last saved
+menu, spot and prices with "Order at the window", and switches back by itself. The app keeps one small
+public file per truck in `limp/` (no private data). For first-time visitors, Caddy has to serve it while
+the app is down. Add this inside the `https:// { ... }` block, under `reverse_proxy`:
+```
+    encode zstd gzip
+
+    # Limp mode: when the app doesn't answer, Caddy serves the menu file and a plain page itself.
+    handle_errors {
+        @menu path /limp.json
+        handle @menu {
+            root * /var/www/foodtruck/limp
+            rewrite * /{host}.json
+            file_server
+        }
+        @asset path *.css *.js *.png *.svg *.woff2
+        handle @asset {
+            root * /var/www/foodtruck/public
+            file_server
+        }
+        handle {
+            root * /var/www/foodtruck/public
+            rewrite * /limp.html
+            file_server
+        }
+    }
+```
+`sudo systemctl reload caddy`. Test it: `pm2 stop foodtruck-backend`, open a truck page on your phone
+(menu + "Order at the window"), `pm2 start foodtruck-backend`, and it turns back within 20 seconds.
+`encode` also makes every page about four times smaller over the air.
+
+**Kitchen with no signal.** Taps made with no signal are saved on the tablet, shown at once, and sent
+in order (with the time they were really tapped) when signal returns. Reloading with no signal opens
+the last ticket list. If something changed meanwhile (the customer canceled), the tablet says so.
+
+**Email retries.** Email that can't go out (mail service down) is kept in the database and retried
+for up to a day. Same idempotency key every try, so it never arrives twice. Alerts that are useless
+late (the "no kitchen screen" email) are dropped instead of sent late.
+
+**Prank protection.** One phone can have 3 unpaid orders waiting at once (a script that hides which
+phone it is: 8 per network). Unpaid orders of $150 or more, or over 20 items, show "Big order, check
+with the customer before cooking" in the kitchen; Mark Ready waits for that tap.
+
+**Deploys with a spare tire.** From now on deploy with:
+```
+cd /var/www/foodtruck && scripts/deploy.sh main      # or the branch you approved
+```
+It saves the running code and a copy of the database, switches to the branch, runs the order-path
+tests (its own copy of the app, empty database, no email), restarts without dropping requests, checks
+`/api/health`, and puts the previous version back by itself if anything fails. By hand later:
+`scripts/rollback.sh`. If you still copy files in by hand instead of using git, run
+`scripts/deploy.sh` with no branch after copying; it skips the git step. One-time setup:
+`chmod +x scripts/*.sh`, and `sudo apt install sqlite3` if it isn't there.
+
+**Versioned database changes.** Each change to the tables is numbered in `core.js` (SCHEMA_CHANGES).
+When newer code starts on an older database it saves a full copy to `backups/` first. The first start
+of this version does that once.
+
+**Load test before a big event.** `npm run load-test` (200 orders over 10 minutes on the server's own
+copy of the app; real trucks and email are never touched). `node scripts/load-test.js --orders 300 --minutes 2`
+for a harder run. It ends with a plain verdict.
+
+**Certificate watch.** Once a day the app checks the certificates on the main site and the busiest
+truck addresses, and emails `ADMIN_EMAIL` if any has under 14 days left. Set `ADMIN_EMAIL` in `.env`.
+
+**Your steps (the app can't do these for you):**
+1. **Uptime monitor:** a free UptimeRobot (or Better Stack) monitor on `https://onlinekitchen.fyi/api/health`,
+   every 5 minutes, alerting your phone. It tells you before a truck notices.
+2. **Litestream (continuous backup, seconds instead of a day):** make a bucket at Backblaze B2 (cheapest)
+   with an application key. Then:
+   ```
+   wget https://github.com/benbjohnson/litestream/releases/download/v0.3.13/litestream-v0.3.13-linux-amd64.deb
+   sudo dpkg -i litestream-v0.3.13-linux-amd64.deb
+   sudo nano /etc/litestream.yml
+   ```
+   ```
+   dbs:
+     - path: /var/www/foodtruck/database.sqlite
+       replicas:
+         - type: s3
+           bucket: YOUR-BUCKET
+           path: foodtruck
+           endpoint: https://s3.YOUR-REGION.backblazeb2.com
+   ```
+   Put the two keys in `/etc/default/litestream` (never in chat or email):
+   `LITESTREAM_ACCESS_KEY_ID=...` and `LITESTREAM_SECRET_ACCESS_KEY=...`, then
+   `sudo systemctl enable --now litestream`. Check with `litestream snapshots /var/www/foodtruck/database.sqlite`.
+3. Read `RUNBOOK.md` once now, and fill in the three logins at the bottom on your own copy.

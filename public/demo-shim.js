@@ -443,6 +443,15 @@
             d.orders = d.orders.filter(function (o) { return o.status === 'Preparing' || o.status === 'Ready'; }); save(d);
             return ok({ ok: true });
         }
+        if ((m = p.match(/^\/api\/owner\/orders\/(\d+)\/history$/)) && method === 'GET') {
+            var oh = d.orders.filter(function (x) { return x.id === parseInt(m[1], 10); })[0];
+            if (!oh) return fail(404, 'Order not found.');
+            var evs = [{ event: 'placed', actor: 'customer', at: oh.createdAt }];
+            if (oh.allergyAck) evs.push({ event: 'allergy-confirmed', actor: 'Maria', at: oh.createdAt + 60e3 });
+            if (oh.readyAt) evs.push({ event: 'ready', actor: 'owner', at: oh.readyAt });
+            if (oh.status === 'Fulfilled' || oh.status === 'Canceled') evs.push({ event: oh.status.toLowerCase(), actor: oh.byCustomer ? 'customer' : 'owner', at: oh.updatedAt });
+            return ok({ ticket: oh.ticket, events: evs });
+        }
         if ((m = p.match(/^\/api\/owner\/orders\/(\d+)$/)) && method === 'PATCH' && b.action === 'ack-allergy') {
             var oa = d.orders.filter(function (x) { return x.id === parseInt(m[1], 10); })[0];
             if (!oa || !oa.allergy || oa.allergyAck) return fail(409, 'That allergy was already confirmed.');

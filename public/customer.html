@@ -73,6 +73,7 @@
                     <span id="storeStatusText" data-i18n="checking">Checking…</span>
                 </div>
 
+                <div id="limpNote" class="limp-note" role="status" style="display:none"></div>
                 <div id="closedNote" class="w-full text-center text-sm font-semibold text-zinc-200 mb-3" style="display:none"></div>
                 <div id="rushStatusContainer" class="w-full"></div>
                 <div id="waitLine" class="w-full text-center text-sm font-semibold text-zinc-200 mb-3" style="display:none;font-variant-numeric:tabular-nums"></div>
@@ -273,6 +274,10 @@
                 notes_label: 'Special instructions (optional)', notes_ph: 'Any requests for the kitchen?',
                 allergy_label: 'Food allergy? (optional)', allergy_ph: 'e.g. peanuts, shellfish', allergy_note: 'The kitchen has to confirm it before your order is marked ready.', name_label: 'Your name', name_ph: 'So we can call you',
                 place_order: 'Place Order', placing: 'Placing order…', sold_out_in_cart: 'An item in your cart just sold out. Please remove it.',
+                limp_badge: 'Online ordering is down for a moment • Order at the window', limp_note: 'Here’s the menu as of {t}. Prices and what’s left may have changed. We’ll switch back by ourselves when online ordering returns.',
+                limp_note_old: 'Here’s our last saved menu. Prices and what’s left may have changed.', see_menu: 'See the menu', at_window: 'At the window',
+                check_first: 'Big order: the truck will check it with you at the window before cooking.',
+                order_down: 'Online ordering isn’t answering right now. Please order at the window, or try again in a minute (you won’t be charged twice).',
                 order_failed: 'Could not place your order. Please try again.', connection: 'Connection problem. Please check your signal and try again.',
                 order_placed: 'Order placed!', ticket_number: 'Your ticket number:', est_wait: 'Estimated wait: ~{n} min', view_tracker: 'Order Status',
                 to_menu: '← Menu', tracker_title: 'Order Status', no_orders: 'No orders yet.', ticket: 'Ticket #{n}',
@@ -318,6 +323,10 @@
                 notes_label: 'Instrucciones especiales (opcional)', notes_ph: '¿Algo especial para la cocina?',
                 allergy_label: '¿Alergia a algún alimento? (opcional)', allergy_ph: 'p. ej. cacahuates, mariscos', allergy_note: 'La cocina debe confirmarla antes de marcar tu pedido como listo.', name_label: 'Tu nombre', name_ph: 'Para llamarte cuando esté listo',
                 place_order: 'Enviar pedido', placing: 'Enviando pedido…', sold_out_in_cart: 'Algo en tu carrito se acaba de agotar. Quítalo, por favor.',
+                limp_badge: 'Pedidos en línea caídos por un momento • Pide en la ventanilla', limp_note: 'Este es el menú de las {t}. Precios y disponibilidad pueden haber cambiado. Volveremos solos cuando regresen los pedidos en línea.',
+                limp_note_old: 'Este es nuestro último menú guardado. Precios y disponibilidad pueden haber cambiado.', see_menu: 'Ver el menú', at_window: 'En la ventanilla',
+                check_first: 'Pedido grande: el camión lo confirmará contigo en la ventanilla antes de cocinar.',
+                order_down: 'Los pedidos en línea no responden ahora. Pide en la ventanilla o inténtalo en un minuto (no se cobrará dos veces).',
                 order_failed: 'No pudimos enviar tu pedido. Inténtalo de nuevo.', connection: 'Problema de conexión. Revisa tu señal e inténtalo de nuevo.',
                 order_placed: '¡Pedido enviado!', ticket_number: 'Tu número de ticket:', est_wait: 'Espera aproximada: ~{n} min', view_tracker: 'Estado del pedido',
                 to_menu: '← Menú', tracker_title: 'Estado del pedido', no_orders: 'Todavía no hay pedidos.', ticket: 'Ticket #{n}',
@@ -433,7 +442,7 @@
         function fmtClock(ms) { try { return new Date(ms).toLocaleTimeString(lang === 'es' ? 'es' : 'en-US', { hour: 'numeric', minute: '2-digit', timeZone: app.timezone || undefined }); } catch (e) { return new Date(ms).toLocaleTimeString(); } }
         function liveWait() { return app.state.wait && app.state.wait.minutes ? app.state.wait.minutes : 0; }
         function pacedUntil() { var p = app.state.pace; return p && p.until > Date.now() ? p.until : 0; }
-        function canOrder() { return !isClosed() && !app.state.paused && !pacedUntil(); }
+        function canOrder() { return !app.limp && !isClosed() && !app.state.paused && !pacedUntil(); }
         // Pacing ends by the clock: reopen the button the moment it does.
         setInterval(function () { if (app.vendor && app.state.pace && app.state.pace.until && app.state.pace.until <= Date.now()) { app.state.pace.until = 0; renderStatus(); } }, 5000);
 
@@ -444,13 +453,20 @@
                 (closed ? 'bg-rose-500/10 border-rose-500/30 text-rose-400' : paused ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400');
             $('storeStatusDot').className = 'w-2 h-2 rounded-full animate-pulse ' + (closed ? 'bg-rose-500' : paused ? 'bg-amber-500' : 'bg-emerald-500');
             $('storeStatusText').textContent = closed ? t('closed_now') : paused ? t('paused_now') : t('open_now');
+            if (app.limp) {
+                badge.className = 'border rounded-xl px-4 py-2 text-xs mb-3 flex items-center gap-2 w-full justify-center bg-amber-500/10 border-amber-500/30 text-amber-400';
+                $('storeStatusDot').className = 'w-2 h-2 rounded-full bg-amber-500';
+                $('storeStatusText').textContent = t('limp_badge');
+            }
+            $('limpNote').style.display = app.limp ? 'block' : 'none';
+            if (app.limp) $('limpNote').textContent = app.limp.at ? t('limp_note', { t: fmtClock(app.limp.at) }) : t('limp_note_old');
 
             $('closedNote').style.display = closed && app.state.closedNote ? 'block' : 'none';
             $('closedNote').textContent = app.state.closedNote || '';
             var btn = $('btn-start-order');
-            btn.disabled = !canOrder();
-            btn.textContent = closed ? t('currently_closed') : paused ? t('order_at_window') : pacedUntil() ? t('paced', { t: new Date(pacedUntil()).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) }) : t('start_order');
-            btn.className = !canOrder()
+            btn.disabled = !canOrder() && !app.limp;
+            btn.textContent = app.limp ? t('see_menu') : closed ? t('currently_closed') : paused ? t('order_at_window') : pacedUntil() ? t('paced', { t: new Date(pacedUntil()).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) }) : t('start_order');
+            btn.className = !canOrder() && !app.limp
                 ? 'w-full bg-zinc-800 text-zinc-500 font-semibold py-3.5 rounded-xl transition'
                 : 'w-full bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-3.5 rounded-xl transition shadow-lg';
 
@@ -488,7 +504,7 @@
             renderCard();
             renderNextStop();
             // If the truck closes or pauses while someone has the menu open, send them back instead of letting them build a doomed cart.
-            if (!canOrder() && app.view === 'menu') show('landing');
+            if (!canOrder() && !app.limp && app.view === 'menu') show('landing');
             updateCartUI();
         }
 
@@ -568,7 +584,9 @@
                 ? '<span class="text-sm font-semibold line-through text-zinc-500 mr-1">' + money(pi.wasCents / 100) + '</span><span class="text-sm font-bold text-zinc-100">' + money(pi.cents / 100) + '</span>' +
                     (pi.deal ? '<span class="deal-tag">' + esc(pi.deal) + '</span>' : '')
                 : '<span class="text-sm font-semibold">' + money(item.price) + '</span>';
-            var btn = item.soldOut
+            var btn = app.limp
+                ? (item.soldOut ? '<span class="text-[11px] text-zinc-500 shrink-0">' + esc(t('sold_out')) + '</span>' : '')
+                : item.soldOut
                 ? '<button disabled class="text-zinc-500 bg-zinc-800 px-3 py-1.5 rounded-lg text-xs font-bold h-8 min-w-[60px] shrink-0">' + esc(t('sold_out')) + '</button>'
                 : '<button data-action="add-item" data-id="' + item.id + '" class="text-zinc-950 px-3 py-1.5 rounded-lg text-xs font-semibold h-8 min-w-[60px] shrink-0 shadow bg-zinc-100 hover:bg-white">' + esc(t('add')) + '</button>';
             var photo = item.photo
@@ -590,7 +608,7 @@
                 highlights.innerHTML = ''; chips.innerHTML = ''; $('highlightsBox').style.display = 'none';
                 return;
             }
-            var first = app.menu.filter(function (m) { return !m.soldOut; })[0];
+            var first = app.limp ? null : app.menu.filter(function (m) { return !m.soldOut; })[0];
             $('highlightsBox').style.display = first ? 'block' : 'none';
             if (first) {
                 highlights.innerHTML =
@@ -617,7 +635,7 @@
         /* ---------- item modal ---------- */
         function openItemModal(id) {
             var item = app.menu.find(function (m) { return m.id === id; });
-            if (!item || item.soldOut) return;
+            if (!item || item.soldOut || app.limp) return;
             app.modalItem = item;
             app.modalQty = 1;
             $('itemModalQty').textContent = '1';
@@ -691,6 +709,7 @@
             var tt = cartTotals();
             $('cartCountBadge').textContent = t(tt.count === 1 ? 'item' : 'items', { n: tt.count });
             $('cartTotalBadge').textContent = money(tt.total);
+            $('btn-view-cart').parentNode.style.display = app.limp ? 'none' : '';
             if ($('cartModal').style.display === 'flex') renderCartModal();
         }
 
@@ -788,6 +807,7 @@
                     notes: notes,
                     website: $('website').value,
                     clientKey: app.orderKey,
+                    device: deviceId(),
                     // What they were shown. If a deal ended in the meantime, the server asks before charging more.
                     seenTotal: Math.max(Math.round(tt.total * 100 - rewardCents()) / 100, app.acceptedTotal || 0),
                     cardToken: cardToken() || undefined,
@@ -823,6 +843,7 @@
                     reloadVendor().then(function () { renderCartModal(); if (app.view === 'menu') renderMenu(); setCartError(msg); });
                     return;
                 }
+                if (!res.ok && (res.status === 0 || res.status >= 500) && !res.body.error) { setCartError(t('order_down')); return; }
                 if (!res.ok) {
                     setCartError(res.body.error || t('order_failed'));
                     if (res.status === 403 || res.status === 409 || res.status === 400) reloadVendor();
@@ -865,7 +886,7 @@
                 $('successWait').textContent = res.body.pickupAt ? t('pickup_at', { t: fmtClock(res.body.pickupAt) }) : t('est_wait', { n: res.body.estimatedMinutes });
                 app.later = false; app.pickupAt = null;
                 $('successPay').textContent = '💵 ' + t('pay_window_short').replace(/^💵\s*/, '');
-                $('successChange').textContent = res.body.changeUntil ? t('change_left', { t: '2:00' }) : '';
+                $('successChange').textContent = (res.body.changeUntil ? t('change_left', { t: '2:00' }) : '') + (res.body.checkFirst ? (res.body.changeUntil ? ' ' : '') + t('check_first') : '');
                 renderAlertOffer();
                 $('successModal').style.display = 'flex';
             }).catch(function () {
@@ -1204,8 +1225,49 @@
         }
 
         /* ---------- loading + live sync ---------- */
+        /* ---------- limp mode: online ordering is down, the menu isn't ----------
+           The page keeps its own copy of the public menu. If the server can't be reached it shows the
+           server's limp-mode file (or that copy), with "Order at the window", and comes back by itself. */
+        var MENU_KEY = 'ok_menu_' + location.host;
+        // A random id this phone keeps, so the truck can limit how many unpaid orders one phone has waiting.
+        function deviceId() {
+            var id = '';
+            try { id = localStorage.getItem('ok_device') || ''; } catch (e) {}
+            if (!/^[A-Za-z0-9_-]{16,64}$/.test(id)) {
+                var a = new Uint8Array(16); (window.crypto || window.msCrypto).getRandomValues(a);
+                id = Array.prototype.map.call(a, function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
+                try { localStorage.setItem('ok_device', id); } catch (e) {}
+            }
+            return id;
+        }
+        function keepMenu(d) {
+            if (window.__FT_DEMO || d.limp) return;
+            var keep = { businessName: d.businessName, slug: d.slug, emoji: d.emoji, ownerIG: d.ownerIG, menu: d.menu, hours: d.hours, timezone: d.timezone,
+                state: { status: d.state && d.state.status, location: d.state && d.state.location, closedNote: d.state && d.state.closedNote } };
+            try { localStorage.setItem(MENU_KEY, JSON.stringify({ at: Date.now(), d: keep })); } catch (e) {}
+        }
+        function limpData() {
+            return fetch('/limp.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).catch(function () { return null; }).then(function (d) {
+                if (d && d.menu) return d;
+                try { var k = JSON.parse(localStorage.getItem(MENU_KEY) || 'null'); if (k && k.d && Date.now() - k.at < 7 * 864e5) return Object.assign({}, k.d, { at: k.at }); } catch (e) {}
+                return null;
+            });
+        }
+        function enterLimp(d) {
+            app.limp = { at: d.at || 0 };
+            applyVendor(Object.assign({}, d, { limp: true, state: Object.assign({ rush: 0, paused: false }, d.state || {}), cateringEnabled: false, nextStop: null, deals: [], rewards: null, payMode: 'window', smsReady: false, showBranding: false }));
+            loadTracked(); updateTrackButtons();
+            show('landing');
+            // Check quietly; once the server answers again, reload into the normal page.
+            app.limpTimer = setInterval(function () {
+                fetch('/api/vendor-data', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; })
+                    .then(function (v) { if (v && v.menu && !v.isDemo) { clearInterval(app.limpTimer); location.reload(); } }).catch(function () {});
+            }, 20000);
+        }
+
         function applyVendor(d) {
             app.vendor = d;
+            keepMenu(d);
             app.menu = d.menu || [];
             app.state = d.state || app.state;
             app.hours = d.hours || null;
@@ -1245,7 +1307,7 @@
         function reloadVendor() {
             return fetch('/api/vendor-data', { cache: 'no-store' })
                 .then(function (r) { return r.ok ? r.json() : null; })
-                .then(function (d) { if (d && !d.isDemo) applyVendor(d); })
+                .then(function (d) { if (d && !d.isDemo) { if (app.limp) location.reload(); else applyVendor(d); } })
                 .catch(function () {});
         }
 
@@ -1337,7 +1399,7 @@
             var key = el.getAttribute('data-key');
             var line;
             switch (a) {
-                case 'open-menu': if (canOrder()) show('menu'); else show('landing'); break;
+                case 'open-menu': if (canOrder() || app.limp) show('menu'); else show('landing'); break;
                 case 'open-landing': show('landing'); break;
                 case 'open-tracker': show('tracker'); break;
                 case 'open-cart': openCartModal(); break;
@@ -1396,9 +1458,12 @@
         try { var savedName = localStorage.getItem('ft_name'); if (savedName) $('customerName').value = savedName; } catch (e) {}
         if ('serviceWorker' in navigator && !window.__FT_DEMO) navigator.serviceWorker.register('/sw.js').catch(function () {});
 
+        function goLimp() { return limpData().then(function (d) { if (d) enterLimp(d); else showError(t('err_load')); }); }
         fetch('/api/vendor-data', { cache: 'no-store' })
-            .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, status: r.status, d: d }; }); })
+            .then(function (r) { return r.json().catch(function () { return null; }).then(function (d) { return { ok: r.ok, status: r.status, d: d }; }); })
             .then(function (res) {
+                // No answer from the app itself (the proxy answered, or nothing did): limp mode.
+                if (!res.d || (res.status >= 500 && res.status !== 503 && !res.d.error)) return goLimp();
                 if (!res.ok || res.d.isDemo) {
                     showError(res.status === 503 ? t('err_inactive') : t('err_missing'));
                     return;
@@ -1414,7 +1479,7 @@
                 refreshTracked();
                 setInterval(function () { if (!document.hidden) refreshTracked(); }, 30000);
             })
-            .catch(function () { showError(t('err_load')); });
+            .catch(goLimp);
     })();
     </script>
 </body>
