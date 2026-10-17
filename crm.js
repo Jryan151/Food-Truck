@@ -149,7 +149,7 @@ async function deliver() {
     const html = `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:560px;color:#111;line-height:1.5">${escHtml(m.body).replace(/\n/g, '<br>')}
       <p style="color:#888;font-size:12px;margin-top:24px">${escHtml(v.business_name)} · <a href="${unsub}" style="color:#888">Unsubscribe</a></p></div>`;
     const ok = await sendMail({
-      to: c.email, replyTo: v.email || undefined, subject: m.subject, text: m.body + `\n\n—\nUnsubscribe: ${unsub}`, html,
+      to: c.email, replyTo: v.email || undefined, brand: auth.brandFor(v), subject: m.subject, text: m.body + `\n\n—\nUnsubscribe: ${unsub}`, html,
       headers: { 'List-Unsubscribe': `<${oneClick}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
       idempotencyKey: `crm-${m.id}`,
     }).catch(() => false);

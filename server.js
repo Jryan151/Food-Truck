@@ -89,8 +89,15 @@ app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 
 /* ---------- pages ---------- */
 const sendPage = (res, file) => res.sendFile(path.join(PUB, file));
-const unavailable = (res) =>
-  res.status(503).send('<h1>This page is not available right now.</h1>');
+// Every dead end gets the same calm page (public/page.html), never a bare error.
+let pageTpl = null;
+function simplePage(res, status, { kicker = 'Online Kitchen', title, text, href = '/', cta = 'Go to the main page' }) {
+  try { pageTpl = pageTpl || fs.readFileSync(path.join(PUB, 'page.html'), 'utf8'); } catch (e) { return res.status(status).send(`<h1>${escAttr(title)}</h1>`); }
+  const fill = { kicker, title, text, href, cta };
+  res.status(status).set('Cache-Control', 'no-store').type('html').send(pageTpl.replace(/\{\{(\w+)\}\}/g, (m, k) => escAttr(fill[k] || '')));
+}
+const notFound = (res) => simplePage(res, 404, { title: 'We couldn’t find that page', text: 'The link may be old, or the address may have a typo. If you were looking for a truck, check the spelling of its name in the address.' });
+const unavailable = (res) => simplePage(res, 503, { title: 'This truck’s page is resting', text: 'It isn’t taking orders online right now. Find them at the window, or check their Instagram for where they’ll be.', cta: 'Online Kitchen' });
 
 const escAttr = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -115,7 +122,7 @@ function shareTags(req, v, kind) {
 function vendorPage(file, kind) {
   return async (req, res, next) => {
     const v = req.tenant.vendor;
-    if (!v) return res.status(404).send('<h1>Page not found</h1>');
+    if (!v) return notFound(res);
     if (v.status !== 'active') return unavailable(res);
     try {
       const html = await fs.promises.readFile(path.join(PUB, file), 'utf8');
@@ -125,7 +132,7 @@ function vendorPage(file, kind) {
   };
 }
 function rootPage(file) {
-  return (req, res) => (req.tenant.isRoot ? sendPage(res, file) : res.status(404).send('<h1>Page not found</h1>'));
+  return (req, res) => (req.tenant.isRoot ? sendPage(res, file) : notFound(res));
 }
 
 app.get('/', (req, res, next) => {
@@ -149,6 +156,8 @@ app.get(['/signup', '/signup.html'], rootPage('signup.html'));
 app.get(['/login', '/login.html'], (req, res) =>
   req.tenant.isRoot ? sendPage(res, 'login.html') : res.redirect('/owner.html'));
 app.get(['/reset', '/reset.html'], rootPage('reset.html'));
+// Your admin page (main site only). It does nothing without ADMIN_TOKEN, which is typed in, never stored.
+app.get(['/admin', '/admin/'], (req, res, next) => { res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' }); return rootPage('admin.html')(req, res, next); });
 // Legal pages work on the main site and on every vendor page (the customer footer links to them).
 app.get(['/terms', '/terms.html'], (req, res) => sendPage(res, 'terms.html'));
 app.get(['/privacy', '/privacy.html'], (req, res) => sendPage(res, 'privacy.html'));
@@ -160,7 +169,7 @@ app.get(['/privacy', '/privacy.html'], (req, res) => sendPage(res, 'privacy.html
 const DEMO_TAG = '<script src="/demo-shim.js"></script>';
 function demoPage(file) {
   return async (req, res, next) => {
-    if (!req.tenant.isRoot) return res.status(404).send('<h1>Page not found</h1>');
+    if (!req.tenant.isRoot) return notFound(res);
     try {
       const html = await fs.promises.readFile(path.join(PUB, file), 'utf8');
       res.set('Cache-Control', 'no-store');
@@ -169,7 +178,7 @@ function demoPage(file) {
   };
 }
 app.get(['/demo', '/demo/'], (req, res) =>
-  req.tenant.isRoot ? res.redirect('/demo/customer') : res.status(404).send('<h1>Page not found</h1>'));
+  req.tenant.isRoot ? res.redirect('/demo/customer') : notFound(res));
 app.get('/demo/customer', demoPage('customer.html'));
 app.get('/demo/owner', demoPage('owner.html'));
 app.get('/demo/now', demoPage('now.html'));
@@ -234,7 +243,7 @@ app.use((req, res, next) => {
 });
 app.use(express.static(PUB, { index: false, dotfiles: 'ignore', maxAge: '1h' }));
 
-app.use((req, res) => res.status(404).send('<h1>Page not found</h1>'));
+app.use((req, res) => notFound(res));
 
 // Any error in an async route lands here (Express 5 forwards rejected promises).
 app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
@@ -242,7 +251,7 @@ app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
   report(err);
   if (res.headersSent) return;
   if (req.path.startsWith('/api/')) return res.status(500).json({ error: 'Something went wrong. Please try again.' });
-  res.status(500).send('Something went wrong.');
+  simplePage(res, 500, { title: 'Something went wrong on our side', text: 'Please try again in a moment. If it keeps happening, the people who run Online Kitchen already have a note about it.', href: req.originalUrl || '/', cta: 'Try again' });
 });
 
 process.on('unhandledRejection', (e) => { console.error('Unhandled rejection:', e); report(e); });

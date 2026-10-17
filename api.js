@@ -94,6 +94,7 @@ router.get('/vendor-data', async (req, res) => {
     customDomain: v.custom_domain,
     ownerIG: v.owner_ig || '',
     emoji: v.emoji || '',
+    brand: core.brandOf(v),            // logo and accent color (see brandOf)
     menu: await publicMenu(v),
     state: await core.getState(v.id),
     showBranding: !f.removeBranding,
@@ -1105,6 +1106,11 @@ router.get('/owner/insights/forecast', ownerOnly, async (req, res) => {
   const here = all.filter((r) => r.loc === location);
   const useHere = location && new Set(here.map((r) => Insights.dateKey(Insights.parts(r.t, tz)))).size >= 2;
   const f = Insights.forecast(useHere ? here : all, tz);
+  // Prep and shopping list: what to expect against what's counted now ("expect 40, have 12: make 28").
+  if (f.prep) {
+    const counts = new Map((await inventory.menuFor(v, { owner: true })).filter((m) => m.left !== null && m.left !== undefined).map((m) => [m.name, m.left]));
+    f.prep = f.prep.map((x) => (counts.has(x.name) ? Object.assign(x, { have: counts.get(x.name), need: Math.max(0, x.qty - counts.get(x.name)) }) : x));
+  }
   res.json(Object.assign(f, {
     date: day, weekday: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][wd],
     location, basis: useHere ? 'spot' : f.days ? 'weekday' : 'none',
@@ -1168,11 +1174,16 @@ router.put('/owner/profile', ownerOnly, async (req, res) => {
   const v = req.tenant.vendor;
   const name = b.businessName !== undefined ? String(b.businessName).trim() : v.business_name;
   if (name.length < 2 || name.length > 60) return res.status(400).json({ error: 'Business name must be 2-60 characters.' });
-  await run('UPDATE vendors SET business_name = ?, owner_ig = ?, emoji = ?, owner_name = ?, updated_at = ? WHERE id = ?', [
+  // Brand: an uploaded logo (only our own /uploads files) and one accent color. '' removes either.
+  if (b.logoUrl !== undefined && b.logoUrl !== '' && !(core.PHOTO_RE.test(String(b.logoUrl)) && String(b.logoUrl).startsWith(`/uploads/${v.id}-`))) return res.status(400).json({ error: 'Upload the logo again, please.' });
+  if (b.brandColor !== undefined && b.brandColor !== '' && !core.COLOR_RE.test(String(b.brandColor))) return res.status(400).json({ error: 'Pick a color, please.' });
+  await run('UPDATE vendors SET business_name = ?, owner_ig = ?, emoji = ?, owner_name = ?, logo_url = ?, brand_color = ?, updated_at = ? WHERE id = ?', [
     name,
     b.ownerIG !== undefined ? auth.cleanIG(b.ownerIG) : v.owner_ig,
     b.emoji !== undefined ? String(b.emoji).slice(0, 8) : v.emoji,
     b.ownerName !== undefined ? String(b.ownerName).trim().slice(0, 60) : v.owner_name,
+    b.logoUrl !== undefined ? String(b.logoUrl) || null : v.logo_url,
+    b.brandColor !== undefined ? String(b.brandColor).toLowerCase() || null : v.brand_color,
     Date.now(), v.id,
   ]);
   core.broadcast(v.id, 'PROFILE', { businessName: name }, true);
@@ -1364,10 +1375,34 @@ function requireAdmin(req, res, next) {
 }
 
 router.get('/admin/vendors', requireAdmin, async (req, res) => {
+  const since = Date.now() - 30 * 864e5;
   const rows = await all(
-    'SELECT id, slug, business_name, email, status, plan, plan_status, email_verified, custom_domain, created_at FROM vendors ORDER BY id DESC LIMIT 500'
-  );
-  res.json({ vendors: rows });
+    `SELECT v.id, v.slug, v.business_name, v.email, v.owner_name, v.status, v.plan, v.plan_status, v.email_verified, v.custom_domain, v.created_at,
+       (SELECT COUNT(*) FROM orders o WHERE o.vendor_id = v.id AND o.status IN ('Ready','Fulfilled')) AS orders,
+       (SELECT COUNT(*) FROM orders o WHERE o.vendor_id = v.id AND o.status IN ('Ready','Fulfilled') AND o.created_at > ?) AS orders30,
+       (SELECT MAX(created_at) FROM orders o WHERE o.vendor_id = v.id) AS last_order_at,
+       (SELECT MAX(created_at) FROM sessions s WHERE s.vendor_id = v.id) AS last_login_at
+     FROM vendors v ORDER BY v.id DESC LIMIT 1000`, [since]);
+  res.json({ vendors: rows, rootDomain: core.ROOT_DOMAIN, now: Date.now() });
+});
+
+/* ----- "Send feedback": beta trucks tell the people building it what's broken or missing ----- */
+const limitFeedback = rateLimit({ windowMs: 60 * 60 * 1000, max: 8 });
+router.post('/owner/feedback', ownerOnly, limitFeedback, async (req, res) => {
+  const v = req.tenant.vendor;
+  const msg = String((req.body || {}).message || '').trim().slice(0, 4000);
+  const where = String((req.body || {}).where || '').slice(0, 60);
+  if (msg.length < 3) return res.status(400).json({ error: 'Tell us what’s on your mind.' });
+  const to = process.env.FEEDBACK_EMAIL || process.env.ADMIN_EMAIL;
+  if (!to || !auth.mailConfigured()) return res.status(503).json({ error: 'Feedback email isn’t set up yet. Please email us instead.' });
+  const head = `${v.business_name} (${v.slug}.${core.ROOT_DOMAIN})${where ? ' · from ' + where : ''}`;
+  await auth.mailLater({
+    to, replyTo: v.email || undefined,
+    subject: `Feedback from ${v.business_name}`,
+    text: `${head}\n\n${msg}\n\nReply to this email to answer them.`,
+    html: `<p><b>${auth.escHtml(head)}</b></p><p style="white-space:pre-wrap">${auth.escHtml(msg)}</p><p style="color:#666">Reply to this email to answer them.</p>`,
+  });
+  res.json({ ok: true });
 });
 
 router.post('/admin/vendors/:id', requireAdmin, async (req, res) => {

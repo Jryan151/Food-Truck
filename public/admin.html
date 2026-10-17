@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Admin · Online Kitchen</title>
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#0a0a0b">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+    <script src="/theme.js"></script>
+    <link rel="stylesheet" href="/theme.css">
+    <link rel="stylesheet" href="/ok.css">
+    <style>
+        [hidden] { display: none !important; }
+        .ad-wrap { max-width: 960px; margin: 0 auto; padding: 20px 16px 48px; display: flex; flex-direction: column; gap: 16px; }
+        .ad-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+        .ad-stat { background: var(--z900); border: 1px solid var(--z800); border-radius: 12px; padding: 10px 12px; }
+        .ad-stat b { display: block; font-size: 22px; color: var(--z100); font-variant-numeric: tabular-nums; }
+        .ad-stat span { font-size: 11px; color: var(--z500); font-weight: 600; }
+        .ad-bar { display: flex; gap: 8px; flex-wrap: wrap; }
+        .ad-bar .ok-box { flex: 1; min-width: 200px; }
+        .ad-bar select { width: auto; }
+        .ad-list { display: flex; flex-direction: column; gap: 8px; }
+        .ad-v { background: var(--z900); border: 1px solid var(--z800); border-radius: 14px; padding: 12px 14px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; }
+        .ad-v h3 { margin: 0; font-size: 15px; color: var(--z100); }
+        .ad-v a { color: var(--z300); font-size: 12px; }
+        .ad-meta { font-size: 12px; color: var(--z500); line-height: 1.6; }
+        .ad-meta b { color: var(--z200); font-weight: 700; }
+        .ad-tags { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; align-items: flex-start; }
+        .ad-tag { font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; border: 1px solid var(--z700); border-radius: 6px; padding: 2px 6px; color: var(--z300); }
+        .ad-tag.bad { border-color: var(--bad); color: var(--bad); }
+        .ad-tag.warn { border-color: var(--warn); color: var(--warn); }
+        .ad-acts { grid-column: 1 / -1; display: flex; gap: 6px; flex-wrap: wrap; border-top: 1px solid var(--z800); padding-top: 8px; }
+        .ad-acts button { border: 1px solid var(--z700); background: var(--z950); color: var(--z100); border-radius: 9px; padding: 7px 11px; font-size: 12px; font-weight: 700; font-family: inherit; cursor: pointer; }
+        .ad-acts button.danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 50%, transparent); }
+        @media (max-width: 600px) { .ad-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ad-v { grid-template-columns: 1fr; } .ad-tags { justify-content: flex-start; } }
+    </style>
+</head>
+<body>
+<main class="ad-wrap">
+    <div class="ok-top">
+        <div><div class="ok-step">Online Kitchen</div><h1 class="ok-h1" style="font-size:26px">Admin</h1></div>
+        <button class="ok-btn quiet" id="lockBtn" hidden style="width:auto;padding:0 14px">Lock</button>
+    </div>
+
+    <form id="unlock" class="ok-section" autocomplete="off">
+        <p class="ok-lede" style="margin:0">Enter the ADMIN_TOKEN from the server’s .env. It stays in this tab only and is forgotten when you close it.</p>
+        <label class="sr" for="token">Admin token</label>
+        <input id="token" class="ok-box" type="password" autocomplete="off" placeholder="Admin token">
+        <button class="ok-btn" type="submit">Open</button>
+        <div class="ok-err" id="unlockErr" role="alert"></div>
+    </form>
+
+    <section id="panel" hidden class="ok-section">
+        <div class="ad-stats" id="stats"></div>
+        <div class="ad-bar">
+            <label class="sr" for="q">Search trucks</label>
+            <input id="q" class="ok-box" placeholder="Search name, address or email">
+            <label class="sr" for="filter">Show</label>
+            <select id="filter" class="ok-box">
+                <option value="all">All trucks</option>
+                <option value="active">Active</option>
+                <option value="quiet">Active, no orders in 30 days</option>
+                <option value="pro">Pro</option>
+                <option value="suspended">Suspended</option>
+                <option value="pending">Waiting for email</option>
+            </select>
+        </div>
+        <div class="ad-list" id="list" aria-live="polite"></div>
+        <div class="ok-err" id="err" role="alert"></div>
+    </section>
+</main>
+<script>
+(function () {
+    'use strict';
+    var $ = function (id) { return document.getElementById(id); };
+    var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+    var state = { vendors: [], root: '', now: Date.now() };
+    function token() { try { return sessionStorage.getItem('ok_admin') || ''; } catch (e) { return ''; } }
+    function api(method, url, body) {
+        return fetch(url, { method: method, headers: Object.assign({ 'x-admin-token': token() }, body ? { 'Content-Type': 'application/json' } : {}), body: body ? JSON.stringify(body) : undefined, cache: 'no-store' })
+            .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, status: r.status, d: d }; }); });
+    }
+    function ago(ms) {
+        if (!ms) return 'never';
+        var d = Math.floor((state.now - ms) / 864e5);
+        return d <= 0 ? 'today' : d === 1 ? 'yesterday' : d < 60 ? d + ' days ago' : new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+    function load() {
+        return api('GET', '/api/admin/vendors').then(function (r) {
+            if (r.status === 401 || r.status === 404) { lock(r.status === 404 ? 'The admin page is off: set ADMIN_TOKEN in the server’s .env.' : 'That token isn’t right.'); return; }
+            if (!r.ok) { $('err').textContent = r.d.error || 'Couldn’t load.'; return; }
+            state.vendors = r.d.vendors; state.root = r.d.rootDomain; state.now = r.d.now;
+            $('unlock').hidden = true; $('panel').hidden = false; $('lockBtn').hidden = false;
+            render();
+        });
+    }
+    function lock(msg) {
+        try { sessionStorage.removeItem('ok_admin'); } catch (e) {}
+        $('unlock').hidden = false; $('panel').hidden = true; $('lockBtn').hidden = true;
+        $('unlockErr').textContent = msg || '';
+    }
+    function render() {
+        var vs = state.vendors, act = vs.filter(function (v) { return v.status === 'active'; });
+        $('stats').innerHTML = [
+            [vs.length, 'trucks'], [act.length, 'active'],
+            [act.filter(function (v) { return v.orders30 > 0; }).length, 'took orders in 30 days'],
+            [vs.reduce(function (n, v) { return n + v.orders30; }, 0), 'orders in 30 days']
+        ].map(function (s) { return '<div class="ad-stat"><b>' + s[0] + '</b><span>' + s[1] + '</span></div>'; }).join('');
+        var q = $('q').value.trim().toLowerCase(), f = $('filter').value;
+        var list = vs.filter(function (v) {
+            if (q && (v.business_name + ' ' + v.slug + ' ' + (v.email || '') + ' ' + (v.custom_domain || '')).toLowerCase().indexOf(q) < 0) return false;
+            if (f === 'active') return v.status === 'active';
+            if (f === 'quiet') return v.status === 'active' && !v.orders30;
+            if (f === 'pro') return v.plan === 'pro';
+            if (f === 'suspended') return v.status === 'suspended';
+            if (f === 'pending') return v.status === 'pending';
+            return true;
+        });
+        $('list').innerHTML = list.length ? list.map(function (v) {
+            var host = v.slug + '.' + state.root;
+            return '<article class="ad-v">' +
+                '<div><h3>' + esc(v.business_name) + '</h3><a href="https://' + esc(host) + '" target="_blank" rel="noopener">' + esc(host) + '</a>' + (v.custom_domain ? ' · <a href="https://' + esc(v.custom_domain) + '" target="_blank" rel="noopener">' + esc(v.custom_domain) + '</a>' : '') +
+                '<div class="ad-meta">' + esc(v.owner_name || '') + (v.email ? ' · ' + esc(v.email) : '') + '<br>' +
+                '<b>' + v.orders30 + '</b> orders in 30 days · <b>' + v.orders + '</b> in all · last order ' + esc(ago(v.last_order_at)) + ' · last sign-in ' + esc(ago(v.last_login_at)) + ' · joined ' + esc(ago(v.created_at)) + '</div></div>' +
+                '<div class="ad-tags"><span class="ad-tag' + (v.status === 'suspended' ? ' bad' : v.status === 'pending' ? ' warn' : '') + '">' + esc(v.status) + '</span><span class="ad-tag">' + esc(v.plan) + '</span>' + (v.plan_status && v.plan_status !== 'active' ? '<span class="ad-tag warn">' + esc(v.plan_status) + '</span>' : '') + '</div>' +
+                '<div class="ad-acts">' +
+                (v.status === 'suspended' ? '<button data-act="status" data-id="' + v.id + '" data-v="active">Turn back on</button>' : '<button class="danger" data-act="status" data-id="' + v.id + '" data-v="suspended">Suspend</button>') +
+                (v.plan === 'pro' ? '<button data-act="plan" data-id="' + v.id + '" data-v="free">Set Free</button>' : '<button data-act="plan" data-id="' + v.id + '" data-v="pro">Give Pro</button>') +
+                '<button data-act="domain" data-id="' + v.id + '">' + (v.custom_domain ? 'Change domain' : 'Custom domain') + '</button>' +
+                '</div></article>';
+        }).join('') : '<p class="ok-lede">No trucks match.</p>';
+    }
+    function change(id, body, confirmText) {
+        if (confirmText && !confirm(confirmText)) return;
+        $('err').textContent = '';
+        api('POST', '/api/admin/vendors/' + id, body).then(function (r) {
+            if (!r.ok) { $('err').textContent = r.d.error || 'Couldn’t change that.'; return; }
+            load();
+        });
+    }
+    $('list').addEventListener('click', function (e) {
+        var b = e.target.closest('[data-act]'); if (!b) return;
+        var id = b.getAttribute('data-id'), v = state.vendors.filter(function (x) { return String(x.id) === id; })[0];
+        var act = b.getAttribute('data-act');
+        if (act === 'status') change(id, { status: b.getAttribute('data-v') }, b.getAttribute('data-v') === 'suspended' ? 'Suspend ' + v.business_name + '? Their page shows “not available” and online ordering stops until you turn it back on.' : null);
+        if (act === 'plan') change(id, { plan: b.getAttribute('data-v') }, (b.getAttribute('data-v') === 'pro' ? 'Give ' : 'Set Free for ') + v.business_name + '?');
+        if (act === 'domain') {
+            var d = prompt('Custom domain for ' + v.business_name + ' (like order.theirtruck.com). Leave empty to remove it.\n\nThey point it at this server first (DEPLOY.md, “Setting up a custom domain”).', v.custom_domain || '');
+            if (d !== null) change(id, { customDomain: d.trim() });
+        }
+    });
+    $('q').addEventListener('input', render);
+    $('filter').addEventListener('change', render);
+    $('unlock').addEventListener('submit', function (e) {
+        e.preventDefault();
+        try { sessionStorage.setItem('ok_admin', $('token').value.trim()); } catch (er) {}
+        $('token').value = '';
+        load();
+    });
+    $('lockBtn').addEventListener('click', function () { lock(''); });
+    if (token()) load();
+})();
+</script>
+</body>
+</html>

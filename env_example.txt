@@ -50,3 +50,6 @@ PIN_PEPPER=
 
 # Optional: key for signing links in client emails (unsubscribe, feedback). Generated and stored if unset.
 LINK_SECRET=
+
+# Optional: where owners' "Send feedback" goes (defaults to ADMIN_EMAIL). Replies go straight to the owner.
+FEEDBACK_EMAIL=

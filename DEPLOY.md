@@ -478,3 +478,20 @@ The tables are added on start (database change 3, with a copy saved first).
 - **Group order:** "Ordering for a group? Send everyone a link" in the cart. Everyone adds their own items on their
   own phone; the host places one order with who-gets-what and everyone's allergies on the ticket.
 - **Spanish menu:** item editor → "En español" for the owner's own Spanish name and description.
+
+## Brand, QR sign, admin page, feedback, accessibility
+
+- **The truck's brand:** Settings → Business Profile → "Upload your own logo" and a brand color. The logo shows on the
+  order page, kitchen portal, QR sign and the Share-today's-spot image; the color is a thin line across the top of the
+  order page and customer emails (never behind text). Customer emails (catering, punch card, follow, client notes)
+  carry the truck's logo, name and color.
+- **QR sign:** three print sizes: window (letter), A-frame (11×17) and table tent (4×6).
+- **Admin page:** `https://onlinekitchen.fyi/admin`. Type your `ADMIN_TOKEN` (from `.env`); it's kept for that browser
+  tab only. Lists every truck with orders in the last 30 days, last order and last sign-in; suspend or turn back on,
+  give Pro, set a custom domain. With no `ADMIN_TOKEN` set, the page does nothing.
+- **Send feedback:** owners tap "Send feedback" (Guide tab, or Settings) and it emails `FEEDBACK_EMAIL`
+  (or `ADMIN_EMAIL`); reply to answer them. Add `FEEDBACK_EMAIL=` to `.env` if you want a different inbox.
+- **Accessibility:** every control has a name for screen readers, dialogs move focus in and out (Escape closes),
+  the page language follows English/Spanish, a visible focus ring for keyboards, faint text raised to 4.5:1 contrast,
+  and no animation for people who turn motion off.
+- **Calm dead ends:** not-found, resting (suspended) and error pages use the same quiet page instead of bare text.

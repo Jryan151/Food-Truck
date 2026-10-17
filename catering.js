@@ -182,7 +182,7 @@ router.post('/request', requireVendor, limitRequest, async (req, res) => {
   const holdUntil = new Date(now + HOLD_MS);
   // To the host: what they asked for, the locked quote, and one link for everything.
   mailLater({
-    to: host.email, replyTo: v.email || undefined,
+    to: host.email, replyTo: v.email || undefined, brand: auth.brandFor(v),
     subject: `Your catering request with ${v.business_name} for ${fmtDate(date)}`,
     text: `Thanks, ${host.name}. ${v.business_name} has your request for ${when}, ${quote.guests} guests (${pkg.name}).\n\nTotal: ${Q.money(quote.totalCents)}. The date is held for 24 hours while ${v.business_name} confirms.\n\nEverything about your booking: ${link}\n\nReply to this email to reach ${v.business_name} directly.`,
     html: `<p>Thanks, ${escHtml(host.name)}. <b>${escHtml(v.business_name)}</b> has your request for <b>${escHtml(when)}</b>, ${quote.guests} guests (${escHtml(pkg.name)}).</p>
@@ -222,7 +222,7 @@ router.post('/quote-email', requireVendor, limitRequest, async (req, res) => {
   const date = Q.validDate(String(b.date || '')) ? String(b.date) : null;
   const link = pageUrl(req, '/catering');
   const ok = await sendMail({
-    to: email, replyTo: v.email || undefined,
+    to: email, replyTo: v.email || undefined, brand: auth.brandFor(v),
     subject: `Your catering quote from ${v.business_name}: ${Q.money(quote.totalCents)}`,
     text: `Here's your quote from ${v.business_name}${date ? ' for ' + fmtDate(date) : ''}: ${quote.guests} guests, ${pkg.name}.
 
@@ -271,7 +271,7 @@ router.post('/custom', requireVendor, limitRequest, async (req, res) => {
   if (!ok) return res.status(502).json({ error: 'We couldn’t send that just now. Please try again in a minute.' });
   crm.catering.asked(v.id, { email, name, phone: b.hostPhone }, message);
   mailLater({
-    to: email, replyTo: v.email,
+    to: email, replyTo: v.email, brand: auth.brandFor(v),
     subject: `${v.business_name} got your catering question`,
     text: `Thanks, ${name}. ${v.business_name} got your message and will reply to this email address.\n\nYour message:\n${message}`,
     html: `<p>Thanks, ${escHtml(name)}. ${escHtml(v.business_name)} got your message and will reply to this email address.</p><p style="white-space:pre-wrap;color:#555">${escHtml(message)}</p>`,
@@ -362,7 +362,7 @@ async function decide(req, res, accept) {
   const reason = String((req.body || {}).message || '').trim().slice(0, 400);
   if (accept) {
     mailLater({
-      to: b.host_email, replyTo: v.email || undefined,
+      to: b.host_email, replyTo: v.email || undefined, brand: auth.brandFor(v),
       subject: `Confirmed: ${v.business_name} on ${fmtDate(b.event_date)}`,
       text: `Good news, ${b.host_name}: ${v.business_name} confirmed ${fmtDate(b.event_date)} at ${fmtTime(b.start_time)} for ${b.guests} guests. Total ${Q.money(b.total_cents)}.\n${d.finalCountDays ? `Final guest count is due ${d.finalCountDays} days before the event.\n` : ''}${reason ? '\n' + reason + '\n' : ''}\nYour booking: ${link}\nReply to this email to reach ${v.business_name}.`,
       html: `<p>Good news, ${escHtml(b.host_name)}: <b>${escHtml(v.business_name)}</b> confirmed <b>${escHtml(fmtDate(b.event_date))} at ${escHtml(fmtTime(b.start_time))}</b> for ${b.guests} guests.</p>
@@ -372,7 +372,7 @@ async function decide(req, res, accept) {
     }).catch(() => {});
   } else {
     mailLater({
-      to: b.host_email, replyTo: v.email || undefined,
+      to: b.host_email, replyTo: v.email || undefined, brand: auth.brandFor(v),
       subject: `${v.business_name} can’t make ${fmtDate(b.event_date)}`,
       text: `Sorry, ${b.host_name}: ${v.business_name} can't take your event on ${fmtDate(b.event_date)}.${reason ? '\n\n' + reason : ''}\n\nReply to this email to ask about another date.`,
       html: `<p>Sorry, ${escHtml(b.host_name)}: ${escHtml(v.business_name)} can't take your event on ${escHtml(fmtDate(b.event_date))}.</p>${reason ? `<p>${escHtml(reason)}</p>` : ''}<p>Reply to this email to ask about another date.</p>`,
@@ -386,13 +386,13 @@ router.post('/owner/bookings/:id/decline', ownerOnly, (req, res) => decide(req, 
 /* ---------- housekeeping: holds nobody answered ---------- */
 async function expireHolds() {
   const now = Date.now();
-  const due = await all("SELECT b.*, v.business_name, v.email AS owner_email FROM catering_bookings b JOIN vendors v ON v.id = b.vendor_id WHERE b.status = 'requested' AND b.hold_expires_at <= ?", [now]);
+  const due = await all("SELECT b.*, v.business_name, v.slug, v.logo_url, v.brand_color, v.emoji, v.email AS owner_email FROM catering_bookings b JOIN vendors v ON v.id = b.vendor_id WHERE b.status = 'requested' AND b.hold_expires_at <= ?", [now]);
   for (const b of due) {
     const r = await run("UPDATE catering_bookings SET status = 'expired', updated_at = ? WHERE id = ? AND status = 'requested'", [now, b.id]);
     if (!r.changes) continue;
     crm.catering.expired(b);
     mailLater({
-      to: b.host_email, replyTo: b.owner_email || undefined,
+      to: b.host_email, replyTo: b.owner_email || undefined, brand: auth.brandFor({ business_name: b.business_name, slug: b.slug, logo_url: b.logo_url, brand_color: b.brand_color, emoji: b.emoji }),
       subject: `Your hold with ${b.business_name} for ${fmtDate(b.event_date)} has ended`,
       text: `${b.business_name} hasn't confirmed your request for ${fmtDate(b.event_date)} yet, so the 24-hour hold has ended. They can still confirm if the date is free; reply to this email to check in.`,
       html: `<p>${escHtml(b.business_name)} hasn't confirmed your request for ${escHtml(fmtDate(b.event_date))} yet, so the 24-hour hold has ended. They can still confirm if the date is free; reply to this email to check in.</p>`,

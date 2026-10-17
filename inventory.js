@@ -32,8 +32,8 @@ async function menuFor(v, { owner = false, costs = owner } = {}) {
     const missing = (m.ingredients || []).find((i) => out.includes(norm(i)));
     const reason = m.soldOut ? 'manual' : left !== null && left <= 0 ? 'stock' : missing ? 'ingredient' : null;
     const item = Object.assign({}, m, { soldOut: !!reason, outReason: reason });
-    if (owner) { item.left = left; item.manualSoldOut = !!m.soldOut; item.missing = missing || null; if (!costs) delete item.cost; }
-    else { item.left = left !== null && left <= LOW ? Math.max(0, left) : null; delete item.ingredients; delete item.cost; }
+    if (owner) { item.left = left; item.manualSoldOut = !!m.soldOut; item.missing = missing || null; if (!costs) { delete item.cost; delete item.recipe; } }
+    else { item.left = left !== null && left <= LOW ? Math.max(0, left) : null; delete item.ingredients; delete item.cost; delete item.recipe; }
     return item;
   });
 }

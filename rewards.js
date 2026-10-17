@@ -144,7 +144,7 @@ router.post('/save', requireVendor, limitSave, async (req, res) => {
   if (card) {
     const link = `${req.secure ? 'https' : 'http'}://${req.tenant.host}/?card=${encodeURIComponent(b.card)}`;
     mailLater({
-      to: email, replyTo: v.email || undefined, subject: `Your ${v.business_name} ${settings(v).name.toLowerCase()}`,
+      to: email, replyTo: v.email || undefined, brand: auth.brandFor(v), subject: `Your ${v.business_name} ${settings(v).name.toLowerCase()}`,
       text: `Open this on any phone to keep your ${settings(v).name.toLowerCase()} (${card.stamps} stamp${card.stamps === 1 ? '' : 's'} so far): ${link}\n\nKeep this email private: the link is your card.`,
       html: `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:520px;margin:0 auto;color:#111"><h2 style="margin:0 0 8px">Your ${escHtml(settings(v).name.toLowerCase())}</h2><p>${card.stamps} stamp${card.stamps === 1 ? '' : 's'} so far. Open this link on any phone to keep collecting.</p><p><a href="${link}" style="display:inline-block;background:#111;color:#fff;padding:12px 18px;border-radius:10px;text-decoration:none;font-weight:700">Open my card</a></p><p style="color:#777;font-size:12px">Keep this email private: the link is your card.</p></div>`,
     }).catch(() => {});

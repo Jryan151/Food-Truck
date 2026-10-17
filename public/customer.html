@@ -134,7 +134,7 @@
     </div>
 
     <!-- Footer -->
-    <div class="w-full text-center py-5 mt-auto bg-zinc-950 relative z-0 border-t border-zinc-900/50 space-y-1">
+    <div id="pageFooter" class="w-full text-center py-5 mt-auto bg-zinc-950 relative z-0 border-t border-zinc-900/50 space-y-1">
         <div id="brandingLine" class="text-[10px] text-zinc-600 font-medium tracking-wide" style="display:none;"><span data-i18n="powered_by">Powered by</span> <a id="brandingLink" href="#" target="_blank" rel="noopener" class="underline hover:text-zinc-400">platform</a></div>
         <div class="text-[10px] text-zinc-600 font-medium tracking-wide space-x-2">
             <a href="/owner.html" class="hover:text-zinc-400 uppercase" data-i18n="owner_login">Owner login</a>
@@ -145,7 +145,7 @@
     </div>
 
     <!-- Item Modal -->
-    <div id="itemModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" style="display:none;">
+    <div id="itemModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="itemModalTitle">
         <div class="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-2xl p-5 space-y-4 relative max-h-[90vh] overflow-y-auto">
             <img id="itemModalPhoto" alt="" class="w-full h-auto max-h-80 object-contain bg-zinc-950 rounded-xl -mt-1" style="display:none;">
             <div class="flex justify-between items-center gap-3"><h3 id="itemModalTitle" class="font-bold text-lg text-zinc-100">Add to Order</h3><button data-action="close-item" class="text-zinc-400 hover:text-white text-sm" aria-label="Close">✕</button></div>
@@ -174,9 +174,9 @@
     </div>
 
     <!-- Cart Modal -->
-    <div id="cartModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" style="display:none;">
+    <div id="cartModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="cartTitle">
         <div class="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div class="flex justify-between items-center border-b border-zinc-800 pb-3"><h3 class="font-bold text-lg" data-i18n="your_order">Your Order</h3><button data-action="close-cart" class="text-zinc-400 hover:text-white text-sm" aria-label="Close">✕</button></div>
+            <div class="flex justify-between items-center border-b border-zinc-800 pb-3"><h3 class="font-bold text-lg" id="cartTitle" data-i18n="your_order">Your Order</h3><button data-action="close-cart" class="text-zinc-400 hover:text-white text-sm" aria-label="Close">✕</button></div>
 
             <div id="whenBox" data-noguest style="display:none"></div>
             <div id="cartWaitTimeContainer" data-noguest class="bg-amber-500/10 border border-amber-500/30 rounded-lg p-2.5 flex items-center justify-between text-xs">
@@ -223,10 +223,10 @@
     </div>
 
     <!-- Success Modal -->
-    <div id="successModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" style="display:none;">
+    <div id="successModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="successTitle">
         <div class="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-2xl p-6 text-center space-y-4 relative">
             <div class="w-16 h-16 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-full flex items-center justify-center mx-auto text-2xl">✓</div>
-            <h3 class="font-bold text-lg text-zinc-100" data-i18n="order_placed">Order placed!</h3>
+            <h3 class="font-bold text-lg text-zinc-100" id="successTitle" data-i18n="order_placed">Order placed!</h3>
             <div class="bg-zinc-950 p-4 rounded-xl border border-zinc-800 space-y-1">
                 <div class="text-xs text-zinc-400" data-i18n="ticket_number">Your ticket number:</div>
                 <div id="successTicketNum" class="text-2xl font-mono font-bold text-zinc-100">#000</div>
@@ -367,6 +367,7 @@
         var lang = 'en';
         try { lang = localStorage.getItem('ft_lang') || ''; } catch (e) {}
         if (lang !== 'en' && lang !== 'es') lang = /^es\b/i.test(navigator.language || '') ? 'es' : 'en';
+        document.documentElement.lang = lang; // screen readers pronounce Spanish as Spanish
         function t(k, vars) {
             var s = (I18N[lang] && I18N[lang][k] != null) ? I18N[lang][k] : (I18N.en[k] != null ? I18N.en[k] : k);
             if (vars) for (var v in vars) s = s.split('{' + v + '}').join(vars[v]);
@@ -414,6 +415,7 @@
         /* ---------- views ---------- */
         function show(view) {
             app.view = view;
+            document.body.classList.toggle('cartbar', view === 'menu' && !app.limp); // keeps the footer clear of the floating cart
             ['landing', 'menu', 'tracker'].forEach(function (v) {
                 var el = $(v + 'View');
                 if (el) el.style.display = (v === view) ? (v === 'landing' ? 'flex' : 'block') : 'none';
@@ -1473,7 +1475,11 @@
             app.timezone = d.timezone || '';
             document.title = d.businessName;
             $('dynamic-truck-name').textContent = d.businessName;
-            TruckLogo.set($('dynamic-emoji'), d.emoji, 'var(--z900)');
+            TruckLogo.set($('dynamic-emoji'), d.emoji, 'var(--z900)', d.brand);
+            // The truck's accent color: a thin line across the top of the page, and around the logo.
+            var bc = d.brand && /^#[0-9a-f]{6}$/i.test(d.brand.color || '') ? d.brand.color : '';
+            document.documentElement.style.setProperty('--brand', bc || 'transparent');
+            document.body.classList.toggle('branded', !!bc);
             $('cateringLink').style.display = d.cateringEnabled ? 'block' : 'none';
             app.nextStop = d.nextStop || null;
             app.deals = d.deals || [];
@@ -1591,6 +1597,30 @@
             }
         }
 
+        /* ---------- dialogs: focus goes in when one opens, comes back when it closes; Escape closes ---------- */
+        var MODALS = ['itemModal', 'cartModal', 'successModal'];
+        (function () {
+            var last = null, open = {};
+            new MutationObserver(function () {
+                MODALS.forEach(function (id) {
+                    var el = $(id), shown = el.style.display === 'flex';
+                    if (shown && !open[id]) {
+                        open[id] = true; last = document.activeElement;
+                        setTimeout(function () { var f = el.querySelector('h3[id]') || el.querySelector('button, input, select, textarea'); if (f) { if (f.tagName === 'H3') f.setAttribute('tabindex', '-1'); f.focus({ preventScroll: true }); } }, 30);
+                    } else if (!shown && open[id]) {
+                        open[id] = false;
+                        if (last && document.body.contains(last)) try { last.focus({ preventScroll: true }); } catch (e) {}
+                    }
+                });
+            }).observe(document.body, { attributes: true, subtree: true, attributeFilter: ['style'] });
+            document.addEventListener('keydown', function (e) {
+                if (e.key !== 'Escape') return;
+                if ($('itemModal').style.display === 'flex') closeItemModal();
+                else if ($('cartModal').style.display === 'flex') closeCartModal();
+                else if ($('successModal').style.display === 'flex') { $('successModal').style.display = 'none'; show('tracker'); }
+            });
+        })();
+
         /* ---------- events (no inline handlers) ---------- */
         document.addEventListener('click', function (e) {
             var el = e.target.closest('[data-action]');
@@ -1650,6 +1680,7 @@
                     break;
                 case 'toggle-lang':
                     lang = lang === 'es' ? 'en' : 'es';
+                    document.documentElement.lang = lang;
                     try { localStorage.setItem('ft_lang', lang); } catch (er) {}
                     applyStatic();
                     if (app.vendor) renderAll();

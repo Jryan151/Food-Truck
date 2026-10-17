@@ -62,8 +62,24 @@ const mailConfigured = () => !!(process.env.RESEND_API_KEY && process.env.MAIL_F
 
 async function sendMail(msg) { return (await deliverMail(msg)).ok; }
 
+/* ---------- the truck's brand on customer emails ----------
+   `brand` ({ name, color, logo, emoji, origin }) puts the truck's color bar, logo and name at the top. */
+function brandWrap(b, html) {
+  const color = /^#[0-9a-f]{6}$/i.test(b.color || '') ? b.color : '#111111';
+  const mark = b.logo && b.origin
+    ? `<img src="${escHtml(b.origin + b.logo)}" alt="" width="40" height="40" style="display:block;width:40px;height:40px;border-radius:20px;object-fit:cover">`
+    : b.emoji ? `<span style="font-size:28px;line-height:40px">${escHtml(b.emoji)}</span>` : '';
+  return `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:520px;margin:0 auto;color:#111">
+<div style="height:4px;background:${color};border-radius:2px"></div>
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin:14px 0 10px"><tr>${mark ? `<td style="padding-right:10px;vertical-align:middle">${mark}</td>` : ''}<td style="font-weight:800;font-size:17px;vertical-align:middle">${escHtml(b.name || '')}</td></tr></table>
+${html}</div>`;
+}
+/** brand for a vendor row, with the absolute address its logo is served from. */
+function brandFor(v) { return Object.assign(core.brandOf(v), { origin: vendorUrl(v.slug, '').replace(/\/$/, '') }); }
+
 // { ok } on success; { ok: false, retry: true } when trying again later can help (network, 5xx, 429).
-async function deliverMail({ to, subject, html, text, replyTo, headers, idempotencyKey }) {
+async function deliverMail({ to, subject, html, text, replyTo, headers, idempotencyKey, brand }) {
+  if (brand && html) html = brandWrap(brand, html);
   if (!mailConfigured()) {
     console.warn(`[MAIL NOT CONFIGURED — this email was NOT sent] to=${to} subject="${subject}"\n${text}\n`);
     return { ok: false, retry: false };
@@ -98,7 +114,7 @@ async function mailLater(msg, { staleAfterMs, notBefore } = {}) {
   const hold = !!(notBefore && notBefore > now);
   const r = hold ? { ok: false, retry: true, error: null } : await deliverMail(Object.assign({}, msg, { idempotencyKey: key }));
   if (r.ok || !r.retry) return r.ok;
-  const payload = JSON.stringify({ to: msg.to, subject: msg.subject, html: msg.html, text: msg.text, replyTo: msg.replyTo, headers: msg.headers });
+  const payload = JSON.stringify({ to: msg.to, subject: msg.subject, html: msg.html, text: msg.text, replyTo: msg.replyTo, headers: msg.headers, brand: msg.brand });
   try {
     await run('INSERT OR IGNORE INTO mail_outbox (idem_key, payload, next_at, stale_at, last_error, created_at, attempts) VALUES (?, ?, ?, ?, ?, ?, ?)',
       [key, payload, hold ? notBefore : now + MAIL_BACKOFF_MIN[0] * 60000, staleAfterMs ? (hold ? notBefore : now) + staleAfterMs : null, r.error || null, hold ? notBefore : now, hold ? 0 : 1]);
@@ -607,6 +623,7 @@ router.get('/me', async (req, res) => {
       ownerName: v.owner_name || '',
       ownerIG: v.owner_ig || '',
       emoji: v.emoji || '',
+      brand: core.brandOf(v),
       email: s.role === 'owner' ? v.email || '' : undefined,
       plan: core.effectivePlan(v),
       planStatus: v.plan_status,
@@ -645,5 +662,5 @@ router.post('/reset', limitLogin, async (req, res) => {
 
 module.exports = {
   router, tenant, requireVendor, requireRole, getSession, startSession, clearSessionCookie, requestToken,
-  rateLimit, sendMail, mailLater, retryMail, mailConfigured, escHtml, parseCookies, vendorUrl, EMAIL_RE, PIN_RE, cleanIG,
+  rateLimit, sendMail, mailLater, retryMail, mailConfigured, brandFor, brandWrap, escHtml, parseCookies, vendorUrl, EMAIL_RE, PIN_RE, cleanIG,
 };

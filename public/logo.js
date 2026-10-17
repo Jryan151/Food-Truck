@@ -21,9 +21,22 @@
     // '' = the universal truck logo (default for every new truck).
     var PRESETS = ['', '🌮', '🌯', '🍔', '🍕', '🌭', '🍟', '🍗', '🍖', '🥩', '🍜', '🍣', '🥟', '🍛', '🥙', '🥪', '🥗', '🍤', '🦞', '🍩', '🧁', '🍦', '🥤', '🧋', '☕'];
 
-    /** Puts the logo into an element. `hole` is the background color behind it (for the cut-outs). */
-    function setLogo(el, emoji, hole) {
+    /** Puts the logo into an element. `hole` is the background color behind it (for the cut-outs).
+        `brand` (optional, from the server): an uploaded logo wins, and its accent color rings the logo. */
+    function setLogo(el, emoji, hole, brand) {
         if (!el) return;
+        // The round frame the logo sits in (the element itself, or the circle around it).
+        var ring = el.classList.contains('rounded-full') || el.classList.contains('sign-logo') ? el : (el.closest && el.closest('.rounded-full')) || el;
+        ring.style.boxShadow = brand && /^#[0-9a-f]{6}$/i.test(brand.color || '') ? '0 0 0 3px ' + brand.color : '';
+        if (brand && /^\/uploads\/[\w-]+\.(jpg|png|webp)$/.test(brand.logo || '')) {
+            // An uploaded logo fills the circle edge to edge.
+            if (ring !== el) { el.style.cssText += ';display:block;width:100%;height:100%;border-radius:50%;overflow:hidden'; ring.style.overflow = 'hidden'; }
+            else el.style.overflow = 'hidden';
+            el.innerHTML = '<img src="' + brand.logo + '" alt="" style="width:100%;height:100%;object-fit:cover;display:block">';
+            return;
+        }
+        if (ring !== el) { el.style.display = ''; el.style.width = ''; el.style.height = ''; el.style.borderRadius = ''; }
+        el.style.overflow = '';
         var e = String(emoji || '').trim();
         if (e) { el.textContent = e; return; }
         el.innerHTML = TRUCK_SVG;

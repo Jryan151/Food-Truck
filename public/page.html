@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>{{title}}</title>
+    <meta name="robots" content="noindex">
+    <meta name="theme-color" content="#0a0a0b">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+    <script src="/theme.js"></script>
+    <link rel="stylesheet" href="/theme.css">
+    <link rel="stylesheet" href="/ok.css">
+</head>
+<body>
+<!-- One calm page for every dead end: not found, resting, or a server hiccup. Filled in by server.js. -->
+<main class="ok-wrap" style="min-height:80vh;justify-content:center">
+    <div>
+        <div class="ok-step">{{kicker}}</div>
+        <h1 class="ok-h1" style="margin-top:6px">{{title}}</h1>
+        <p class="ok-lede">{{text}}</p>
+    </div>
+    <a class="ok-btn" href="{{href}}">{{cta}}</a>
+</main>
+</body>
+</html>

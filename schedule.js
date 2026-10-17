@@ -182,7 +182,7 @@ router.post('/follow', requireVendor, limitFollow, async (req, res) => {
   const link = `${origin(req)}/schedule?follow=${token}`;
   const confirmed = existing && existing.confirmed_at;
   mailLater({
-    to: email,
+    to: email, brand: auth.brandFor(v),
     replyTo: v.email || undefined,
     subject: confirmed ? `Your ${v.business_name} updates` : `Confirm: follow ${v.business_name}`,
     text: confirmed ? `You already follow ${v.business_name}. Change what you get here: ${link}` : `Tap to confirm you want updates from ${v.business_name}: ${link}\n\nIf this wasn't you, ignore this email and nothing happens.`,
@@ -327,7 +327,7 @@ async function mailFollowers(req, v, list, subject, bodyFor) {
     const b = bodyFor(f);
     // "We're open near you" is no use tomorrow: retried for two hours at most.
     await mailLater({
-      to: f.email, replyTo: v.email || undefined, subject, text: b.text + `\n\nChange what you get or unfollow: ${manage}`, html: mailShell(v, b.html, manage),
+      to: f.email, replyTo: v.email || undefined, brand: auth.brandFor(v), subject, text: b.text + `\n\nChange what you get or unfollow: ${manage}`, html: mailShell(v, b.html, manage),
       headers: { 'List-Unsubscribe': `<${origin(req)}/api/schedule/follow/${token}/unsubscribe>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
     }, { staleAfterMs: 2 * 60 * 60 * 1000 }).catch(() => {});
   }

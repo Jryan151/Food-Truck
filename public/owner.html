@@ -31,9 +31,32 @@
         /* Printing the QR sign: only the sign itself goes on paper. */
         @media print {
             body > *:not(#qrModal) { display: none !important; }
-            #qrModal { position: static !important; background: #fff !important; padding: 0 !important; display: block !important; }
+            body { background: #fff !important; }
+            #qrModal { position: static !important; background: #fff !important; padding: 0 !important; display: block !important; backdrop-filter: none !important; }
+            #qrModal > div { max-width: none !important; }
             #qrModal .no-print { display: none !important; }
-            #qrSheet { box-shadow: none !important; border: 0 !important; margin: 0 auto !important; }
+            #qrSheet { box-shadow: none !important; border: 0 !important; margin: 0 auto !important; border-radius: 0 !important; }
+        }
+        /* The QR sign: sized for a window (letter), an A-frame (11×17) or a table tent (4×6). */
+        .sign { background: #fff; color: #0a0a0b; text-align: center; font-family: Manrope, -apple-system, Segoe UI, Roboto, sans-serif; border-radius: 18px; overflow: hidden; }
+        .sign-bar { height: 10px; background: var(--sign-brand, #0a0a0b); }
+        .sign-in { padding: 28px 26px 26px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+        .sign-logo { width: 72px; height: 72px; border-radius: 36px; display: flex; align-items: center; justify-content: center; font-size: 44px; color: #0a0a0b; }
+        .sign-name { font-weight: 800; font-size: 30px; letter-spacing: -0.02em; line-height: 1.1; margin-top: 4px; }
+        .sign-cta { font-weight: 800; font-size: 20px; margin-top: 10px; }
+        .sign-qr svg { width: 100%; height: auto; display: block; }
+        .sign-qr { width: 78%; max-width: 300px; margin: 6px 0 4px; }
+        .sign-sub { font-weight: 600; font-size: 14px; }
+        .sign-es { font-size: 12px; color: #52525b; }
+        .sign-url { font-size: 12px; font-weight: 700; color: #3f3f46; margin-top: 6px; letter-spacing: .01em; }
+        @media print {
+            .sign { border-radius: 0; }
+            .sign.letter { width: 7.5in; } .sign.letter .sign-in { padding: .5in .4in; gap: 10px; } .sign.letter .sign-logo { width: 1.3in; height: 1.3in; font-size: .8in; border-radius: .65in; }
+            .sign.letter .sign-name { font-size: 44pt; } .sign.letter .sign-cta { font-size: 30pt; } .sign.letter .sign-qr { width: 4.6in; max-width: none; } .sign.letter .sign-sub { font-size: 18pt; } .sign.letter .sign-es { font-size: 14pt; } .sign.letter .sign-url { font-size: 14pt; } .sign.letter .sign-bar { height: .3in; }
+            .sign.tabloid { width: 10in; } .sign.tabloid .sign-in { padding: .8in .5in; gap: 14px; } .sign.tabloid .sign-logo { width: 1.8in; height: 1.8in; font-size: 1.1in; border-radius: .9in; }
+            .sign.tabloid .sign-name { font-size: 64pt; } .sign.tabloid .sign-cta { font-size: 42pt; } .sign.tabloid .sign-qr { width: 6.6in; max-width: none; } .sign.tabloid .sign-sub { font-size: 26pt; } .sign.tabloid .sign-es { font-size: 20pt; } .sign.tabloid .sign-url { font-size: 20pt; } .sign.tabloid .sign-bar { height: .45in; }
+            .sign.tent { width: 3.6in; } .sign.tent .sign-in { padding: .2in; gap: 3px; } .sign.tent .sign-logo { width: .5in; height: .5in; font-size: .3in; }
+            .sign.tent .sign-name { font-size: 16pt; } .sign.tent .sign-cta { font-size: 12pt; } .sign.tent .sign-qr { width: 2.2in; } .sign.tent .sign-sub, .sign.tent .sign-url { font-size: 8pt; } .sign.tent .sign-es { font-size: 7pt; }
         }
     </style>
 </head>
@@ -169,7 +192,7 @@
                     <p class="text-[11px] text-zinc-500 mb-3">Build a menu for an event once and switch to it in one tap, this year and next. Switching back is one tap too, and the menu that’s on now is always kept.</p>
                     <div id="menusList" class="space-y-2"></div>
                     <div class="flex gap-2 mt-3">
-                        <input id="menuSaveName" maxlength="40" placeholder="Save the menu that’s on now as…" class="flex-1 min-w-0 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200">
+                        <input id="menuSaveName" maxlength="40" placeholder="Save the menu that’s on now as…" class="flex-1 min-w-0 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200" aria-label="Name for the saved menu">
                         <button data-action="menu-save" class="bg-zinc-100 text-zinc-950 px-4 rounded-lg text-xs font-bold">Save</button>
                     </div>
                     <div id="menusMsg" class="text-[11px] mt-2" role="status"></div>
@@ -247,7 +270,7 @@
                 <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" id="pageBox">
                     <h3 class="font-bold text-sm text-zinc-100 mb-3 border-b border-zinc-800 pb-2">Your Ordering Page</h3>
                     <div class="flex gap-2">
-                        <input type="text" id="shareLink" readonly class="flex-1 min-w-0 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-300">
+                        <input type="text" id="shareLink" readonly class="flex-1 min-w-0 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-300" aria-label="Your ordering page link">
                         <button data-action="copy-link" id="btnCopyLink" class="bg-zinc-800 hover:bg-zinc-700 text-white px-3 rounded-lg text-xs font-bold">Copy</button>
                     </div>
                     <p class="text-[10px] text-zinc-500 mt-2">Share this link on social media, and print a QR sign for your window.</p>
@@ -272,7 +295,7 @@
                 <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" data-owner id="crewNoteBox">
                     <h3 class="font-bold text-sm text-zinc-100 mb-1 border-b border-zinc-800 pb-2">Note for the crew</h3>
                     <p class="text-[11px] text-zinc-400 mt-3 mb-2">Shows at the top of every kitchen screen until you clear it. For example: "Out of cilantro today."</p>
-                    <textarea id="crewNoteInput" maxlength="240" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200 resize-none h-16" placeholder="Nothing for the crew right now"></textarea>
+                    <textarea id="crewNoteInput" maxlength="240" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200 resize-none h-16" placeholder="Nothing for the crew right now" aria-label="Note for the crew"></textarea>
                     <div class="flex gap-2 mt-2">
                         <button data-action="save-crew-note" class="flex-1 bg-zinc-100 hover:bg-white text-zinc-950 py-2.5 rounded-lg text-xs font-bold">Post note</button>
                         <button data-action="clear-crew-note" class="px-4 bg-zinc-950 border border-zinc-800 text-zinc-300 py-2.5 rounded-lg text-xs font-bold">Clear</button>
@@ -286,7 +309,7 @@
                     <p class="text-[11px] text-zinc-500 mt-3 mb-3">One summary a day instead of a stream of notifications: orders, top item, busiest and slowest hour, what customers said, what sold out, and tomorrow’s weather.</p>
                     <div class="flex items-center justify-between gap-3">
                         <div class="text-xs font-bold text-zinc-200">Day summary by email</div>
-                        <select id="sumWhen" class="bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200"><option value="morning">Next morning</option><option value="close">Right after close</option><option value="off">Off</option></select>
+                        <select id="sumWhen" class="bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200" aria-label="Day summary by email"><option value="morning">Next morning</option><option value="close">Right after close</option><option value="off">Off</option></select>
                     </div>
                     <div class="flex items-center justify-between gap-3 mt-4">
                         <div class="min-w-0"><div class="text-xs font-bold text-zinc-200">Quiet hours</div><div class="text-[10px] text-zinc-500">No emails to you overnight. Anything that comes in waits for the morning.</div></div>
@@ -377,8 +400,8 @@
                 <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" data-owner id="locationManagerBox">
                     <h3 class="font-bold text-sm text-zinc-100 mb-3 border-b border-zinc-800 pb-2">Location Manager</h3>
                     <div class="flex gap-2 mb-3">
-                        <input type="text" id="newLocationInput" maxlength="80" placeholder="Add new location..." class="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200">
-                        <button data-action="add-location" class="bg-zinc-800 hover:bg-zinc-700 text-white px-3 rounded-lg text-xs font-bold">+</button>
+                        <input type="text" id="newLocationInput" maxlength="80" placeholder="Add new location..." class="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200" aria-label="New location name">
+                        <button data-action="add-location" aria-label="Add location" class="bg-zinc-800 hover:bg-zinc-700 text-white px-3 rounded-lg text-xs font-bold">+</button>
                     </div>
                     <div class="space-y-2 mb-4" id="activeLocationsList"></div>
                     <h4 class="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Recently Deleted (Trash)</h4>
@@ -402,8 +425,8 @@
                         <div style="grid-column:span 3"><label class="block text-[10px] text-zinc-400 mb-1" for="schLoc">Where</label>
                             <select id="schLoc" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200"></select>
                             <input type="text" id="schLocNew" maxlength="80" placeholder="Name of the spot" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200 mt-2" style="display:none"></div>
-                        <div style="grid-column:span 3"><input type="text" id="schAddr" maxlength="160" placeholder="Street address (optional, for maps)" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200"></div>
-                        <div style="grid-column:span 3"><input type="text" id="schNote" maxlength="200" placeholder="Note (optional): “by the fountain”, “cash only today”" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200"></div>
+                        <div style="grid-column:span 3"><input type="text" id="schAddr" maxlength="160" placeholder="Street address (optional, for maps)" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200" aria-label="Street address"></div>
+                        <div style="grid-column:span 3"><input type="text" id="schNote" maxlength="200" placeholder="Note (optional): “by the fountain”, “cash only today”" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200" aria-label="Note for this stop"></div>
                     </div>
                     <button data-action="sch-add" class="mt-3 w-full bg-zinc-100 text-zinc-950 py-2.5 rounded-lg text-xs font-bold">Add stop</button>
                     <div id="schMsg" class="text-[11px] mt-2" role="status"></div>
@@ -430,13 +453,26 @@
                 <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" data-owner id="profileBox">
                     <h3 class="font-bold text-sm text-zinc-100 mb-3 border-b border-zinc-800 pb-2">Business Profile</h3>
                     <div class="space-y-2">
-                        <input type="text" id="profName" maxlength="60" placeholder="Business name" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200">
+                        <input type="text" id="profName" maxlength="60" placeholder="Business name" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200" aria-label="Business name">
                         <label class="block text-[10px] text-zinc-400 mt-1">Logo</label>
                         <input type="hidden" id="profEmoji">
                         <div id="logoPicker" class="grid grid-cols-7 gap-1.5"></div>
-                        <input type="text" id="profEmojiCustom" maxlength="4" placeholder="Or type any emoji" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200">
-                        <input type="text" id="profIG" maxlength="31" placeholder="Instagram handle" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200">
-                        <input type="text" id="profOwner" maxlength="60" placeholder="Your name" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200">
+                        <input type="text" id="profEmojiCustom" maxlength="4" placeholder="Or type any emoji" aria-label="Or type any emoji" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200">
+                        <div class="flex items-center gap-3 mt-1">
+                            <div id="brandLogo" class="w-12 h-12 rounded-full border border-zinc-700 bg-zinc-950 flex items-center justify-center text-xl shrink-0" style="width:48px;height:48px"></div>
+                            <div class="min-w-0 flex-1">
+                                <label class="inline-block border border-zinc-700 text-zinc-100 px-3 py-2 rounded-lg text-[11px] font-bold cursor-pointer">Upload your own logo<input type="file" id="logoFile" accept="image/png,image/jpeg,image/webp" class="sr"></label>
+                                <button data-action="logo-remove" id="logoRemove" class="text-[11px] text-zinc-400 underline ml-2" style="display:none">Remove</button>
+                                <div class="text-[10px] text-zinc-500 mt-1" id="logoMsg">Square works best. Shown on your page, QR sign and emails.</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3 mt-1">
+                            <label class="text-[10px] text-zinc-400 flex-1" for="brandColor">Brand color <span class="text-zinc-500">· a thin line on your page and emails, never behind text</span></label>
+                            <input type="color" id="brandColor" value="#111111" aria-label="Brand color" style="width:44px;height:32px;border:1px solid var(--z700);border-radius:8px;background:transparent">
+                            <button data-action="brand-none" id="brandNone" class="text-[11px] text-zinc-400 underline">None</button>
+                        </div>
+                        <input type="text" id="profIG" maxlength="31" placeholder="Instagram handle" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200" aria-label="Instagram handle">
+                        <input type="text" id="profOwner" maxlength="60" placeholder="Your name" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200" aria-label="Your name">
                         <button data-action="save-profile" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 py-2.5 rounded-lg text-xs font-bold">Save Profile</button>
                         <div id="profMsg" class="text-[11px] text-center" style="display:none;"></div>
                     </div>
@@ -447,8 +483,8 @@
                     <p class="text-[11px] text-zinc-500 mb-3">Give each person their own PIN for the kitchen screen. What they do is recorded with their name. Removing someone signs them out right away.</p>
                     <div id="crewList" class="space-y-2"></div>
                     <div class="flex gap-2 mt-3">
-                        <input type="text" id="crewName" maxlength="30" placeholder="Name" autocomplete="off" class="flex-1 min-w-0 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200">
-                        <input type="text" id="crewPin" maxlength="8" inputmode="numeric" placeholder="PIN" autocomplete="off" class="w-20 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200 text-center tracking-widest font-mono">
+                        <input type="text" id="crewName" maxlength="30" placeholder="Name" autocomplete="off" class="flex-1 min-w-0 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200" aria-label="Crew member’s name">
+                        <input type="text" id="crewPin" maxlength="8" inputmode="numeric" placeholder="PIN" autocomplete="off" class="w-20 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200 text-center tracking-widest font-mono" aria-label="Their PIN">
                         <button data-action="crew-add" class="bg-zinc-100 text-zinc-950 px-3 rounded-lg text-xs font-bold">Add</button>
                     </div>
                     <div id="crewMsg" class="text-[11px] mt-2" role="status"></div>
@@ -458,19 +494,21 @@
                             <button data-action="shared-pin-off" id="sharedPinOff" class="text-[11px] text-zinc-400 underline" style="display:none">Turn off</button>
                         </div>
                         <div class="flex gap-2 mt-2">
-                            <input type="text" id="newStaffPin" maxlength="8" placeholder="New shared PIN" class="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200 text-center tracking-widest font-mono">
+                            <input type="text" id="newStaffPin" maxlength="8" placeholder="New shared PIN" class="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200 text-center tracking-widest font-mono" aria-label="New shared PIN">
                             <button data-action="save-pin" class="bg-zinc-800 text-zinc-100 px-4 rounded-lg text-xs font-bold">Save</button>
                         </div>
                     </div>
                 </div>
 
+                <button data-action="open-feedback" data-owner class="w-full border border-zinc-800 text-zinc-300 py-3 rounded-xl text-xs font-semibold">💬 Send feedback: something broken or missing?</button>
+
                 <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" data-owner id="securityBox">
                     <h3 class="font-bold text-sm text-zinc-100 mb-3 border-b border-zinc-800 pb-2">Security Settings</h3>
                     <label class="block text-xs text-zinc-400 mb-1">Change password</label>
                     <div class="space-y-2">
-                        <input type="email" id="pwEmail" placeholder="Email (needed once for older accounts)" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200" style="display:none;">
-                        <input type="password" id="pwCurrent" placeholder="Current password" autocomplete="current-password" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200">
-                        <input type="password" id="pwNew" placeholder="New password (8+ characters)" autocomplete="new-password" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200">
+                        <input type="email" id="pwEmail" placeholder="Email (needed once for older accounts)" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200" style="display:none;" aria-label="Email">
+                        <input type="password" id="pwCurrent" placeholder="Current password" autocomplete="current-password" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200" aria-label="Current password">
+                        <input type="password" id="pwNew" placeholder="New password (8+ characters)" autocomplete="new-password" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200" aria-label="New password">
                         <button data-action="save-password" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 py-2.5 rounded-lg text-xs font-bold">Update Password</button>
                     </div>
                     <div id="secMsg" class="text-[11px] text-center mt-2" style="display:none;"></div>
@@ -481,8 +519,8 @@
                     <label class="block text-xs text-zinc-400 mb-1">Login email</label>
                     <p class="text-[11px] text-zinc-300 mb-2" id="currentEmail"></p>
                     <div class="space-y-2 mb-2">
-                        <input type="email" id="emailNew" placeholder="New email" autocomplete="email" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200">
-                        <input type="password" id="emailPw" placeholder="Current password" autocomplete="current-password" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200">
+                        <input type="email" id="emailNew" placeholder="New email" autocomplete="email" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200" aria-label="New email">
+                        <input type="password" id="emailPw" placeholder="Current password" autocomplete="current-password" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200" aria-label="Current password">
                         <button data-action="save-email" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 py-2.5 rounded-lg text-xs font-bold">Change Email</button>
                     </div>
                     <div id="emailMsg" class="text-[11px] text-center mb-3" style="display:none;"></div>
@@ -491,8 +529,8 @@
                         <summary class="text-xs text-rose-400 cursor-pointer">Delete my account</summary>
                         <p class="text-[11px] text-zinc-400 mt-2 mb-2">This permanently deletes your page, menu, orders and settings, and cancels Pro if you have it. It cannot be undone.</p>
                         <div class="space-y-2">
-                            <input type="password" id="delPassword" placeholder="Your password" autocomplete="current-password" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200">
-                            <input type="text" id="delConfirm" placeholder="Type DELETE to confirm" autocapitalize="characters" class="w-full bg-zinc-950 border border-rose-500/30 rounded-lg p-2 text-xs text-zinc-200">
+                            <input type="password" id="delPassword" placeholder="Your password" autocomplete="current-password" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200" aria-label="Your password">
+                            <input type="text" id="delConfirm" placeholder="Type DELETE to confirm" autocapitalize="characters" class="w-full bg-zinc-950 border border-rose-500/30 rounded-lg p-2 text-xs text-zinc-200" aria-label="Type DELETE to confirm">
                             <button data-action="delete-account" class="w-full bg-rose-600 hover:bg-rose-500 text-white py-2.5 rounded-lg text-xs font-bold">Permanently delete account</button>
                         </div>
                         <div id="delMsg" class="text-[11px] text-center mt-2" style="display:none;"></div>
@@ -508,6 +546,11 @@
                     <p class="text-[11px] text-zinc-400 mt-1">A quick tour of every feature. Tap <b class="text-zinc-200">Take me there</b> to jump straight to it. Features marked <span class="text-[9px] font-bold text-emerald-400 border border-emerald-500/40 rounded px-1">PRO</span> need the Pro plan.</p>
                 </div>
                 <div id="guideList" class="space-y-5"></div>
+                <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+                    <h3 class="font-bold text-sm text-zinc-100">Something broken, or missing?</h3>
+                    <p class="text-[11px] text-zinc-400 mt-1 mb-3">Online Kitchen is built with trucks like yours. Tell us; a person reads every one and writes back.</p>
+                    <button data-action="open-feedback" class="w-full bg-zinc-100 text-zinc-950 py-2.5 rounded-lg text-xs font-bold">Send feedback</button>
+                </div>
             </div>
 
             <div id="ownerTabAnalytics" class="space-y-4 relative" style="display:none;">
@@ -689,6 +732,20 @@
     </div>
 
     <!-- QR sign (printable) -->
+    <div id="feedbackModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" style="display:none;align-items:center" role="dialog" aria-modal="true" aria-labelledby="fbTitle">
+        <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 w-full max-w-sm">
+            <h3 id="fbTitle" class="font-bold text-base text-zinc-100">Send feedback</h3>
+            <p class="text-xs text-zinc-400 mt-1">What’s broken, confusing or missing? Screenshots help: reply to our answer with them.</p>
+            <label class="sr" for="fbText">Your feedback</label>
+            <textarea id="fbText" maxlength="4000" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200 h-32 resize-none mt-3" placeholder="For example: I couldn’t find where to change my hours."></textarea>
+            <div id="fbMsg" class="text-[11px] mt-2" role="status"></div>
+            <div class="flex gap-2 mt-3">
+                <button data-action="close-feedback" class="flex-1 py-3 rounded-xl text-sm font-semibold bg-zinc-950 text-zinc-300 border border-zinc-800">Cancel</button>
+                <button data-action="send-feedback" class="flex-1 py-3 rounded-xl text-sm font-bold bg-zinc-100 text-zinc-950">Send</button>
+            </div>
+        </div>
+    </div>
+
     <div id="spotModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto" style="display:none;" role="dialog" aria-label="Share today’s spot">
         <div class="w-full max-w-sm">
             <img id="spotImg" alt="Today’s spot, ready to post" class="w-full rounded-2xl border border-zinc-800 bg-zinc-950" style="aspect-ratio:4/5">
@@ -703,18 +760,26 @@
 
     <div id="qrModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto" style="display:none;">
         <div class="w-full max-w-sm">
-            <div id="qrSheet" class="bg-white text-zinc-950 rounded-2xl p-8 text-center shadow-2xl">
-                <div id="qrEmoji" class="text-6xl mb-2 flex justify-center text-zinc-950"></div>
-                <div id="qrName" class="text-3xl font-serif font-bold italic mb-1">Your Truck</div>
-                <div class="text-lg font-bold mb-4">Scan to order ahead</div>
-                <div id="qrCode" class="flex justify-center mb-4"></div>
-                <div class="text-sm font-semibold mb-1">Skip the line — pay at the window.</div>
-                <div class="text-xs text-zinc-500 mb-3">Escanea para pedir · Paga en la ventanilla</div>
-                <div id="qrUrl" class="text-xs font-mono text-zinc-700 break-all"></div>
+            <div class="no-print theme-seg mb-3" role="group" aria-label="Sign size" style="background:var(--z900)">
+                <button data-action="sign-size" data-size="letter" aria-pressed="true">Window · letter</button>
+                <button data-action="sign-size" data-size="tabloid" aria-pressed="false">A-frame · 11×17</button>
+                <button data-action="sign-size" data-size="tent" aria-pressed="false">Table · 4×6</button>
+            </div>
+            <div id="qrSheet" class="sign letter shadow-2xl">
+                <div class="sign-bar"></div>
+                <div class="sign-in">
+                    <div id="qrEmoji" class="sign-logo"></div>
+                    <div id="qrName" class="sign-name">Your Truck</div>
+                    <div class="sign-cta">Scan to order ahead</div>
+                    <div id="qrCode" class="sign-qr"></div>
+                    <div class="sign-sub" id="qrSub">Skip the line. Pay at the window.</div>
+                    <div class="sign-es" id="qrEs">Escanea para pedir · Paga en la ventanilla</div>
+                    <div id="qrUrl" class="sign-url"></div>
+                </div>
             </div>
             <div class="no-print flex gap-2 mt-3">
-                <button data-action="print-qr" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 rounded-xl text-sm">🖨️ Print</button>
-                <button data-action="download-qr" class="flex-1 bg-zinc-100 text-zinc-950 font-semibold py-3 rounded-xl text-sm">Save QR image</button>
+                <button data-action="print-qr" class="flex-1 bg-zinc-100 text-zinc-950 font-bold py-3 rounded-xl text-sm">🖨️ Print</button>
+                <button data-action="download-qr" class="flex-1 border border-zinc-700 text-zinc-100 font-semibold py-3 rounded-xl text-sm">Save QR image</button>
                 <button data-action="close-qr" class="px-4 bg-zinc-800 text-zinc-200 font-semibold py-3 rounded-xl text-sm">Close</button>
             </div>
         </div>
@@ -917,7 +982,7 @@
         function applyPublic(d) {
             app.pub = d;
             $('login-name').textContent = d.businessName;
-            TruckLogo.set($('login-emoji'), d.emoji, 'var(--z950)');
+            TruckLogo.set($('login-emoji'), d.emoji, 'var(--z950)', d.brand);
             document.title = d.businessName + ' - Manage';
         }
 
@@ -927,7 +992,7 @@
             $('ownerDashboardView').style.display = 'block';
             var v = app.me.vendor;
             $('dash-name').textContent = v.businessName;
-            TruckLogo.set($('dash-emoji'), v.emoji, 'var(--z900)');
+            TruckLogo.set($('dash-emoji'), v.emoji, 'var(--z900)', v.brand);
             $('dash-owner').textContent = v.ownerName || 'Partner';
             $('dash-role').textContent = app.role === 'staff' ? 'Staff' : '';
             $('dash-role').style.display = app.role === 'staff' ? 'inline' : 'none';
@@ -939,6 +1004,7 @@
             $('profName').value = v.businessName || '';
             $('profEmoji').value = v.emoji || '';
             renderLogoPicker();
+            app.brandLogo = undefined; app.brandColor = undefined; renderBrand();
             $('profIG').value = v.ownerIG || '';
             $('profOwner').value = v.ownerName || '';
             $('pwEmail').style.display = (isOwner() && !v.hasPassword) ? 'block' : 'none';
@@ -2087,7 +2153,7 @@
                     '<div class="fc-big">~' + f.orders + ' orders · ~' + centsShort(f.cents) + '</div>' +
                     (f.busiestHour !== null ? '<div class="ins-s">Busiest around ' + esc(hourName(f.busiestHour)) + '</div>' : '') +
                     '<div class="fc-bars">' + bars + '</div><div class="fc-axis"><span>' + esc(hourName(lo)) + '</span><span>' + esc(hourName(hi)) + '</span></div>' +
-                    (f.prep.length ? '<div class="ins-k" style="margin-top:10px">Prep list</div><div class="fc-prep">' + f.prep.map(function (x) { return '<span><b>' + x.qty + '</b> ' + esc(x.name) + '</span>'; }).join('') + '</div>' : '') +
+                    (f.prep.length ? '<div class="ins-k" style="margin-top:10px">Prep list</div><div class="fc-prep">' + f.prep.map(function (x) { return '<span><b>' + x.qty + '</b> ' + esc(x.name) + (x.have !== undefined ? ' <i class="fc-have">' + (x.need ? 'have ' + x.have + ', make ' + x.need : 'have ' + x.have + ', enough') + '</i>' : '') + '</span>'; }).join('') + '</div>' : '') +
                     (f.nudges && f.nudges.length ? f.nudges.slice(0, 3).map(function (n) { return '<div class="brief-nudge" style="margin-top:10px"><span>' + esc(n.text) + '</span><button data-action="brief-stock" data-id="' + n.itemId + '">Set a count</button></div>'; }).join('') : '');
                 box.style.display = 'block';
             });
@@ -2268,7 +2334,7 @@
             $('editPhotoRemove').style.display = has ? 'block' : 'none';
             $('editPhotoLabel').textContent = app.uploading ? 'Uploading…' : (has ? 'Change photo' : 'Choose photo');
         }
-        function shrinkImage(file, maxPx) {
+        function shrinkImage(file, maxPx, type) {
             return new Promise(function (resolve, reject) {
                 var url = URL.createObjectURL(file), img = new Image();
                 img.onload = function () {
@@ -2277,12 +2343,35 @@
                     c.width = Math.round(img.naturalWidth * scale); c.height = Math.round(img.naturalHeight * scale);
                     c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
                     URL.revokeObjectURL(url);
-                    c.toBlob(function (b) { b ? resolve(b) : reject(new Error('encode')); }, 'image/jpeg', 0.82);
+                    c.toBlob(function (b) { b ? resolve(b) : reject(new Error('encode')); }, type || 'image/jpeg', 0.82);
                 };
                 img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('read')); };
                 img.src = url;
             });
         }
+        /* ---------- brand: own logo and accent color ---------- */
+        function renderBrand() {
+            var b = (app.me && app.me.vendor.brand) || {};
+            if (app.brandLogo === undefined) app.brandLogo = b.logo || '';
+            if (app.brandColor === undefined) app.brandColor = b.color || '';
+            TruckLogo.set($('brandLogo'), $('profEmoji').value || (app.me && app.me.vendor.emoji), 'var(--z950)', { logo: app.brandLogo, color: app.brandColor });
+            $('logoRemove').style.display = app.brandLogo ? 'inline' : 'none';
+            $('brandColor').value = app.brandColor || '#111111';
+            $('brandNone').textContent = app.brandColor ? 'None' : 'No color';
+            $('brandNone').style.fontWeight = app.brandColor ? '' : '700';
+        }
+        $('logoFile').addEventListener('change', function (e) {
+            var f = e.target.files && e.target.files[0]; if (!f) return;
+            $('logoMsg').textContent = 'Uploading…';
+            shrinkImage(f, 512, 'image/png').then(function (blob) {
+                return fetch('/api/owner/upload', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob, cache: 'no-store' }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); });
+            }).then(function (r) {
+                if (!r.ok || !r.d.url) { $('logoMsg').textContent = (r.d && r.d.error) || 'Couldn’t upload that image.'; return; }
+                app.brandLogo = r.d.url; renderBrand(); $('logoMsg').textContent = 'Looks good? Tap Save Profile.';
+            }).catch(function () { $('logoMsg').textContent = 'Couldn’t read that image. Try a PNG or JPG.'; }).then(function () { e.target.value = ''; });
+        });
+        $('brandColor').addEventListener('input', function (e) { app.brandColor = e.target.value; renderBrand(); });
+
         function uploadPhoto(file) {
             if (!file) return;
             app.uploading = true; renderEditPhoto(); say('editError', '');
@@ -2306,10 +2395,10 @@
             $('hoursRows').innerHTML = h.map(function (d, i) {
                 return '<div class="flex items-center gap-2 text-xs" data-day="' + i + '">' +
                     '<span class="w-20 text-zinc-300">' + DAYS[i].slice(0, 3) + '</span>' +
-                    '<label class="flex items-center gap-1 text-[10px] text-zinc-400 w-16"><input type="checkbox" class="h-closed accent-rose-500"' + (d.closed ? ' checked' : '') + '> Closed</label>' +
-                    '<input type="time" class="h-open flex-1 min-w-0 bg-zinc-950 border border-zinc-800 rounded-lg p-1.5 text-xs text-zinc-200" value="' + esc(d.open) + '"' + (d.closed ? ' disabled' : '') + '>' +
+                    '<label class="flex items-center gap-1 text-[10px] text-zinc-400 w-16"><input aria-label="Closed on ' + DAYS[i] + '" type="checkbox" class="h-closed accent-rose-500"' + (d.closed ? ' checked' : '') + '> Closed</label>' +
+                    '<input type="time" aria-label="' + DAYS[i] + ' opens" class="h-open flex-1 min-w-0 bg-zinc-950 border border-zinc-800 rounded-lg p-1.5 text-xs text-zinc-200" value="' + esc(d.open) + '"' + (d.closed ? ' disabled' : '') + '>' +
                     '<span class="text-zinc-600">–</span>' +
-                    '<input type="time" class="h-close flex-1 min-w-0 bg-zinc-950 border border-zinc-800 rounded-lg p-1.5 text-xs text-zinc-200" value="' + esc(d.close) + '"' + (d.closed ? ' disabled' : '') + '></div>';
+                    '<input type="time" aria-label="' + DAYS[i] + ' closes" class="h-close flex-1 min-w-0 bg-zinc-950 border border-zinc-800 rounded-lg p-1.5 text-xs text-zinc-200" value="' + esc(d.close) + '"' + (d.closed ? ' disabled' : '') + '></div>';
             }).join('');
             // US time zones only, with plain names. A truck saved with another zone keeps it at the top of the list.
             var ZONES = [
@@ -2348,10 +2437,23 @@
 
         /* ---------- QR sign ---------- */
         function pageUrl() { return location.origin + '/'; }
+        function setSignSize(size) {
+            $('qrSheet').className = 'sign ' + size + ' shadow-2xl';
+            document.querySelectorAll('[data-action="sign-size"]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-size') === size)); });
+            var page = { letter: 'letter portrait', tabloid: '11in 17in', tent: '4in 6in' }[size];
+            var st = $('signPage') || document.head.appendChild(Object.assign(document.createElement('style'), { id: 'signPage' }));
+            st.textContent = '@media print { @page { size: ' + page + '; margin: ' + (size === 'tent' ? '0.2in' : '0.5in') + '; } }';
+        }
         function openQr() {
             var v = app.me.vendor;
+            var b = v.brand || {};
+            $('qrSheet').style.setProperty('--sign-brand', /^#[0-9a-f]{6}$/i.test(b.color || '') ? b.color : '#0a0a0b');
+            var pm = (app.pay && app.pay.payMode) || 'window';
+            $('qrSub').textContent = pm === 'online' ? 'Skip the line. Pay on your phone.' : pm === 'both' ? 'Skip the line. Pay ahead or at the window.' : 'Skip the line. Pay at the window.';
+            $('qrEs').textContent = pm === 'window' ? 'Escanea para pedir · Paga en la ventanilla' : 'Escanea para pedir · Sin filas';
+            setSignSize(app.signSize || 'letter');
             $('qrName').textContent = v.businessName;
-            TruckLogo.set($('qrEmoji'), v.emoji, '#ffffff');
+            TruckLogo.set($('qrEmoji'), v.emoji, '#ffffff', v.brand);
             $('qrUrl').textContent = pageUrl().replace(/^https?:\/\//, '').replace(/\/$/, '');
             try { $('qrCode').innerHTML = QR.svg(pageUrl(), { size: 260 }); } catch (e) { $('qrCode').textContent = pageUrl(); }
             $('qrModal').style.display = 'flex';
@@ -2372,6 +2474,8 @@
             var g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#16161a'); g.addColorStop(1, '#0a0a0b');
             x.fillStyle = g; x.fillRect(0, 0, W, H);
             x.strokeStyle = 'rgba(214,216,222,0.22)'; x.lineWidth = 3; x.strokeRect(48, 48, W - 96, H - 96);
+            var brand = v.brand || {};
+            if (/^#[0-9a-f]{6}$/i.test(brand.color || '')) { x.fillStyle = brand.color; x.fillRect(48, 48, W - 96, 12); }
             function fit(text, size, weight, maxW) { var sz = size; do { x.font = weight + ' ' + sz + 'px ' + F; sz -= 4; } while (x.measureText(text).width > maxW && sz > 28); }
             function wrap(text, size, weight, maxW, y, lh, color, lines) {
                 x.fillStyle = color; x.font = weight + ' ' + size + 'px ' + F;
@@ -2387,8 +2491,13 @@
                 return y + Math.min(out.length, lines) * lh;
             }
             x.textAlign = 'center'; x.textBaseline = 'alphabetic';
-            if (v.emoji) { x.font = '110px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif'; x.fillText(v.emoji, W / 2, 230); }
-            x.fillStyle = '#f4f4f5'; fit(v.businessName, 92, '800', W - 200); x.fillText(v.businessName, W / 2, v.emoji ? 350 : 290);
+            var hasMark = !!(app.spotLogo || v.emoji);
+            if (app.spotLogo) {
+                x.save(); x.beginPath(); x.arc(W / 2, 190, 78, 0, Math.PI * 2); x.closePath(); x.clip();
+                var im = app.spotLogo, sc = Math.max(156 / im.naturalWidth, 156 / im.naturalHeight);
+                x.drawImage(im, W / 2 - im.naturalWidth * sc / 2, 190 - im.naturalHeight * sc / 2, im.naturalWidth * sc, im.naturalHeight * sc); x.restore();
+            } else if (v.emoji) { x.font = '110px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif'; x.fillText(v.emoji, W / 2, 230); }
+            x.fillStyle = '#f4f4f5'; fit(v.businessName, 92, '800', W - 200); x.fillText(v.businessName, W / 2, hasMark ? 350 : 290);
             x.fillStyle = '#a1a1aa'; x.font = '700 34px ' + F;
             var day = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: (app.pub && app.pub.timezone) || undefined });
             x.fillText('TODAY · ' + day.toUpperCase(), W / 2, 450);
@@ -2414,8 +2523,15 @@
                 $('spotShare').style.display = navigator.canShare ? '' : 'none';
                 $('spotModal').style.display = 'flex';
             };
-            // The image uses the page's font: make sure it's loaded before drawing.
-            if (document.fonts && document.fonts.load) Promise.all([document.fonts.load('800 80px Manrope'), document.fonts.load('600 40px Manrope')]).then(draw, draw); else draw();
+            // The image uses the page's font (and the truck's logo, if it has one): load both before drawing.
+            var logo = (app.me.vendor.brand || {}).logo;
+            var logoReady = new Promise(function (ok) {
+                app.spotLogo = null;
+                if (!logo) return ok();
+                var im = new Image(); im.onload = function () { app.spotLogo = im; ok(); }; im.onerror = function () { ok(); }; im.src = logo;
+            });
+            var fonts = document.fonts && document.fonts.load ? Promise.all([document.fonts.load('800 80px Manrope'), document.fonts.load('600 40px Manrope')]) : Promise.resolve();
+            Promise.all([fonts.catch(function () {}), logoReady]).then(draw, draw);
         }
         function spotFile(cb) { app.spotCanvas.toBlob(function (b) { cb(new File([b], (app.me.vendor.slug || 'truck') + '-today.png', { type: 'image/png' })); }, 'image/png'); }
         function shareSpot() {
@@ -2803,10 +2919,23 @@
                 case 'save-hours': saveHours(); break;
                 case 'open-qr': openQr(); break;
                 case 'open-spot': openSpot(); break;
+                case 'logo-remove': app.brandLogo = ''; renderBrand(); $('logoMsg').textContent = 'Tap Save Profile to use your emoji or the truck again.'; break;
+                case 'brand-none': app.brandColor = ''; renderBrand(); break;
+                case 'open-feedback': $('feedbackModal').style.display = 'flex'; say('fbMsg', ''); setTimeout(function () { $('fbText').focus(); }, 50); break;
+                case 'close-feedback': $('feedbackModal').style.display = 'none'; break;
+                case 'send-feedback':
+                    if (window.__FT_DEMO) { say('fbMsg', 'In your own portal this goes straight to the people building Online Kitchen.', true); break; }
+                    api('POST', '/api/owner/feedback', { message: $('fbText').value, where: app.tab }).then(function (r) {
+                        if (!r.ok) { say('fbMsg', r.data.error || 'Couldn’t send. Please try again.'); return; }
+                        $('fbText').value = ''; say('fbMsg', 'Sent. Thank you. We’ll write back to your email.', true);
+                        setTimeout(function () { $('feedbackModal').style.display = 'none'; }, 1800);
+                    });
+                    break;
                 case 'spot-share': shareSpot(); break;
                 case 'spot-download': downloadSpot(); break;
                 case 'close-spot': $('spotModal').style.display = 'none'; break;
                 case 'print-qr': window.print(); break;
+                case 'sign-size': app.signSize = el.getAttribute('data-size'); setSignSize(app.signSize); break;
                 case 'download-qr': downloadQr(); break;
                 case 'close-qr': $('qrModal').style.display = 'none'; break;
                 case 'export-csv': exportCsv(); break;
@@ -2838,9 +2967,9 @@
                 case 'delete-location': api('DELETE', '/api/owner/locations/' + id).then(function () { return Promise.all([loadLocations(), loadState()]); }).then(renderSettings); break;
                 case 'restore-location': api('POST', '/api/owner/locations/' + id + '/restore').then(function () { return loadLocations(); }).then(renderSettings); break;
                 case 'save-profile':
-                    api('PUT', '/api/owner/profile', { businessName: $('profName').value.trim(), emoji: $('profEmoji').value.trim(), ownerIG: $('profIG').value.trim(), ownerName: $('profOwner').value.trim() }).then(function (r) {
+                    api('PUT', '/api/owner/profile', { businessName: $('profName').value.trim(), emoji: $('profEmoji').value.trim(), ownerIG: $('profIG').value.trim(), ownerName: $('profOwner').value.trim(), logoUrl: app.brandLogo || '', brandColor: app.brandColor || '' }).then(function (r) {
                         say('profMsg', r.ok ? 'Saved.' : (r.data.error || 'Could not save.'), r.ok);
-                        if (r.ok) loadMe().then(function () { $('dash-name').textContent = app.me.vendor.businessName; TruckLogo.set($('dash-emoji'), app.me.vendor.emoji, 'var(--z900)'); TruckLogo.set($('login-emoji'), app.me.vendor.emoji, 'var(--z950)'); $('dash-owner').textContent = app.me.vendor.ownerName || 'Partner'; });
+                        if (r.ok) loadMe().then(function () { $('dash-name').textContent = app.me.vendor.businessName; TruckLogo.set($('dash-emoji'), app.me.vendor.emoji, 'var(--z900)', app.me.vendor.brand); TruckLogo.set($('login-emoji'), app.me.vendor.emoji, 'var(--z950)', app.me.vendor.brand); renderBrand(); $('dash-owner').textContent = app.me.vendor.ownerName || 'Partner'; });
                     });
                     break;
                 case 'save-pin':

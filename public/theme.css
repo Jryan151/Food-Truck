@@ -18,7 +18,7 @@
   --z900: #151618;   /* cards, panels */
   --z800: #26282b;   /* hairlines, borders */
   --z700: #3a3c40;
-  --z600: #6b6e74;
+  --z600: #7f8288;   /* faint text: still 4.5:1 on cards */
   --z500: #8a8d93;   /* quiet text */
   --z400: #a3a6ab;   /* secondary text */
   --z300: #c4c6ca;
@@ -38,7 +38,7 @@
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="night"]) {
     color-scheme: light;
-    --z950: #e8e9eb; --z900: #f7f7f8; --z800: #cfd1d5; --z700: #b6b9be; --z600: #6b6e74;
+    --z950: #e8e9eb; --z900: #f7f7f8; --z800: #cfd1d5; --z700: #b6b9be; --z600: #63666c;
     --z500: #5c5f65; --z400: #4b4e54; --z300: #36383c; --z200: #24262a; --z100: #0b0b0c;
     --zwhite: #000000; --zblack: #0b0b0c;
     --ink: #0b0b0c; --on-ink: #e8e9eb;
@@ -47,7 +47,7 @@
 }
 :root[data-theme="day"] {
   color-scheme: light;
-  --z950: #e8e9eb; --z900: #f7f7f8; --z800: #cfd1d5; --z700: #b6b9be; --z600: #6b6e74;
+  --z950: #e8e9eb; --z900: #f7f7f8; --z800: #cfd1d5; --z700: #b6b9be; --z600: #63666c;
   --z500: #5c5f65; --z400: #4b4e54; --z300: #36383c; --z200: #24262a; --z100: #0b0b0c;
   --zwhite: #000000; --zblack: #0b0b0c;
   --ink: #0b0b0c; --on-ink: #e8e9eb;
@@ -379,3 +379,16 @@ body.glove .ticket button { min-height: 52px; font-size: 14px; }
 .go-row span:nth-child(2) { flex: 1; min-width: 0; }
 .go-amt { flex: none; font-variant-numeric: tabular-nums; color: var(--z200); }
 #cartModal.as-guest [data-noguest] { display: none !important; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* The truck's own accent color (customer page): a thin line across the top. Color never carries text. */
+body.branded::before { content: ''; position: fixed; top: 0; left: 0; right: 0; height: 4px; background: var(--brand); z-index: 70; }
+
+/* Accessible by default: a clear focus ring for keyboards and switch controls, and no motion for people who turn it off. */
+:focus-visible { outline: 2px solid var(--z100); outline-offset: 2px; border-radius: 6px; }
+button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
+}
+.fc-have { font-style: normal; color: var(--z500); font-size: 11px; }
+body.cartbar #pageFooter { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }

@@ -49,16 +49,19 @@ const orderTag = (token) => sha256('order:' + token).slice(0, 24);
 const MAX_ITEMS = 200;
 
 const PLANS = {
-  free: { label: 'Free', customDomain: false, sms: false, removeBranding: false, onlinePayments: false, insights: false, deals: false, rewards: false },
-  pro: { label: 'Pro', customDomain: true, sms: true, removeBranding: true, onlinePayments: true, insights: true, deals: true, rewards: true },
+  free: { label: 'Free', customDomain: false, sms: false, removeBranding: false, onlinePayments: false, insights: false, deals: false, rewards: false, business: false },
+  pro: { label: 'Pro', customDomain: true, sms: true, removeBranding: true, onlinePayments: true, insights: true, deals: true, rewards: true, business: false },
+  // Business: everything in Pro, plus the business tools (events, costs, taxes, documents, time clock,
+  // maintenance, accountant export, more than one truck). Open to everyone during the free beta.
+  business: { label: 'Business', customDomain: true, sms: true, removeBranding: true, onlinePayments: true, insights: true, deals: true, rewards: true, business: true },
 };
 const GRACE_MS = 7 * 24 * 60 * 60 * 1000; // paid features stay on 7 days after a failed payment
 
 function effectivePlan(v) {
-  if (!v || v.plan !== 'pro') return 'free';
-  if (v.plan_status === 'active') return 'pro';
+  if (!v || !(v.plan === 'pro' || v.plan === 'business')) return 'free';
+  if (v.plan_status === 'active') return v.plan;
   if (v.plan_status === 'past_due') {
-    return Date.now() - (v.past_due_since || 0) < GRACE_MS ? 'pro' : 'free';
+    return Date.now() - (v.past_due_since || 0) < GRACE_MS ? v.plan : 'free';
   }
   return 'free';
 }
@@ -124,6 +127,9 @@ function normalizeItem(i, id) {
     category: String(i.category || '').trim().slice(0, 40),
     // Key ingredients ("cilantro, pork"): one tap on "Out of cilantro" sells out every item that has it.
     ingredients: normalizeOptions(i.ingredients).map((x) => x.slice(0, 30)).slice(0, 12),
+    // Recipe for plate cost: how much of each priced ingredient one serving uses (see business.js).
+    recipe: (Array.isArray(i.recipe) ? i.recipe : []).map((r) => ({ ingredientId: parseInt(r && r.ingredientId, 10), qty: Math.round(Math.max(0, Math.min(1000, num(r && r.qty))) * 1000) / 1000 }))
+      .filter((r) => Number.isInteger(r.ingredientId) && r.ingredientId > 0 && r.qty > 0).slice(0, 20),
     photo: PHOTO_RE.test(String(i.photo || '')) ? String(i.photo) : '',
     soldOut: !!(i.soldOut ?? i.soldout),
   };
@@ -422,7 +428,8 @@ async function addColumn(table, col, def) {
 const SCHEMA_CHANGES = [
   [1, 'Everything up to the first versioned release'],
   [2, 'Durability: mail retry outbox; device and big-order check on orders'],
-  [3, 'The owner’s day: feedback, sold-out log, day summaries; quiet hours, weather place, saved menus; kitchen screen setup per PIN; group orders'],
+  [3, 'The owner’s day: feedback, sold-out log, day summaries; quiet hours, weather place, saved menus; kitchen screen setup per PIN; group orders; logo and brand color'],
+  [4, 'Business tools: events, ingredient prices, location tax, documents, time clock, maintenance, fleets'],
 ];
 const SCHEMA_VERSION = SCHEMA_CHANGES[SCHEMA_CHANGES.length - 1][0];
 const BACKUP_DIR = process.env.BACKUP_DIR_LOCAL || path.join(path.dirname(DB_FILE === ':memory:' ? path.join(__dirname, 'x') : DB_FILE), 'backups');
@@ -512,6 +519,12 @@ async function applySchema() {
     ['weather_json', 'TEXT'],
     ['menus_json', 'TEXT'],
     ['owner_prefs_json', 'TEXT'],                 // the owner's own kitchen-screen setup (see /api/auth/prefs)
+    // The truck's brand: an uploaded logo (one of our /uploads files) and one accent color (#rrggbb).
+    ['logo_url', 'TEXT'],
+    ['brand_color', 'TEXT'],
+    // Business: several trucks under one owner (fleet_id = the first truck's id); the organizer packet link.
+    ['fleet_id', 'INTEGER'],
+    ['packet_token', 'TEXT'],
   ];
   for (const [c, d] of vendorCols) await addColumn('vendors', c, d);
 
@@ -543,6 +556,10 @@ async function applySchema() {
     deleted INTEGER NOT NULL DEFAULT 0
   )`);
   await run('CREATE INDEX IF NOT EXISTS idx_locations_vendor ON locations(vendor_id)');
+  // Sales tax by location: the city a spot is in, its rate, and whether menu prices already include it.
+  await addColumn('locations', 'city', 'TEXT');
+  await addColumn('locations', 'tax_rate', 'REAL');
+  await addColumn('locations', 'tax_included', 'INTEGER NOT NULL DEFAULT 1');
 
   await exec(`CREATE TABLE IF NOT EXISTS orders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -632,6 +649,8 @@ async function applySchema() {
   await exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_staff_pin ON staff_members (vendor_id, pin_lookup)');
   // Each PIN remembers its kitchen screen: text size, sound, station, glove mode, ready button.
   await addColumn('staff_members', 'prefs_json', 'TEXT');
+  // Time clock: what each person is paid per hour (cents), for payroll hours and labor cost.
+  await addColumn('staff_members', 'wage_cents', 'INTEGER');
   await addColumn('sessions', 'staff_id', 'INTEGER');
   // Small server-wide values that must survive restarts (e.g. the PIN pepper when PIN_PEPPER isn't set).
   await exec('CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
@@ -703,6 +722,46 @@ async function applySchema() {
   await exec(`CREATE TABLE IF NOT EXISTS day_summaries (
     vendor_id INTEGER NOT NULL, day TEXT NOT NULL, body TEXT NOT NULL, sent_at INTEGER,
     PRIMARY KEY (vendor_id, day)
+  )`);
+  /* ----- Business tools (business.js) ----- */
+  await exec(`CREATE TABLE IF NOT EXISTS biz_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, vendor_id INTEGER NOT NULL,
+    name TEXT NOT NULL, organizer TEXT, contact TEXT, url TEXT, location TEXT,
+    start_day TEXT, end_day TEXT, deadline_day TEXT,
+    fee_cents INTEGER NOT NULL DEFAULT 0, walkup_cents INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'idea',      -- idea | applied | accepted | declined | done
+    notes TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+  )`);
+  await exec(`CREATE TABLE IF NOT EXISTS ingredients (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, vendor_id INTEGER NOT NULL,
+    name TEXT NOT NULL, unit TEXT NOT NULL, price_cents INTEGER NOT NULL, updated_at INTEGER NOT NULL
+  )`);
+  await exec(`CREATE TABLE IF NOT EXISTS ingredient_prices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, vendor_id INTEGER NOT NULL, ingredient_id INTEGER NOT NULL,
+    price_cents INTEGER NOT NULL, receipt_url TEXT, at INTEGER NOT NULL
+  )`);
+  await exec(`CREATE TABLE IF NOT EXISTS vault_docs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, vendor_id INTEGER NOT NULL,
+    kind TEXT NOT NULL, title TEXT NOT NULL, file TEXT NOT NULL, mime TEXT NOT NULL, size INTEGER NOT NULL,
+    expires_day TEXT, in_packet INTEGER NOT NULL DEFAULT 1, warned TEXT, created_at INTEGER NOT NULL
+  )`);
+  await exec(`CREATE TABLE IF NOT EXISTS time_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, vendor_id INTEGER NOT NULL, staff_id INTEGER NOT NULL,
+    in_at INTEGER NOT NULL, out_at INTEGER, wage_cents INTEGER, edited_by TEXT
+  )`);
+  await exec('CREATE INDEX IF NOT EXISTS idx_time_vendor ON time_entries (vendor_id, in_at)');
+  await exec(`CREATE TABLE IF NOT EXISTS shifts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, vendor_id INTEGER NOT NULL, staff_id INTEGER NOT NULL,
+    day TEXT NOT NULL, start_time TEXT NOT NULL, end_time TEXT NOT NULL
+  )`);
+  await exec(`CREATE TABLE IF NOT EXISTS maint_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, vendor_id INTEGER NOT NULL,
+    name TEXT NOT NULL, unit TEXT NOT NULL,     -- hours | miles | days
+    every INTEGER NOT NULL, last_reading INTEGER, last_day TEXT, reading_now INTEGER, created_at INTEGER NOT NULL
+  )`);
+  await exec(`CREATE TABLE IF NOT EXISTS maint_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, vendor_id INTEGER NOT NULL, item_id INTEGER NOT NULL,
+    day TEXT NOT NULL, reading INTEGER, cost_cents INTEGER NOT NULL DEFAULT 0, note TEXT, at INTEGER NOT NULL
   )`);
   // Email that must arrive even if the mail service is briefly down: kept here and retried.
   await exec(`CREATE TABLE IF NOT EXISTS mail_outbox (
@@ -933,7 +992,19 @@ setInterval(() => {
 }, 60 * 60 * 1000).unref();
 setInterval(() => { autoCloseOrders().catch((e) => console.error('Auto-close failed:', e.message)); }, 15 * 60 * 1000).unref();
 
+/** The truck's brand for pages and emails. Color only if it's a real hex color; logo only if it's our own upload. */
+const COLOR_RE = /^#[0-9a-f]{6}$/i;
+function brandOf(v) {
+  return {
+    name: v.business_name,
+    color: COLOR_RE.test(String(v.brand_color || '')) ? String(v.brand_color).toLowerCase() : '',
+    logo: PHOTO_RE.test(String(v.logo_url || '')) ? v.logo_url : '',
+    emoji: v.emoji || '',
+  };
+}
+
 module.exports = {
+  brandOf, COLOR_RE,
   ROOT_DOMAIN, UPLOAD_DIR, raw, run, get, all, exec,
   sha256, randomToken, orderTag, logOrderEvent,
   MAX_ITEMS, PLANS, effectivePlan, features,
