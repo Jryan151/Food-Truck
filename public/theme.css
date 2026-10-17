@@ -246,3 +246,12 @@ input::placeholder, textarea::placeholder { color: var(--z500); opacity: 1; }
 .deal-later { font-size: 12px; color: var(--z400); text-align: center; margin-bottom: 12px; }
 .deal-chip { min-width: 34px; height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--z800); background: transparent; color: var(--z400); font-size: 12px; font-weight: 700; }
 .deal-chip[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+
+/* Punch card */
+.punch-card { background: var(--z900); border: 1px solid var(--z800); border-radius: 12px; padding: 12px; text-align: left; }
+.punch-card.ready { border-color: var(--z300); }
+.punch-dots { display: inline-flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.punch { width: 10px; height: 10px; border-radius: 5px; border: 1.5px solid var(--z600); display: inline-block; }
+.punch.on { background: var(--z100); border-color: var(--z100); }
+.punch-use { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--z100); background: var(--z950); border: 1px solid var(--z300); border-radius: 12px; padding: 12px; }
+.punch-use input { width: 20px; height: 20px; accent-color: var(--ink); }

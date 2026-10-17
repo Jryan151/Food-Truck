@@ -25,6 +25,7 @@ const payments = require('./payments');
 const sms = require('./sms');
 const catering = require('./catering');
 const schedule = require('./schedule');
+const rewards = require('./rewards');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -72,6 +73,7 @@ app.use('/api/payments', payments.router);
 app.use('/api/sms', sms.router);
 app.use('/api/catering', catering.router);
 app.use('/api/schedule', schedule.router);
+app.use('/api/rewards', rewards.router);
 app.use('/api', api.router);
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 

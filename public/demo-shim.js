@@ -151,6 +151,24 @@
         return demoHistory.concat(live);
     }
 
+    /* ---------- punch card (same rules as rewards.js; a new demo card starts with 3 stamps so the reward is reachable) ---------- */
+    function rw(d) { if (!d.rewards) d.rewards = { on: true, name: 'Punch card', every: 5, minCents: 500, capCents: 1200 }; if (!d.cards) d.cards = {}; return d.rewards; }
+    function cardOut(d, tok) {
+        var s = rw(d), c = d.cards[tok];
+        return { on: !!s.on, name: s.name, every: s.every, minCents: s.minCents, capCents: s.capCents, stamps: c ? c.stamps : 0, ready: !!c && c.stamps >= s.every, used: c ? c.used : 0, known: !!c, canSave: true };
+    }
+    function stampDemo(d, o) {
+        var s = rw(d);
+        if (!s.on || !o.cardToken || o.stamped || !d.cards[o.cardToken] || (o.total * 100 + (o.rewardCents || 0)) < s.minCents) return;
+        o.stamped = true; d.cards[o.cardToken].stamps++;
+    }
+    function undoDemo(d, o) {
+        var c = o.cardToken && d.cards[o.cardToken];
+        if (!c) return;
+        if (o.rewardCents && !o.rewardReturned) { o.rewardReturned = true; c.stamps += o.rewardEvery || 0; c.used = Math.max(0, c.used - 1); }
+        if (o.stamped) { o.stamped = false; c.stamps = Math.max(0, c.stamps - 1); }
+    }
+
     function stateOut(d) { return Object.assign({}, d.state, { wait: demoWait(d) }); }
     function emitWait(d) { emit('WAIT', demoWait(d)); }
 
@@ -206,6 +224,7 @@
             ownerIG: d.vendor.ownerIG, emoji: d.vendor.emoji, menu: d.menu, state: stateOut(d),
             showBranding: true, pinOnly: false, hours: d.hours, timezone: d.timezone, payMode: 'window', smsReady: false,
             deals: (d.deals || []).filter(function (x) { return x.on; }),
+            rewards: rw(d).on ? { name: rw(d).name, every: rw(d).every, capCents: rw(d).capCents, minCents: rw(d).minCents } : null,
             nextStop: (function () { var u = demoStops(d)[0]; return u ? { day: u.day, start: u.start, end: u.end, location: u.location, startsAt: u.startsAt, endsAt: u.endsAt } : null; })()
         };
     }
@@ -273,19 +292,32 @@
             items.push({ id: item.id, name: label, qty: qty, price: unit });
             total += unit * qty; prep += item.prep * qty;
         }
-        if (Number.isFinite(Number(b.seenTotal)) && round(total) > Number(b.seenTotal) + 0.004) return fail(409, 'Prices changed while you were ordering. Your total is now $' + round(total).toFixed(2) + '.', { priceChanged: true, total: round(total) });
+        var s = rw(d), tok = String(b.cardToken || ''), card = s.on && d.cards[tok], rewardCents = 0;
+        if (b.useReward === true && s.on) {
+            if (!card || card.stamps < s.every) return fail(409, 'Your free item isn’t ready yet.', { rewardGone: true });
+            var bi = 0; items.forEach(function (it, k) { if (it.price > items[bi].price) bi = k; });
+            var uc = Math.round(items[bi].price * 100); rewardCents = Math.min(uc, s.capCents);
+            var ln = items[bi], free = { id: ln.id, name: ln.name + ' (' + s.name + ' reward)', qty: 1, price: (uc - rewardCents) / 100, reward: true };
+            if (ln.qty > 1) { ln.qty -= 1; items.splice(bi + 1, 0, free); } else items[bi] = free;
+            total = items.reduce(function (sum, it) { return sum + it.price * it.qty; }, 0);
+        }
+        if (Number.isFinite(Number(b.seenTotal)) && round(total) > Number(b.seenTotal) + 0.004) { if (rewardCents) return fail(409, 'Prices changed while you were ordering.', { priceChanged: true, total: round(total) }); return fail(409, 'Prices changed while you were ordering. Your total is now $' + round(total).toFixed(2) + '.', { priceChanged: true, total: round(total) }); }
+        var newTok = null;
+        if (s.on && !card) { newTok = 'demo' + Math.random().toString(36).slice(2) + Date.now().toString(36); card = d.cards[newTok] = { stamps: 3, used: 0 }; tok = newTok; }
+        if (rewardCents) { card.stamps -= s.every; card.used++; }
         var now = Date.now(), id = d.nextOrderId++, ticket = d.nextTicket++;
         var o = {
             id: id, ticket: ticket, token: 'demo-' + id + '-' + Math.random().toString(36).slice(2, 8), name: String(b.customerName || '').trim().slice(0, 40) || 'Guest',
             items: items, summary: items.map(function (x) { return x.qty + 'x ' + x.name; }).join(', '),
             notes: String(b.notes || '').trim().slice(0, 300), total: round(total), status: 'Preparing', createdAt: now, updatedAt: now,
-            allergy: String(b.allergy || '').trim().slice(0, 120), allergyAck: false, location: d.state.location || ''
+            allergy: String(b.allergy || '').trim().slice(0, 120), allergyAck: false, location: d.state.location || '',
+            cardToken: s.on ? tok : null, rewardCents: rewardCents, rewardEvery: rewardCents ? s.every : null
         };
         o.tag = o.token;
         d.orders.push(o); save(d);
         emit('ORDER_NEW', o, true); emitWait(d);
         var w = demoWait(d).minutes;
-        return ok({ ticket: o.ticket, token: o.token, tag: o.tag, status: o.status, total: o.total, estimatedMinutes: w ? Math.max(w, Math.min(prep, 90)) : prep + (d.state.rush || 0), changeUntil: now + 120000, now: now }, 201);
+        return ok({ ticket: o.ticket, token: o.token, tag: o.tag, status: o.status, total: o.total, estimatedMinutes: w ? Math.max(w, Math.min(prep, 90)) : prep + (d.state.rush || 0), changeUntil: now + 120000, now: now, rewardCents: rewardCents, cardToken: newTok || undefined }, 201);
     }
 
     function handle(method, u, b) {
@@ -306,7 +338,7 @@
             if (oc.status === 'Canceled') return ok({ status: 'Canceled' });
             if (oc.status !== 'Preparing') return fail(409, 'Your order is already made.');
             if (Date.now() - oc.createdAt > 120000) return fail(409, 'The kitchen has started on it. Please ask at the window.');
-            oc.status = 'Canceled'; oc.updatedAt = Date.now(); save(d);
+            oc.status = 'Canceled'; oc.updatedAt = Date.now(); undoDemo(d, oc); save(d);
             emit('ORDER_UPDATE', Object.assign({}, oc, { byCustomer: true }), true);
             emit('ORDER_STATUS', { tag: oc.tag, status: 'Canceled' }); emitWait(d);
             return ok({ status: 'Canceled' });
@@ -342,10 +374,26 @@
             var from = b.action === 'ready' ? ['Preparing'] : ['Preparing', 'Ready'];
             if (!o || from.indexOf(o.status) < 0) return fail(409, 'That order cannot be changed.');
             if (b.action !== 'cancel' && o.allergy && !o.allergyAck) return fail(409, 'Confirm the allergy on this ticket first.');
-            o.status = next; o.updatedAt = Date.now(); if (next === 'Ready') o.readyAt = o.updatedAt; save(d);
+            o.status = next; o.updatedAt = Date.now(); if (next === 'Ready') o.readyAt = o.updatedAt;
+            if (next === 'Canceled') undoDemo(d, o); else stampDemo(d, o);
+            save(d);
             emit('ORDER_UPDATE', o, true);
             emit('ORDER_STATUS', { tag: o.tag, status: o.status }); emitWait(d);
             return ok({ order: o });
+        }
+
+        /* punch card */
+        if (p === '/api/rewards' && method === 'GET') { var st0 = rw(d); return ok(st0.on ? cardOut(d, u.searchParams.get('card') || '') : { on: false }); }
+        if (p === '/api/rewards/save' && method === 'POST') return ok({ ok: true, message: 'In the demo, no email is sent. On your page, this emails a link that keeps the card on any phone.' });
+        if (p === '/api/rewards/owner' && method === 'GET') {
+            var cs = Object.keys(rw(d) && d.cards).map(function (k) { return d.cards[k]; });
+            return ok({ settings: rw(d), allowed: true, stats: { cards: 41 + cs.length, active: 33, rewardsUsed: 9 + cs.reduce(function (a, c) { return a + c.used; }, 0), stampsGiven: 186 + d.orders.filter(function (o) { return o.stamped; }).length } });
+        }
+        if (p === '/api/rewards/owner' && method === 'PUT') {
+            var cur = rw(d), cl = function (v, lo, hi, df) { var n = Math.round(Number(v)); return isFinite(n) ? Math.max(lo, Math.min(hi, n)) : df; };
+            d.rewards = { on: b.on === true, name: cur.name, every: cl(b.every, 3, 20, 8), minCents: cl(b.minCents, 0, 10000, 500), capCents: cl(b.capCents, 100, 10000, 1200) };
+            save(d); emit('REWARDS_UPDATE', d.rewards.on ? d.rewards : { on: false });
+            return ok({ settings: d.rewards });
         }
 
         /* deals */

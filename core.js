@@ -48,8 +48,8 @@ const orderTag = (token) => sha256('order:' + token).slice(0, 24);
 const MAX_ITEMS = 200;
 
 const PLANS = {
-  free: { label: 'Free', customDomain: false, sms: false, removeBranding: false, onlinePayments: false, insights: false, deals: false },
-  pro: { label: 'Pro', customDomain: true, sms: true, removeBranding: true, onlinePayments: true, insights: true, deals: true },
+  free: { label: 'Free', customDomain: false, sms: false, removeBranding: false, onlinePayments: false, insights: false, deals: false, rewards: false },
+  pro: { label: 'Pro', customDomain: true, sms: true, removeBranding: true, onlinePayments: true, insights: true, deals: true, rewards: true },
 };
 const GRACE_MS = 7 * 24 * 60 * 60 * 1000; // paid features stay on 7 days after a failed payment
 
@@ -381,7 +381,8 @@ async function ensureSchema() {
     ['crew_note_at', 'INTEGER'],
     // Followers: when the owner last emailed them (keeps it from becoming spam).
     ['follow_open_at', 'INTEGER'],
-    ['deals_json', 'TEXT'],                       // happy hour and other timed deals (see public/deals-core.js)
+    ['deals_json', 'TEXT'],
+    ['rewards_json', 'TEXT'],                     // punch card settings (see rewards.js)                       // happy hour and other timed deals (see public/deals-core.js)
     ['follow_week_at', 'INTEGER'],
   ];
   for (const [c, d] of vendorCols) await addColumn('vendors', c, d);
@@ -435,6 +436,21 @@ async function ensureSchema() {
   for (const [c, d] of orderCols) await addColumn('orders', c, d);
   // Where the truck was parked when the order came in (for comparing locations in Insights).
   await addColumn('orders', 'location', 'TEXT');
+  // Punch card: which card, the free item taken off (cents), how many stamps it used, and whether it earned one.
+  for (const [c, d] of [['card_id', 'INTEGER'], ['reward_cents', 'INTEGER NOT NULL DEFAULT 0'], ['reward_every', 'INTEGER'], ['reward_returned', 'INTEGER NOT NULL DEFAULT 0'], ['stamped', 'INTEGER NOT NULL DEFAULT 0']]) {
+    await addColumn('orders', c, d);
+  }
+  await exec(`CREATE TABLE IF NOT EXISTS reward_cards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vendor_id INTEGER NOT NULL,
+    token_hash TEXT NOT NULL,      -- the card on the customer's phone (only its hash is kept)
+    stamps INTEGER NOT NULL DEFAULT 0,
+    rewards_used INTEGER NOT NULL DEFAULT 0,
+    last_stamp_at INTEGER,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`);
+  await exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_reward_cards_token ON reward_cards (vendor_id, token_hash)');
   await run('CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_client_key ON orders(vendor_id, client_key) WHERE client_key IS NOT NULL');
   await exec(`CREATE TABLE IF NOT EXISTS sms_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -565,8 +581,18 @@ async function autoCloseOrders() {
   closed.push(...(await all("UPDATE orders SET status = 'Fulfilled', customer_phone = NULL WHERE status = 'Preparing' AND payment_status = 'paid' AND created_at < ? RETURNING id, vendor_id, 'fulfilled' AS event", [now - PREPARING_AUTO_CLOSE_MS])));
   closed.push(...(await all("UPDATE orders SET status = 'Canceled', customer_phone = NULL, updated_at = ? WHERE status = 'Preparing' AND payment_status != 'paid' AND created_at < ? RETURNING id, vendor_id, 'canceled' AS event", [now, now - PREPARING_AUTO_CLOSE_MS])));
   closed.push(...(await all("UPDATE orders SET status = 'Canceled', payment_status = 'expired', customer_phone = NULL, updated_at = ? WHERE status = 'Pending' AND created_at < ? RETURNING id, vendor_id, 'expired' AS event", [now, now - PENDING_PAYMENT_MS])));
-  for (const o of closed) logOrderEvent(o.vendor_id, o.id, o.event, 'system');
+  for (const o of closed) {
+    logOrderEvent(o.vendor_id, o.id, o.event, 'system');
+    await orderClosed(o.vendor_id, o.id, o.event);
+  }
   return closed.length;
+}
+
+/* Other parts (the punch card) react when an order closes without going through the kitchen screen. */
+const closeHooks = [];
+function onOrderClosed(fn) { closeHooks.push(fn); }
+async function orderClosed(vendorId, orderId, event) {
+  for (const fn of closeHooks) { try { await fn(vendorId, orderId, event); } catch (e) { console.error('order close hook:', e.message); } }
 }
 
 /* ---------- nightly checks ---------- */
@@ -605,6 +631,7 @@ function orderShape(o) {
     textMe: !!o.customer_phone,
     allergy: o.allergy || '',
     allergyAck: !!o.allergy_ack_at,
+    rewardCents: o.reward_cents || 0,   // a punch-card free item on this ticket
     createdAt: o.created_at,
     updatedAt: o.updated_at,
   };
@@ -625,6 +652,8 @@ module.exports = {
   DEFAULT_MENU, normalizeItem, normalizeMenu, normalizeOptions, parseMenu, saveMenu, num, PHOTO_RE,
   normalizeHours, parseHours, validTimezone,
   getState,
+  onOrderClosed,
+  orderClosed,
   refreshWait,
   refreshAllWaits,
   WAIT_MAX,

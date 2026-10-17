@@ -98,8 +98,9 @@ async function markPaid(orderRow, session) {
 }
 
 async function cancelPending(orderRow, reason = 'expired') {
-  await run("UPDATE orders SET status = 'Canceled', payment_status = ?, customer_phone = NULL, updated_at = ? WHERE id = ? AND status = 'Pending'",
+  const r = await run("UPDATE orders SET status = 'Canceled', payment_status = ?, customer_phone = NULL, updated_at = ? WHERE id = ? AND status = 'Pending'",
     [reason, Date.now(), orderRow.id]);
+  if (r.changes) await core.orderClosed(orderRow.vendor_id, orderRow.id, 'canceled'); // e.g. give back a punch-card reward
 }
 
 /** Refunds a paid order in full on the truck's Stripe account. Returns { ok } or { ok:false, error }. */

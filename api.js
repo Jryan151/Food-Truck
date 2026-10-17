@@ -17,6 +17,7 @@ const catering = require('./catering');
 const Insights = require('./public/insights-core');
 const schedule = require('./schedule');
 const Deals = require('./public/deals-core');
+const rewards = require('./rewards');
 const { run, get, all } = core;
 const { requireVendor, requireRole, getSession, rateLimit } = auth;
 
@@ -95,7 +96,8 @@ router.get('/vendor-data', async (req, res) => {
     smsReady: sms.enabledFor(v) && !!v.sms_customer_ready, // show the "text me when it's ready" box
     cateringEnabled: await catering.isEnabled(v.id),   // show the Catering link
     nextStop: await nextStop(v),
-    deals: vendorDeals(v).filter((d) => d.on),          // happy hour: the page shows it, the server prices it                       // "Next: Fri 4 PM at Brewery Row" when closed
+    deals: vendorDeals(v).filter((d) => d.on),
+    rewards: rewards.enabled(v) ? (({ name, every, capCents, minCents }) => ({ name, every, capCents, minCents }))(rewards.settings(v)) : null,          // happy hour: the page shows it, the server prices it                       // "Next: Fri 4 PM at Brewery Row" when closed
   });
 });
 
@@ -202,10 +204,16 @@ router.post('/orders', limitOrders, requireVendor, async (req, res) => {
   }
   total = Math.round(total * 100) / 100;
   if (total > 5000) return res.status(400).json({ error: 'Order is too large. Please call us.' });
+  // Punch card: what the free item would take off (nothing is spent until the order is really saved).
+  const cardToken = String(b.cardToken || '');
+  const useReward = b.useReward === true;
+  const rp = await rewards.preview(v, { cardToken, useReward, items });
+  if (rp.error) return res.status(rp.status).json({ error: rp.error, rewardGone: true });
+  const due = Math.round(total * 100 - rp.rewardCents) / 100;
   // No surprises: if the price went up since the customer looked (a happy hour just ended), say so first.
   const seen = Number(b.seenTotal);
-  if (Number.isFinite(seen) && total > seen + 0.004) {
-    return res.status(409).json({ error: `Prices changed while you were ordering. Your total is now $${total.toFixed(2)}.`, priceChanged: true, total });
+  if (Number.isFinite(seen) && due > seen + 0.004) {
+    return res.status(409).json({ error: `Prices changed while you were ordering. Your total is now $${due.toFixed(2)}.`, priceChanged: true, total: due });
   }
 
   const name = String(b.customerName || '').trim().slice(0, 40) || 'Guest';
@@ -214,9 +222,10 @@ router.post('/orders', limitOrders, requireVendor, async (req, res) => {
 
   // How they're paying. Free trucks (and Pro trucks without Stripe connected) are window-only.
   const payMode = payments.effectivePayMode(v);
-  const payNow = b.payNow === true;
+  const nothingDue = due <= 0; // a free item that covers the whole order: nothing to pay anywhere
+  const payNow = b.payNow === true && !nothingDue;
   if (payNow && payMode === 'window') return res.status(400).json({ error: 'This truck takes payment at the window.' });
-  if (!payNow && payMode === 'online') return res.status(400).json({ error: 'This truck takes card payment when you order.' });
+  if (!payNow && !nothingDue && payMode === 'online') return res.status(400).json({ error: 'This truck takes card payment when you order.' });
 
   // "Text me when it's ready" — only with the box ticked, and only if the truck has texts on.
   let phone = null;
@@ -240,6 +249,11 @@ router.post('/orders', limitOrders, requireVendor, async (req, res) => {
   };
   if (await sameOrder()) return;
 
+  // Now spend the reward for real (atomically) and give the customer a card if they don't have one yet.
+  const rw = await rewards.atOrder(v, { cardToken, useReward, items });
+  if (rw.error) return res.status(rw.status).json({ error: rw.error, rewardGone: true });
+  total = Math.round(items.reduce((sum, it) => sum + Math.round(it.price * 100) * it.qty, 0)) / 100;
+
   // Atomic per-vendor ticket counter.
   const row = await get('UPDATE vendors SET next_ticket = COALESCE(next_ticket, 101) + 1 WHERE id = ? RETURNING next_ticket - 1 AS ticket', [v.id]);
   const now = Date.now();
@@ -247,11 +261,12 @@ router.post('/orders', limitOrders, requireVendor, async (req, res) => {
   let r;
   try {
     r = await run(
-      `INSERT INTO orders (vendor_id, ticket_no, public_token, customer_name, items_json, notes, total, status, payment_status, customer_phone, client_key, allergy, location, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [v.id, row.ticket, token, name, JSON.stringify(items), notes, total, payNow ? 'Pending' : 'Preparing', payNow ? 'pending' : 'window', phone, clientKey, allergy, state.location || null, now, now]
+      `INSERT INTO orders (vendor_id, ticket_no, public_token, customer_name, items_json, notes, total, status, payment_status, customer_phone, client_key, allergy, location, card_id, reward_cents, reward_every, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [v.id, row.ticket, token, name, JSON.stringify(items), notes, total, payNow ? 'Pending' : 'Preparing', payNow ? 'pending' : 'window', phone, clientKey, allergy, state.location || null, rw.cardId || null, rw.rewardCents || 0, rw.rewardEvery || null, now, now]
     );
   } catch (err) {
+    await rewards.giveBack(rw.cardId, rw.rewardEvery); // the order wasn't saved, so the reward wasn't spent
     // Two taps arrived at the same instant: the first one won, so answer with its order.
     if (err.code === 'SQLITE_CONSTRAINT' && clientKey && (await sameOrder())) return;
     throw err;
@@ -267,7 +282,9 @@ router.post('/orders', limitOrders, requireVendor, async (req, res) => {
     estimatedMinutes: waitFor(state, prepMinutes),
     changeUntil: changeUntil(orderRow),
     now: Date.now(),
+    rewardCents: rw.rewardCents,
   };
+  if (rw.token) reply.cardToken = rw.token; // a new punch card, kept on the customer's phone
 
   if (payNow) {
     // Not shown in the kitchen until Stripe says it's paid.
@@ -318,6 +335,7 @@ router.post('/orders/:token/cancel', limitOrders, requireVendor, async (req, res
     return res.status(409).json({ error: msg, status: o.status });
   }
   core.logOrderEvent(v.id, row.id, 'canceled', 'customer');
+  await rewards.undo(row.id);
   core.broadcast(v.id, 'ORDER_UPDATE', Object.assign(orderShape(row), { byCustomer: true }), true);
   core.broadcast(v.id, 'ORDER_STATUS', { tag: core.orderTag(row.public_token), status: 'Canceled' });
   core.refreshWait(v.id);
@@ -379,6 +397,8 @@ router.patch('/owner/orders/:id', staffOrOwner, async (req, res) => {
   );
   if (!row) return res.status(409).json({ error: 'That order cannot be changed.' });
   core.logOrderEvent(v.id, row.id, next.toLowerCase(), req.session.role);
+  if (next === 'Canceled') await rewards.undo(row.id);
+  else await rewards.stamp(v.id, row.id);
   if (next === 'Ready') sms.notifyReady(v, existing).catch(() => {});
   const order = orderShape(row);
   core.broadcast(v.id, 'ORDER_UPDATE', order, true);

@@ -80,6 +80,7 @@
 
             <div class="w-full space-y-3 relative mt-3">
                 <div id="usualLanding" style="display:none"></div>
+                <div id="cardBox" style="display:none"></div>
                 <button data-action="open-menu" id="btn-start-order" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-3.5 rounded-xl transition shadow-lg">Start Order</button>
                 <button data-action="open-tracker" id="btn-track-landing" class="w-full bg-zinc-900 border border-zinc-800 text-zinc-300 font-semibold py-3 rounded-xl text-sm transition" style="display:none;" data-i18n="track_orders">Order Status</button>
                 <a href="/schedule" id="scheduleLink" class="ok-btn-quiet block w-full text-center py-3 rounded-xl text-sm transition" style="display:none;"></a>
@@ -179,6 +180,7 @@
             </div>
 
             <div id="cartItemsList" class="space-y-3 border-b border-zinc-800 pb-3"></div>
+            <div id="rewardRow" style="display:none"></div>
             <div class="flex justify-between items-center text-sm font-semibold"><span data-i18n="total">Total</span><span id="cartModalTotal" class="font-mono">$0.00</span></div>
 
             <div id="payChoice" class="space-y-2"></div>
@@ -225,6 +227,7 @@
                 <div class="text-xs text-zinc-400 pt-1" id="successPay"></div>
             </div>
             <div id="successChange" class="text-[11px] text-zinc-500"></div>
+            <div id="successStamp" class="text-[11px] text-zinc-400"></div>
             <div id="successAlert"></div>
             <button data-action="close-success" id="btn-view-tracker" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-3 rounded-xl text-sm transition" data-i18n="view_tracker">Order Status</button>
         </div>
@@ -247,6 +250,9 @@
                 start_order: 'Start Order', currently_closed: 'Currently Closed', order_at_window: 'Order at the window',
                 catering_cta: 'Planning an event? Get a catering quote',
                 sched_next: 'Next: {when} · {where}', sched_link: 'Where we’ll be this week', sched_full: 'Full schedule', sched_today: 'Today',
+                card_progress: '{n} of {every}', card_more: 'Free item (up to {cap}) after {left} more', card_ready: '🎁 Your free item is ready. Use it at checkout.',
+                card_keep: 'Keep my card on another phone', card_email_ph: 'you@email.com', card_send: 'Send', card_use: 'Use my free item (up to {cap})', card_line: 'Free item',
+                card_stamp_soon: '+1 stamp on your {name} when your order is ready', card_gone: 'Your free item isn’t ready yet.',
                 deal_until: 'until {t}', deal_later: '{name} today, {from} – {to}', price_changed_ok: 'Check your cart, then tap Place order again.',
                 wait_now: '⏱ About {n} min wait right now', usual_title: 'Your usual', again_title: 'Order again', alert_chime: '🔔 We’ll chime here when it’s ready. Keep this page open.', usual_add: 'Add to cart', usual_out: '{item} is sold out today.',
                 change_left: 'You can change or cancel for {t}', change_btn: 'Change', cancel_btn: 'Cancel',
@@ -287,6 +293,9 @@
                 start_order: 'Hacer pedido', currently_closed: 'Cerrado', order_at_window: 'Pide en la ventanilla',
                 catering_cta: '¿Un evento? Cotiza el catering',
                 sched_next: 'Próxima parada: {when} · {where}', sched_link: 'Dónde estaremos esta semana', sched_full: 'Ver horario', sched_today: 'Hoy',
+                card_progress: '{n} de {every}', card_more: 'Producto gratis (hasta {cap}) en {left} más', card_ready: '🎁 Tu producto gratis está listo. Úsalo al pagar.',
+                card_keep: 'Guardar mi tarjeta en otro teléfono', card_email_ph: 'tu@correo.com', card_send: 'Enviar', card_use: 'Usar mi producto gratis (hasta {cap})', card_line: 'Producto gratis',
+                card_stamp_soon: '+1 sello en tu tarjeta cuando tu pedido esté listo', card_gone: 'Tu producto gratis aún no está listo.',
                 deal_until: 'hasta las {t}', deal_later: '{name} hoy, {from} – {to}', price_changed_ok: 'Revisa tu carrito y vuelve a tocar Enviar pedido.',
                 wait_now: '⏱ Espera de unos {n} min ahora', usual_title: 'Lo de siempre', again_title: 'Pedir de nuevo', alert_chime: '🔔 Sonará aquí cuando esté listo. Deja esta página abierta.', usual_add: 'Agregar', usual_out: '{item} está agotado hoy.',
                 change_left: 'Puedes cambiar o cancelar durante {t}', change_btn: 'Cambiar', cancel_btn: 'Cancelar',
@@ -464,6 +473,7 @@
             $('saleBadgeContainer').innerHTML = banner;
 
             renderUsual();
+            renderCard();
             renderNextStop();
             // If the truck closes or pauses while someone has the menu open, send them back instead of letting them build a doomed cart.
             if (!canOrder() && app.view === 'menu') show('landing');
@@ -670,7 +680,8 @@
             if (!tt.lines.length) { closeCartModal(); return; }
             $('cartEstimatedWait').textContent = t('mins', { n: liveWait() ? Math.max(liveWait(), Math.min(tt.prep, 90)) : tt.prep + (Number(app.state.rush) || 0) });
             renderPayChoice();
-            $('cartModalTotal').textContent = money(tt.total);
+            renderRewardRow();
+            $('cartModalTotal').textContent = money(Math.max(0, tt.total - rewardCents() / 100));
             $('cartItemsList').innerHTML = tt.lines.map(function (x) {
                 return '<div class="flex justify-between items-center bg-zinc-950 p-3 rounded-xl border border-zinc-800 text-sm gap-2">' +
                     '<div class="min-w-0"><div class="font-bold truncate">' + esc(x.label) + '</div>' +
@@ -757,7 +768,9 @@
                     website: $('website').value,
                     clientKey: app.orderKey,
                     // What they were shown. If a deal ended in the meantime, the server asks before charging more.
-                    seenTotal: Math.max(Math.round(tt.total * 100) / 100, app.acceptedTotal || 0),
+                    seenTotal: Math.max(Math.round(tt.total * 100 - rewardCents()) / 100, app.acceptedTotal || 0),
+                    cardToken: cardToken() || undefined,
+                    useReward: app.useReward && !!rewardCents() || undefined,
                     allergy: $('customerAllergy').value.trim() || undefined,
                     payNow: payNow,
                     customerPhone: phone || undefined,
@@ -767,6 +780,10 @@
             }).then(function (r) {
                 return r.json().catch(function () { return {}; }).then(function (body) { return { ok: r.ok, status: r.status, body: body }; });
             }).then(function (res) {
+                if (!res.ok && res.body.rewardGone) {
+                    app.useReward = false; setCartError(res.body.error || t('card_gone'));
+                    loadCard(); return;
+                }
                 if (!res.ok && res.body.priceChanged) {
                     app.acceptedTotal = res.body.total; // the next tap confirms this total
                     var msg = res.body.error + ' ' + t('price_changed_ok');
@@ -782,6 +799,14 @@
                 }
                 app.orderKey = null; // the next order gets a fresh key
                 app.acceptedTotal = 0;
+                if (res.body.cardToken) setCardToken(res.body.cardToken);
+                var usedReward = !!res.body.rewardCents;
+                app.useReward = false;
+                if (app.card) {
+                    var minOk = (res.body.total * 100 + (res.body.rewardCents || 0)) >= app.card.minCents;
+                    $('successStamp').textContent = minOk ? t('card_stamp_soon', { name: app.card.name.toLowerCase() }) : '';
+                } else $('successStamp').textContent = '';
+                if (usedReward || res.body.cardToken) loadCard();
                 var skew = res.body.now ? Date.now() - res.body.now : 0; // phone clock vs server clock
                 if (!app.tracked.some(function (o) { return o.token === res.body.token; }))
                     app.tracked.unshift({
@@ -885,6 +910,53 @@
             updateCartUI();
             if (app.view !== 'menu') show('menu');
             openCartModal();
+        }
+
+        /* ---------- punch card ----------
+           The card is a private token kept on this phone. The server decides stamps and rewards. */
+        function cardKey() { return 'ft_card_' + (app.vendor ? app.vendor.slug : 'x'); }
+        function cardToken() { try { return localStorage.getItem(cardKey()) || app.cardMem || ''; } catch (e) { return app.cardMem || ''; } }
+        function setCardToken(tk) { app.cardMem = tk; try { localStorage.setItem(cardKey(), tk); } catch (e) {} }
+        function loadCard() {
+            if (!app.vendor || !app.vendor.rewards) { app.card = null; renderCard(); return Promise.resolve(); }
+            return fetch('/api/rewards?card=' + encodeURIComponent(cardToken()), { cache: 'no-store' })
+                .then(function (r) { return r.ok ? r.json() : { on: false }; })
+                .then(function (c) { app.card = c && c.on ? c : null; if (!app.card || !app.card.ready) app.useReward = false; renderCard(); if ($('cartModal').style.display === 'flex') renderCartModal(); })
+                .catch(function () {});
+        }
+        function rewardCents() {
+            if (!app.useReward || !app.card || !app.card.ready) return 0;
+            var top = 0;
+            cartLines().forEach(function (x) { if (!x.soldOut) top = Math.max(top, Math.round(x.unit * 100)); });
+            return Math.min(top, app.card.capCents);
+        }
+        function renderCard() {
+            var box = $('cardBox'), c = app.card;
+            if (!c || !canOrder()) { box.style.display = 'none'; return; }
+            var dots = '';
+            for (var i = 0; i < c.every; i++) dots += '<i class="punch' + (i < Math.min(c.stamps, c.every) ? ' on' : '') + '"></i>';
+            var line = c.ready ? t('card_ready') : t('card_progress', { n: c.stamps, every: c.every }) + ' · ' + t('card_more', { cap: money(c.capCents / 100), left: c.every - c.stamps });
+            box.style.display = 'block';
+            box.innerHTML = '<div class="punch-card' + (c.ready ? ' ready' : '') + '"><div class="flex items-center justify-between gap-3"><span class="text-[11px] font-semibold text-zinc-400">' + esc(c.name) + '</span><span class="punch-dots" aria-hidden="true">' + dots + '</span></div>' +
+                '<div class="text-sm text-zinc-100 mt-1">' + esc(line) + '</div>' +
+                (c.canSave && c.known ? (app.cardSaving ? '<form id="cardSave" class="flex gap-2 mt-2"><input id="cardEmail" type="email" autocomplete="email" class="flex-1 min-w-0 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-sm text-zinc-200" placeholder="' + esc(t('card_email_ph')) + '"><button class="bg-zinc-100 text-zinc-950 font-semibold text-xs px-3 rounded-lg">' + esc(t('card_send')) + '</button></form><div id="cardMsg" class="text-[11px] text-zinc-400 mt-1"></div>'
+                    : '<button data-action="card-keep" class="text-[11px] text-zinc-400 underline mt-2">' + esc(t('card_keep')) + '</button>') : '') + '</div>';
+            var f = $('cardSave');
+            if (f) f.onsubmit = function (e) {
+                e.preventDefault();
+                fetch('/api/rewards/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ card: cardToken(), email: $('cardEmail').value.trim() }) })
+                    .then(function (r) { return r.json().catch(function () { return {}; }); })
+                    .then(function (b) { $('cardMsg').textContent = b.message || b.error || ''; });
+            };
+        }
+        function renderRewardRow() {
+            var row = $('rewardRow'), c = app.card;
+            if (!c || !c.ready) { row.style.display = 'none'; app.useReward = false; return; }
+            var off = rewardCents();
+            row.style.display = 'block';
+            row.innerHTML = '<label class="punch-use"><input type="checkbox" id="useReward"' + (app.useReward ? ' checked' : '') + '> <span>' + esc(t('card_use', { cap: money(c.capCents / 100) })) + '</span>' +
+                (off ? '<span class="font-mono ml-auto">−' + money(off / 100) + '</span>' : '') + '</label>';
+            $('useReward').onchange = function () { app.useReward = this.checked; renderCartModal(); };
         }
 
         /* ---------- ready alert + screen on ---------- */
@@ -1046,6 +1118,7 @@
             if (!changed) return;
             saveTracked();
             if (app.view === 'tracker') renderTracker(); else renderAlertOffer();
+            if (readied.length && app.card) setTimeout(loadCard, 600); // the stamp lands when it's ready
             if (readied.length) {
                 try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) {}
                 readied.forEach(announceReady);
@@ -1086,6 +1159,7 @@
             $('cateringLink').style.display = d.cateringEnabled ? 'block' : 'none';
             app.nextStop = d.nextStop || null;
             app.deals = d.deals || [];
+            loadCard();
             if (d.ownerIG) {
                 $('ig-container').style.display = 'block';
                 $('dynamic-ig-text').textContent = d.ownerIG;
@@ -1130,6 +1204,7 @@
                 var p = msg.payload || {};
                 switch (msg.type) {
                     case 'STATE': app.state = { status: p.status, rush: p.rush, location: p.location || '', paused: !!p.paused, wait: p.wait || null }; renderStatus(); renderLocation(); break;
+                    case 'REWARDS_UPDATE': if (app.vendor) { app.vendor.rewards = p.on ? p : null; loadCard(); } break;
                     case 'DEALS_UPDATE': app.deals = p.deals || []; app.dealSig = null; checkDeals(); break;
                     case 'WAIT': app.state.wait = p; renderStatus(); if ($('cartModal').style.display === 'flex') renderCartModal(); break;
                     case 'STORE_STATUS': app.state.status = p.status; renderStatus(); break;
@@ -1222,6 +1297,7 @@
                     break;
                 case 'place-order': placeOrder(); break;
                 case 'add-usual': addUsual(); break;
+                case 'card-keep': app.cardSaving = true; renderCard(); var ce = $('cardEmail'); if (ce) ce.focus(); break;
                 case 'enable-alert': enableAlert(); break;
                 case 'order-cancel': cancelOrder(el.getAttribute('data-token'), false); break;
                 case 'order-change': cancelOrder(el.getAttribute('data-token'), true); break;
@@ -1260,6 +1336,8 @@
                     showError(res.status === 503 ? t('err_inactive') : t('err_missing'));
                     return;
                 }
+                var adopt = new URLSearchParams(location.search).get('card');
+                if (adopt && /^[A-Za-z0-9_-]{16,64}$/.test(adopt)) { app.vendor = res.d; setCardToken(adopt); history.replaceState(null, '', location.pathname); }
                 applyVendor(res.d);
                 loadTracked();
                 updateTrackButtons();

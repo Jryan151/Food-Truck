@@ -316,6 +316,22 @@
                     <div id="followBox" class="mt-4 bg-zinc-950 border border-zinc-800 rounded-lg p-3"></div>
                 </div>
 
+                <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" data-owner id="rewardsBox">
+                    <div class="flex items-center justify-between gap-2 border-b border-zinc-800 pb-2 mb-3">
+                        <h3 class="font-bold text-sm text-zinc-100">Punch card</h3>
+                        <button data-action="rw-toggle" id="rwSwitch" aria-label="Punch card on or off" class="switch"></button>
+                    </div>
+                    <p class="text-[11px] text-zinc-500 mb-3">Regulars collect a stamp each time an order is marked Ready, then get a free item. No app or sign-up: the card lives on their phone. Stamps come back off if an order is canceled.</p>
+                    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+                        <label class="text-[10px] text-zinc-400">Stamps needed<select id="rwEvery" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200 mt-1"><option>5</option><option>6</option><option>8</option><option>10</option><option>12</option></select></label>
+                        <label class="text-[10px] text-zinc-400">Free item up to $<input id="rwCap" type="number" min="1" step="0.5" inputmode="decimal" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200 mt-1"></label>
+                        <label class="text-[10px] text-zinc-400">Min. order $<input id="rwMin" type="number" min="0" step="0.5" inputmode="decimal" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200 mt-1"></label>
+                    </div>
+                    <button data-action="rw-save" class="mt-3 w-full bg-zinc-100 text-zinc-950 py-2.5 rounded-lg text-xs font-bold">Save punch card</button>
+                    <div id="rwMsg" class="text-[11px] mt-2" role="status"></div>
+                    <div id="rwStats" class="text-[11px] text-zinc-500 mt-2"></div>
+                </div>
+
                 <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" data-owner id="profileBox">
                     <h3 class="font-bold text-sm text-zinc-100 mb-3 border-b border-zinc-800 pb-2">Business Profile</h3>
                     <div class="space-y-2">
@@ -747,7 +763,7 @@
             });
             if (name === 'Orders') { app.newCount = 0; renderBadge(); loadOrders(); }
             if (name === 'Menu') { loadMenu(); setFlag('menu'); if (isOwner()) loadDeals(); }
-            if (name === 'Settings') { renderSettings(); if (isOwner()) { loadLocations().then(function () { renderSettings(); loadSchedule(); }); loadFollowers(); loadPayments(); loadSms(); } }
+            if (name === 'Settings') { renderSettings(); if (isOwner()) { loadLocations().then(function () { renderSettings(); loadSchedule(); }); loadFollowers(); loadRewards(); loadPayments(); loadSms(); } }
             if (name === 'Analytics') loadAnalytics();
             if (name === 'Guide') renderGuide();
         }
@@ -922,6 +938,7 @@
                         : o.payment === 'refunded' ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-zinc-700 text-zinc-300">↩ REFUNDED</span>'
                         : '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">💵 PAY AT WINDOW</span>') +
                     (o.textMe ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-300 border border-blue-500/30">📱 texts when ready</span>' : '') +
+                    (o.rewardCents ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full border border-zinc-500 text-zinc-200">🎁 PUNCH CARD −' + money(o.rewardCents / 100) + '</span>' : '') +
                     '</div>' +
                     (o.notes ? '<div class="text-[11px] text-zinc-400 mt-1 whitespace-pre-line">Note: ' + esc(o.notes) + '</div>' : '') +
                     '<div class="text-[10px] ' + color + ' mt-1 font-semibold">' + esc(o.status) + '</div></div>' +
@@ -1263,6 +1280,34 @@
             if (a === 'deal-scope') return dealEdit(i, function (d) { d.scope = v; });
             if (a === 'deal-cat') return dealEdit(i, function (d) { var k = d.categories.indexOf(v); if (k >= 0) d.categories.splice(k, 1); else d.categories.push(v); });
             if (a === 'deal-item') return dealEdit(i, function (d) { var x = +v, k = d.items.indexOf(x); if (k >= 0) d.items.splice(k, 1); else d.items.push(x); });
+        }
+
+        /* ---------- punch card ---------- */
+        function loadRewards() {
+            return api('GET', '/api/rewards/owner').then(function (r) {
+                if (!r.ok) return;
+                app.rw = r.data.settings; app.rwStats = r.data.stats; app.rwAllowed = r.data.allowed;
+                renderRewards();
+            });
+        }
+        function renderRewards() {
+            var s = app.rw; if (!s) return;
+            $('rwSwitch').className = 'switch' + (s.on ? ' on' : '');
+            $('rwEvery').value = String(s.every);
+            if (!$('rwEvery').value) { var o = document.createElement('option'); o.textContent = String(s.every); $('rwEvery').appendChild(o); $('rwEvery').value = String(s.every); }
+            $('rwCap').value = (s.capCents / 100).toFixed(2).replace(/\.00$/, '');
+            $('rwMin').value = (s.minCents / 100).toFixed(2).replace(/\.00$/, '');
+            var st = app.rwStats || {};
+            $('rwStats').textContent = s.on || st.cards ? st.cards + ' card' + (st.cards === 1 ? '' : 's') + ' · ' + st.stampsGiven + ' stamp' + (st.stampsGiven === 1 ? '' : 's') + ' given · ' + st.rewardsUsed + ' free item' + (st.rewardsUsed === 1 ? '' : 's') + ' used' : '';
+        }
+        function saveRewards(on) {
+            var body = { on: on === undefined ? app.rw.on : on, every: +$('rwEvery').value, capCents: Math.round(Number($('rwCap').value) * 100), minCents: Math.round(Number($('rwMin').value || 0) * 100) };
+            api('PUT', '/api/rewards/owner', body).then(function (r) {
+                var m = $('rwMsg');
+                if (!r.ok) { m.className = 'text-[11px] mt-2 text-rose-400'; m.textContent = r.data.error || 'Could not save.'; return; }
+                app.rw = r.data.settings; renderRewards();
+                m.className = 'text-[11px] mt-2 text-zinc-400'; m.textContent = app.rw.on ? '✓ Saved. Customers see it now.' : '✓ Saved. The punch card is off.';
+            });
         }
 
         var toastTimer = null;
@@ -1927,6 +1972,8 @@
                     });
                     break;
                 case 'sch-add': addStop(); break;
+                case 'rw-toggle': if (app.rw) saveRewards(!app.rw.on); break;
+                case 'rw-save': if (app.rw) saveRewards(); break;
                 case 'sch-del': app.schAsk = +el.getAttribute('data-id'); renderSchedule(); break;
                 case 'sch-keep': app.schAsk = null; renderSchedule(); break;
                 case 'sch-all': app.schAll = !app.schAll; renderSchedule(); break;
