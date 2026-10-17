@@ -109,14 +109,20 @@ function requireVendor(req, res, next) {
 }
 
 /* ---------- sessions ---------- */
+/** The raw session token on this request (cookie first, then Bearer header), or ''. */
+function requestToken(req) {
+  let token = parseCookies(req.headers.cookie)[COOKIE];
+  const h = req.headers.authorization;
+  if (!token && h && h.startsWith('Bearer ')) token = h.slice(7);
+  return token || '';
+}
+
 async function getSession(req) {
   if (req._session !== undefined) return req._session;
   req._session = null;
   const v = req.tenant && req.tenant.vendor;
   if (!v) return null;
-  let token = parseCookies(req.headers.cookie)[COOKIE];
-  const h = req.headers.authorization;
-  if (!token && h && h.startsWith('Bearer ')) token = h.slice(7);
+  const token = requestToken(req);
   if (!token) return null;
   const s = await get('SELECT vendor_id, role, expires_at FROM sessions WHERE token_hash = ?', [core.sha256(token)]);
   if (s && s.expires_at > Date.now() && s.vendor_id === v.id) req._session = s;
@@ -154,19 +160,43 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const PIN_RE = /^[A-Za-z0-9]{4,8}$/;
 const cleanIG = (v) => String(v || '').replace(/^@/, '').replace(/[^A-Za-z0-9._]/g, '').slice(0, 30);
 
-// per-vendor staff-PIN lockout (a 4-digit PIN is guessable without it)
-const pinFails = new Map();
-function pinLocked(vendorId) {
-  const e = pinFails.get(vendorId);
-  return !!(e && e.reset > Date.now() && e.n >= 20);
-}
-function pinFailed(vendorId) {
+/*
+ * Staff-PIN lockout. A 4-digit PIN is guessable without one, but locking the whole truck
+ * would let any stranger shut down the kitchen screen mid-rush. So we lock out the GUESSER:
+ *  - each device (IP) gets PIN_MAX_PER_DEVICE wrong tries per window for a given truck;
+ *  - if a truck sees PIN_MAX_PER_VENDOR wrong tries in a window (a spread-out attack),
+ *    every device that has guessed wrong is locked, while devices with no wrong tries
+ *    (the crew's own tablet) keep working.
+ */
+const PIN_WINDOW_MS = 15 * 60 * 1000;
+const PIN_MAX_PER_DEVICE = 10;
+const PIN_MAX_PER_VENDOR = 100;
+const pinFails = new Map(); // key: `${vendorId}|${ip}` -> { n, reset }
+const pinVendorFails = new Map(); // key: vendorId -> { n, reset }
+
+function freshEntry(map, key) {
   const now = Date.now();
-  let e = pinFails.get(vendorId);
-  if (!e || e.reset < now) e = { n: 0, reset: now + 15 * 60 * 1000 };
-  e.n++;
-  pinFails.set(vendorId, e);
+  let e = map.get(key);
+  if (!e || e.reset < now) { e = { n: 0, reset: now + PIN_WINDOW_MS }; map.set(key, e); }
+  return e;
 }
+function peek(map, key) {
+  const e = map.get(key);
+  return e && e.reset > Date.now() ? e.n : 0;
+}
+function pinLocked(vendorId, ip) {
+  const mine = peek(pinFails, `${vendorId}|${ip}`);
+  if (mine >= PIN_MAX_PER_DEVICE) return true;
+  return mine > 0 && peek(pinVendorFails, vendorId) >= PIN_MAX_PER_VENDOR;
+}
+function pinFailed(vendorId, ip) {
+  freshEntry(pinFails, `${vendorId}|${ip}`).n++;
+  freshEntry(pinVendorFails, vendorId).n++;
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const m of [pinFails, pinVendorFails]) for (const [k, e] of m) if (e.reset < now) m.delete(k);
+}, PIN_WINDOW_MS).unref();
 
 /* ---------- routes ---------- */
 const router = express.Router();
@@ -281,9 +311,9 @@ router.post('/login', limitLogin, async (req, res) => {
     const v = t.vendor;
     if (!v || v.status !== 'active') return res.status(404).json({ error: 'Not found' });
     if (v.password_hash) return res.status(400).json({ error: 'Please log in with your email and password.' });
-    if (pinLocked(v.id)) return res.status(429).json({ error: 'Too many attempts. Try again in 15 minutes.' });
+    if (pinLocked(v.id, req.ip)) return res.status(429).json({ error: 'Too many attempts from this device. Try again in 15 minutes.' });
     const ok = v.staff_pin_hash ? await bcrypt.compare(String(b.pin), v.staff_pin_hash) : false;
-    if (!ok) { pinFailed(v.id); return res.status(401).json({ error: 'Incorrect PIN.' }); }
+    if (!ok) { pinFailed(v.id, req.ip); return res.status(401).json({ error: 'Incorrect PIN.' }); }
     await startSession(req, res, v.id, 'owner');
     return res.json({ ok: true, role: 'owner' });
   }
@@ -309,10 +339,10 @@ router.post('/login', limitLogin, async (req, res) => {
 router.post('/staff', limitLogin, async (req, res) => {
   const v = req.tenant.vendor;
   if (!v || v.status !== 'active') return res.status(404).json({ error: 'Not found' });
-  if (pinLocked(v.id)) return res.status(429).json({ error: 'Too many attempts. Try again in 15 minutes.' });
+  if (pinLocked(v.id, req.ip)) return res.status(429).json({ error: 'Too many attempts from this device. Try again in 15 minutes.' });
   const pin = String((req.body || {}).pin || '');
   const ok = v.staff_pin_hash ? await bcrypt.compare(pin, v.staff_pin_hash) : false;
-  if (!ok) { pinFailed(v.id); return res.status(401).json({ error: 'Incorrect PIN.' }); }
+  if (!ok) { pinFailed(v.id, req.ip); return res.status(401).json({ error: 'Incorrect PIN.' }); }
   await startSession(req, res, v.id, 'staff');
   res.json({ ok: true, role: 'staff' });
 });
@@ -374,6 +404,6 @@ router.post('/reset', limitLogin, async (req, res) => {
 });
 
 module.exports = {
-  router, tenant, requireVendor, requireRole, getSession, startSession, clearSessionCookie,
+  router, tenant, requireVendor, requireRole, getSession, startSession, clearSessionCookie, requestToken,
   rateLimit, sendMail, mailConfigured, escHtml, parseCookies, vendorUrl, EMAIL_RE, PIN_RE, cleanIG,
 };

@@ -36,17 +36,17 @@
 
         <div class="grid grid-cols-2 gap-3 mt-10">
             <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-                <div class="text-xs text-zinc-400 mb-1">Free</div>
+                <div class="text-xs text-zinc-400 mb-1" id="freeLabel">Free during beta</div>
                 <div class="text-2xl font-bold mb-3">$0</div>
                 <ul class="text-[11px] text-zinc-400 space-y-1.5 list-disc pl-4"><li>Ordering page</li><li>Live kitchen portal</li><li>Customers pay at the window</li></ul>
             </div>
             <div class="bg-zinc-900 border border-emerald-500/40 rounded-xl p-4">
                 <div class="text-xs text-emerald-400 mb-1">Pro</div>
-                <div class="text-2xl font-bold mb-3" id="proPrice">$34.99/mo</div>
+                <div class="text-2xl font-bold mb-3" id="proPrice">Coming soon</div>
                 <ul class="text-[11px] text-zinc-400 space-y-1.5 list-disc pl-4"><li>Everything in Free</li><li>Use your own domain (like order.yourtruck.com)</li><li>No “Powered by” footer</li><li>Text alerts for new &amp; ready orders</li><li>Customers pay online when they order</li></ul>
             </div>
         </div>
-        <a href="/signup.html" class="block w-full text-center bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 rounded-xl transition mt-6">Start free, upgrade anytime</a>
+        <a href="/signup.html" id="bottomCta" class="block w-full text-center bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 rounded-xl transition mt-6">Join the free beta</a>
 
         <p class="text-[11px] text-zinc-600 text-center mt-12">© <span id="yr"></span> Online Kitchen · <a href="/terms" class="underline hover:text-zinc-400">Terms</a> · <a href="/privacy" class="underline hover:text-zinc-400">Privacy</a></p>
     </div>
@@ -54,7 +54,12 @@
     (function () {
         document.getElementById('yr').textContent = new Date().getFullYear();
         fetch('/api/plans').then(function (r) { return r.json(); }).then(function (d) {
-            if (d && d.pro && d.pro.price) document.getElementById('proPrice').textContent = d.pro.price;
+            // During the free beta Pro shows as "Coming soon"; once billing is live, show the real price.
+            if (d && d.beta === false && d.pro && d.pro.price) {
+                document.getElementById('proPrice').textContent = d.pro.price;
+                document.getElementById('freeLabel').textContent = 'Free';
+                document.getElementById('bottomCta').textContent = 'Start free, upgrade anytime';
+            }
         }).catch(function () {});
     })();
     </script>

@@ -69,6 +69,8 @@ const RESERVED_SLUGS = new Set([
   'owner', 'customer', 'dashboard', 'billing', 'static', 'assets', 'mail', 'ftp', 'smtp', 'imap',
   'pop', 'ns1', 'ns2', 'cdn', 'status', 'blog', 'docs', 'dev', 'staging', 'test', 'demo', 'secure',
   'account', 'accounts', 'verify', 'reset', 'webhook', 'stripe', 'paypal', 'terms', 'privacy',
+  // Email sending (Resend) lives on these subdomains; a truck with one of these names would break mail.
+  'send', 'rsend', 'bounce', 'bounces', 'email', 'resend',
 ]);
 const BLOCKED_SUBSTRINGS = ['paypal', 'stripe', 'venmo', 'cashapp', 'zelle', 'wellsfargo', 'bankofamerica', 'coinbase'];
 

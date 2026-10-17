@@ -402,7 +402,7 @@
             menu: [],
             state: { status: 'open', rush: 0, location: '' },
             locations: { active: [], deleted: [] },
-            proPrice: '$34.99/mo',
+            proPrice: '$34.99/mo', beta: true,
             tab: 'Orders', editId: null, newCount: 0,
             sound: true, es: null, audio: null, wakeLock: null,
             editPhoto: '', uploading: false, installEvt: null
@@ -549,7 +549,7 @@
                 return loadMe().then(function (ok) { if (ok) enterDashboard(); else showLogin(); });
             }).catch(function () { document.body.innerHTML = '<div class="p-8 text-center text-zinc-400">Could not load. Please refresh.</div>'; });
 
-            fetch('/api/plans').then(function (r) { return r.json(); }).then(function (d) { if (d && d.pro) { app.proPrice = d.pro.price; renderPlan(); } }).catch(function () {});
+            fetch('/api/plans').then(function (r) { return r.json(); }).then(function (d) { if (d && d.pro) { app.proPrice = d.pro.price; app.beta = d.beta !== false; renderPlan(); if (app.pay) renderPayments(); if (app.smsSt) renderSms(); } }).catch(function () {});
 
             // Returning from Stripe Checkout: the webhook can take a few seconds, so poll briefly.
             var q = new URLSearchParams(location.search);
@@ -630,7 +630,7 @@
                 ['Text alerts', 'Get a text when a new order comes in, and text customers when their food is ready (only if they opt in).', 'Settings', 'smsSettingsBox', true],
                 ['Your own domain', 'Use your own domain (like order.yourtruck.com) instead of the Online Kitchen address. Email us after upgrading and we’ll set it up.', 'Settings', 'planBox', true],
                 ['No “Powered by” footer', 'Removes the Online Kitchen footer from your ordering page.', 'Settings', 'planBox', true],
-                ['Plan & billing', 'Upgrade to Pro, change your card, or cancel any time.', 'Settings', 'planBox']
+                ['Plan & billing', 'See your plan. Once Pro is available, upgrade, change your card or cancel any time.', 'Settings', 'planBox']
             ]],
             ['Sales', [
                 ['Real-time financials', 'See today’s sales, order count and best sellers as orders come in.', 'Analytics', 'ownerTabAnalytics'],
@@ -903,6 +903,10 @@
                 body.innerHTML = warn + '<div class="text-xs text-zinc-300 mb-3"><span class="font-bold text-emerald-400">Pro plan</span> is active. Thank you!</div>' +
                     '<ul class="text-[11px] text-zinc-400 space-y-1 mb-3 list-disc pl-4"><li>No “Powered by” footer</li><li>Use your own domain (like order.yourtruck.com) — email us to set it up</li><li>Text alerts for you and your customers</li><li>Online pre-order payments (card, Apple Pay, Google Pay)</li></ul>' +
                     '<button data-action="portal" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 py-2.5 rounded-lg text-xs font-bold">Manage Billing</button>';
+            } else if (app.beta) {
+                body.innerHTML = '<div class="text-xs text-zinc-300 mb-2"><span class="font-bold text-emerald-400">Free during beta.</span> Everything that works today is free while we build Online Kitchen with trucks like yours.</div>' +
+                    '<div class="bg-zinc-950 border border-zinc-800 rounded-lg p-3"><div class="text-xs font-bold text-zinc-100 mb-1">Coming soon</div>' +
+                    '<ul class="text-[11px] text-zinc-400 space-y-1 list-disc pl-4"><li>Online pre-order payments (card, Apple Pay, Google Pay)</li><li>Text alerts for you and your customers</li></ul></div>';
             } else {
                 body.innerHTML = warn + '<div class="text-xs text-zinc-300 mb-2">You are on the <span class="font-bold">Free</span> plan. Customers pay at the window.</div>' +
                     '<div class="bg-zinc-950 border border-zinc-800 rounded-lg p-3 mb-3"><div class="text-xs font-bold text-zinc-100 mb-1">Pro — ' + esc(app.proPrice) + '</div>' +
@@ -1153,7 +1157,7 @@
             var b = $('paymentsBody'), p = app.pay; if (!b || !p) return;
             if (!p.pro) {
                 b.innerHTML = '<p class="mb-3">Let customers pay by card, Apple Pay or Google Pay when they order. Money goes straight to your own Stripe account — we take no cut. Stripe\'s standard card fee applies.</p>' +
-                    '<button data-action="upgrade" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-lg text-xs font-bold">Upgrade to Pro to turn on</button>';
+                    (app.beta ? '<p class="text-[11px] font-bold text-zinc-300 border border-zinc-700 rounded-lg px-3 py-2 text-center">Coming soon · free during beta</p>' : '<button data-action="upgrade" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-lg text-xs font-bold">Upgrade to Pro to turn on</button>');
                 return;
             }
             if (!p.configured) { b.innerHTML = '<p>Online payments aren\'t switched on for this site yet. Please check back soon.</p>'; return; }
@@ -1197,7 +1201,7 @@
             var b = $('smsBody'), st = app.smsSt; if (!b || !st) return;
             if (!st.pro) {
                 b.innerHTML = '<p class="mb-3">Get a text when a new order comes in, and text customers automatically when their order is ready.</p>' +
-                    '<button data-action="upgrade" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-lg text-xs font-bold">Upgrade to Pro to turn on</button>';
+                    (app.beta ? '<p class="text-[11px] font-bold text-zinc-300 border border-zinc-700 rounded-lg px-3 py-2 text-center">Coming soon · free during beta</p>' : '<button data-action="upgrade" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-lg text-xs font-bold">Upgrade to Pro to turn on</button>');
                 return;
             }
             if (!st.configured) { b.innerHTML = '<p>Text messages aren\'t switched on for this site yet. Please check back soon.</p>'; return; }
@@ -1390,7 +1394,7 @@
                     break;
                 case 'save-password':
                     api('PUT', '/api/owner/password', { currentPassword: $('pwCurrent').value, newPassword: $('pwNew').value, email: $('pwEmail').value.trim() }).then(function (r) {
-                        say('secMsg', r.ok ? 'Password updated.' : (r.data.error || 'Could not update.'), r.ok);
+                        say('secMsg', r.ok ? 'Password updated. Any other devices signed in as owner were signed out.' : (r.data.error || 'Could not update.'), r.ok);
                         if (r.ok) { $('pwCurrent').value = ''; $('pwNew').value = ''; loadMe().then(function () { $('pwEmail').style.display = 'none'; $('pwCurrent').style.display = 'block'; $('currentEmail').textContent = app.me.vendor.email || ''; }); }
                     });
                     break;

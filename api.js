@@ -34,6 +34,8 @@ router.get('/plans', (req, res) => {
     plans: core.PLANS,
     maxItems: core.MAX_ITEMS,
     pro: { price: process.env.PRO_PRICE_DISPLAY || '$34.99/mo' },
+    // Free beta: on until Pro billing is set up (or force it on with FREE_BETA=true).
+    beta: process.env.FREE_BETA === 'true' || !(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PRICE_ID),
   });
 });
 
@@ -573,7 +575,12 @@ router.put('/owner/password', ownerOnly, async (req, res) => {
     catch (e) { return res.status(409).json({ error: 'That email is already used.' }); }
   }
   await run('UPDATE vendors SET password_hash = ?, updated_at = ? WHERE id = ?', [await bcrypt.hash(next, 10), Date.now(), v.id]);
-  res.json({ ok: true });
+  // Sign out every other owner login (like a password reset does), but keep this device signed in.
+  // Staff kitchen logins use the PIN, not the password, so they stay signed in.
+  await run("DELETE FROM sessions WHERE vendor_id = ? AND role = 'owner' AND token_hash != ?", [
+    v.id, core.sha256(auth.requestToken(req)),
+  ]);
+  res.json({ ok: true, signedOutOthers: true });
 });
 
 const limitSensitive = rateLimit({ windowMs: 15 * 60 * 1000, max: 10 });
