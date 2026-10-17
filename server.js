@@ -262,6 +262,8 @@ core.ensureSchema()
     });
     setTimeout(dailyChecks, 60 * 1000).unref();
     setInterval(dailyChecks, 24 * 60 * 60 * 1000).unref();
+    // The line keeps aging between taps: refresh the wait customers see once a minute.
+    setInterval(() => core.refreshAllWaits().catch(() => {}), 60 * 1000).unref();
   })
   .catch((e) => { console.error('Startup failed:', e); report(e); process.exit(1); });
 

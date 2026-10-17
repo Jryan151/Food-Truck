@@ -175,15 +175,85 @@ function parseMenu(menuData) {
 const saveMenu = (vendorId, menu) =>
   run('UPDATE vendors SET menu_data = ?, updated_at = ? WHERE id = ?', [JSON.stringify(menu), Date.now(), vendorId]);
 
-/* ---------- store state (open/closed, rush, location) ---------- */
+/* ---------- store state (open/closed, rush, location, wait) ---------- */
 async function getState(vendorId) {
-  let s = await get('SELECT status, rush_minutes, active_location, paused FROM store_state WHERE vendor_id = ?', [vendorId]);
+  let s = await get('SELECT status, rush_minutes, active_location, paused, wait_start, wait_lock, service_started_at FROM store_state WHERE vendor_id = ?', [vendorId]);
   if (!s) {
     await run('INSERT OR IGNORE INTO store_state (vendor_id) VALUES (?)', [vendorId]);
     s = { status: 'open', rush_minutes: 0, active_location: '', paused: 0 };
   }
   // paused = open for walk-ups, but not taking online orders right now
-  return { status: s.status, rush: s.rush_minutes, location: s.active_location || '', paused: !!s.paused };
+  return {
+    status: s.status, rush: s.rush_minutes, location: s.active_location || '', paused: !!s.paused,
+    wait: await computeWait(vendorId, s),
+  };
+}
+
+/* ---------- honest wait time ----------
+   What a customer ordering right now should expect, from how the kitchen is actually doing:
+   - the middle (median) time from order to Ready over the last hour's tickets, once there are 3;
+   - before that, the starting wait the owner set when they opened;
+   - never less than the oldest ticket still cooking has already waited (the line is real);
+   - plus the owner's Busy minutes.
+   The owner can lock a number instead; the live suggestion is still worked out so they can take it. */
+const WAIT_SAMPLES_NEEDED = 3;
+const WAIT_LOOKBACK_MS = 60 * 60 * 1000;
+const WAIT_MAX = 90;
+
+const median = (xs) => {
+  const a = xs.slice().sort((x, y) => x - y);
+  const m = Math.floor(a.length / 2);
+  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
+};
+
+async function computeWait(vendorId, s) {
+  const now = Date.now();
+  const since = Math.max(now - WAIT_LOOKBACK_MS, s.service_started_at || 0);
+  const rows = await all(
+    `SELECT e.at - o.created_at AS ms FROM order_events e JOIN orders o ON o.id = e.order_id
+     WHERE e.vendor_id = ? AND e.event = 'ready' AND e.at > ? AND o.created_at >= ? ORDER BY e.at DESC LIMIT 12`,
+    [vendorId, since, since]
+  );
+  const samples = rows.map((r) => r.ms).filter((ms) => ms > 0);
+  const oldest = await get("SELECT MIN(created_at) AS at FROM orders WHERE vendor_id = ? AND status = 'Preparing'", [vendorId]);
+  const queueMin = oldest && oldest.at ? Math.round((now - oldest.at) / 60000) : 0;
+
+  let base = null;
+  let basis = null;
+  if (samples.length >= WAIT_SAMPLES_NEEDED) { base = Math.ceil(median(samples) / 60000); basis = 'pace'; }
+  else if (s.wait_start) { base = s.wait_start; basis = 'start'; }
+  if (queueMin > (base || 0) && (base !== null || queueMin >= 5)) { base = queueMin; basis = 'queue'; }
+  const suggested = base === null ? null : Math.min(WAIT_MAX, Math.max(1, base + (s.rush_minutes || 0)));
+
+  const locked = s.wait_lock ? Math.min(WAIT_MAX, Math.max(1, s.wait_lock)) : null;
+  return {
+    minutes: locked || suggested,      // what customers see (null = not enough to go on yet)
+    mode: locked ? 'locked' : 'auto',
+    basis,                             // pace | start | queue | null
+    samples: samples.length,
+    suggested,
+    start: s.wait_start || null,
+  };
+}
+
+// Tells open pages when the wait changes. Remembers the last number sent so quiet periods stay quiet.
+const lastWait = new Map();
+async function refreshWait(vendorId) {
+  try {
+    const st = await getState(vendorId);
+    const key = JSON.stringify([st.wait.minutes, st.wait.mode, st.wait.suggested]);
+    if (lastWait.get(vendorId) === key) return st.wait;
+    lastWait.set(vendorId, key);
+    broadcast(vendorId, 'WAIT', st.wait);
+    return st.wait;
+  } catch (e) {
+    console.error('wait:', e.message);
+    return null;
+  }
+}
+/** Once a minute: the line keeps aging even when nobody taps anything. Only trucks with a page open. */
+async function refreshAllWaits() {
+  for (const vendorId of [...clients.keys()]) await refreshWait(vendorId);
 }
 
 /** Adds a line to an order's service record. Never throws: the record must not block the kitchen. */
@@ -323,6 +393,10 @@ async function ensureSchema() {
     active_location TEXT NOT NULL DEFAULT ''
   )`);
   await addColumn('store_state', 'paused', 'INTEGER NOT NULL DEFAULT 0');
+  // Honest wait: the owner's starting number for the day, an optional locked number, and when service began.
+  await addColumn('store_state', 'wait_start', 'INTEGER');
+  await addColumn('store_state', 'wait_lock', 'INTEGER');
+  await addColumn('store_state', 'service_started_at', 'INTEGER');
   await exec(`CREATE TABLE IF NOT EXISTS locations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     vendor_id INTEGER NOT NULL,
@@ -391,6 +465,7 @@ async function ensureSchema() {
     at INTEGER NOT NULL
   )`);
   await exec('CREATE INDEX IF NOT EXISTS idx_order_events_order ON order_events (order_id)');
+  await exec('CREATE INDEX IF NOT EXISTS idx_order_events_kind ON order_events (vendor_id, event, at)');
 
   // Catering: one playbook per truck (JSON, cleaned by public/catering-quote.js) and its bookings.
   await exec(`CREATE TABLE IF NOT EXISTS catering_settings (
@@ -515,6 +590,9 @@ module.exports = {
   DEFAULT_MENU, normalizeItem, normalizeMenu, normalizeOptions, parseMenu, saveMenu, num, PHOTO_RE,
   normalizeHours, parseHours, validTimezone,
   getState,
+  refreshWait,
+  refreshAllWaits,
+  WAIT_MAX,
   createToken, consumeToken,
   sseAdd, broadcast, disconnectVendor, closeAllStreams,
   ensureSchema, autoCloseOrders, orderShape, integrityCheck, applyRetention,

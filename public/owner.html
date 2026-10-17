@@ -137,6 +137,7 @@
                     <button data-action="filter" data-filter="Fulfilled" id="filterFulfilled" class="px-4 py-1.5 rounded-lg text-[11px] font-bold text-zinc-400 hover:text-zinc-200 transition">Fulfilled</button>
                     <button data-action="filter" data-filter="Canceled" id="filterCanceled" class="px-4 py-1.5 rounded-lg text-[11px] font-bold text-zinc-400 hover:text-zinc-200 transition">Canceled</button>
                 </div>
+                <button data-action="go-wait" id="waitChip" class="mb-3 text-[11px] font-semibold text-zinc-400 bg-zinc-950 border border-zinc-800 rounded-full px-3 py-1.5" style="display:none"></button>
                 <div id="crewNoteBar" class="rounded-xl p-3 mb-3 text-sm font-semibold" style="display:none;background:var(--ink);color:var(--on-ink)" role="status"></div>
                 <div id="batchBar" class="mb-3" style="display:none"></div>
                 <div class="space-y-3 relative" id="ownerOrdersList"></div>
@@ -166,11 +167,28 @@
                         </div>
                         <button data-action="toggle-pause" id="pauseSwitch" aria-label="Pause online orders" class="switch amber"></button>
                     </div>
-                    <h3 class="font-bold text-sm text-zinc-100 mb-2 mt-5 border-b border-zinc-800 pb-2">Rush Mode (Wait Times)</h3>
+                    <h3 class="font-bold text-sm text-zinc-100 mb-2 mt-5 border-b border-zinc-800 pb-2">Wait time</h3>
+                    <div id="waitBox">
+                        <div class="flex items-baseline justify-between gap-3">
+                            <div class="text-[11px] text-zinc-500">Customers see</div>
+                            <div id="waitMode" class="text-[10px] font-bold uppercase tracking-wider text-zinc-500"></div>
+                        </div>
+                        <div class="flex items-center gap-2 mt-1">
+                            <button data-action="wait-step" data-by="-5" class="wait-btn" aria-label="5 minutes less">−5</button>
+                            <div id="waitNow" class="flex-1 text-center text-2xl font-bold text-zinc-100" style="font-variant-numeric:tabular-nums">—</div>
+                            <button data-action="wait-step" data-by="5" class="wait-btn" aria-label="5 minutes more">+5</button>
+                        </div>
+                        <div id="waitWhy" class="text-[11px] text-zinc-400 mt-2 leading-snug"></div>
+                        <div class="flex gap-2 mt-3">
+                            <button data-action="wait-lock" id="btnWaitLock" class="flex-1 py-2 rounded-lg text-xs font-bold bg-zinc-950 text-zinc-300 border border-zinc-800">Lock this number</button>
+                            <button data-action="wait-auto" id="btnWaitAuto" class="flex-1 py-2 rounded-lg text-xs font-bold bg-zinc-950 text-zinc-300 border border-zinc-800" style="display:none">Back to kitchen pace</button>
+                        </div>
+                    </div>
+                    <div class="text-[11px] text-zinc-500 mt-4 mb-1.5">Busy at the window? Adds minutes on top.</div>
                     <div class="grid grid-cols-3 gap-2">
                         <button id="btnRush0" data-action="set-rush" data-rush="0" class="py-2 rounded-lg text-[10px] font-bold transition">Normal</button>
-                        <button id="btnRush15" data-action="set-rush" data-rush="15" class="py-2 rounded-lg text-[10px] font-bold transition">+15 Mins</button>
-                        <button id="btnRush30" data-action="set-rush" data-rush="30" class="py-2 rounded-lg text-[10px] font-bold transition">+30 Mins</button>
+                        <button id="btnRush15" data-action="set-rush" data-rush="15" class="py-2 rounded-lg text-[10px] font-bold transition">+15 min</button>
+                        <button id="btnRush30" data-action="set-rush" data-rush="30" class="py-2 rounded-lg text-[10px] font-bold transition">+30 min</button>
                     </div>
                 </div>
 
@@ -352,6 +370,21 @@
     </div>
 
     <!-- Item editor -->
+    <div id="startModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" style="display:none;align-items:center" role="dialog" aria-labelledby="startTitle">
+        <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 w-full max-w-sm">
+            <h3 id="startTitle" class="font-bold text-base text-zinc-100">Start service</h3>
+            <p class="text-xs text-zinc-400 mt-1">What wait should customers see to start? After three tickets, your real kitchen pace takes over. You can change it any time.</p>
+            <div class="grid grid-cols-5 gap-2 mt-4" id="startChips"></div>
+            <div id="startLoc" class="text-[11px] text-zinc-500 mt-3"></div>
+            <div class="flex gap-2 mt-5">
+                <button data-action="start-cancel" class="flex-1 py-3 rounded-xl text-sm font-semibold bg-zinc-950 text-zinc-300 border border-zinc-800">Not yet</button>
+                <button data-action="start-go" class="flex-1 py-3 rounded-xl text-sm font-bold bg-zinc-100 text-zinc-950">Open</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="fixed left-1/2 bottom-6 z-50 px-4 py-3 rounded-xl text-sm font-semibold shadow-lg" style="display:none;transform:translateX(-50%);background:var(--ink);color:var(--on-ink);max-width:92vw" role="status" aria-live="polite"></div>
+
     <div id="editItemModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" style="display:none;">
         <div class="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-2xl p-5 space-y-3 relative overflow-y-auto max-h-[90vh]">
             <div class="flex justify-between items-center"><h3 id="editTitle" class="font-bold text-lg text-zinc-300">Live Editor</h3><button data-action="close-edit" class="text-zinc-400 hover:text-white text-sm" aria-label="Close">✕</button></div>
@@ -969,8 +1002,60 @@
             $('btnRush15').className = 'py-2 rounded-lg text-[10px] font-bold transition ' + (r === 15 ? 'bg-amber-500 text-white shadow' : 'bg-zinc-950 text-amber-500 border border-amber-500/30');
             $('btnRush30').className = 'py-2 rounded-lg text-[10px] font-bold transition ' + (r === 30 ? 'bg-red-600 text-white shadow' : 'bg-zinc-950 text-red-500 border border-red-500/30');
             $('pauseSwitch').className = 'switch amber' + (app.state.paused ? ' on' : '');
+            renderWait();
             if (isOwner()) { renderLocations(); renderPlan(); }
             renderSetup();
+        }
+
+        /* ---------- honest wait ---------- */
+        function waitShown() { var w = app.state.wait; return w && w.minutes ? w.minutes : null; }
+        function renderWait() {
+            var w = app.state.wait || {}, m = waitShown(), locked = w.mode === 'locked';
+            $('waitNow').textContent = m ? '~' + m + ' min' : '—';
+            $('waitMode').textContent = locked ? 'Locked by you' : 'Auto';
+            var why;
+            if (locked) {
+                why = 'Stays at ' + m + ' min until you change it.';
+                if (w.suggested && Math.abs(w.suggested - m) >= 3) why += ' Kitchen pace says ~' + w.suggested + ' min.';
+            } else if (w.basis === 'pace') why = 'From your last ' + w.samples + ' tickets, order to ready.';
+            else if (w.basis === 'queue') why = 'Your oldest open ticket has waited this long, so new orders will too.';
+            else if (w.basis === 'start') why = 'Your starting wait. Kitchen pace takes over after 3 tickets' + (w.samples ? ' (' + w.samples + ' so far)' : '') + '.';
+            else why = 'Set a starting wait when you open. Until then, customers see the item prep times.';
+            if (!locked && Number(app.state.rush)) why += ' Includes +' + app.state.rush + ' min busy.';
+            $('waitWhy').textContent = why;
+            $('btnWaitLock').style.display = locked || !m ? 'none' : '';
+            $('btnWaitAuto').style.display = locked ? '' : 'none';
+            $('btnWaitAuto').textContent = locked && w.suggested ? 'Use kitchen pace (~' + w.suggested + ' min)' : 'Back to kitchen pace';
+            var chip = $('waitChip');
+            if (m && app.state.status !== 'closed') {
+                chip.style.display = 'inline-block';
+                chip.textContent = '⏱ Customers see ~' + m + ' min' + (locked ? ' · locked' : '');
+            } else chip.style.display = 'none';
+        }
+        function stepWait(by) {
+            var base = waitShown() || (app.state.wait && app.state.wait.start) || 10;
+            putState({ waitLock: Math.max(1, Math.min(90, base + by)) });
+        }
+
+        /* ---------- start service ---------- */
+        function openStart() {
+            var w = app.state.wait || {};
+            app.startPick = w.start || 10;
+            renderStartChips();
+            $('startLoc').textContent = app.state.location ? 'Location: ' + app.state.location + ' (change it in Locations below)' : '';
+            $('startModal').style.display = 'flex';
+        }
+        function renderStartChips() {
+            $('startChips').innerHTML = [5, 10, 15, 20, 30].map(function (n) {
+                var on = n === app.startPick;
+                return '<button data-action="start-pick" data-n="' + n + '" aria-pressed="' + on + '" class="py-3 rounded-xl text-sm font-bold ' + (on ? 'bg-zinc-100 text-zinc-950' : 'bg-zinc-950 text-zinc-300 border border-zinc-800') + '">' + n + '<span class="block text-[9px] font-semibold opacity-70">min</span></button>';
+            }).join('');
+        }
+
+        var toastTimer = null;
+        function toast(msg) {
+            var el = $('toast'); el.textContent = msg; el.style.display = 'block';
+            clearTimeout(toastTimer); toastTimer = setTimeout(function () { el.style.display = 'none'; }, 6000);
         }
 
         function putState(body) {
@@ -1059,8 +1144,12 @@
                         if (app.tab !== 'Orders') { app.newCount++; renderBadge(); }
                         if (app.filter === 'Active' && !app.orders.some(function (o) { return o.id === p.id; })) { app.orders.push(p); if (app.tab === 'Orders') renderOrders(); }
                         break;
-                    case 'ORDER_UPDATE': loadOrders(); break;
-                    case 'STATE': app.state = { status: p.status, rush: p.rush, location: p.location || '', paused: !!p.paused, crewNote: app.state.crewNote, crewNoteAt: app.state.crewNoteAt }; renderSettings(); break;
+                    case 'ORDER_UPDATE':
+                        loadOrders();
+                        if (p.byCustomer && p.status === 'Canceled') { beep(); toast('Ticket #' + p.ticket + ' (' + p.name + ') was canceled by the customer.'); }
+                        break;
+                    case 'WAIT': app.state.wait = p; renderSettings(); break;
+                    case 'STATE': app.state = { status: p.status, rush: p.rush, location: p.location || '', paused: !!p.paused, wait: p.wait, crewNote: app.state.crewNote, crewNoteAt: app.state.crewNoteAt }; renderSettings(); break;
                     case 'CREW_NOTE': app.state.crewNote = p.note || ''; app.state.crewNoteAt = p.at || 0; renderCrewNote(); if (p.note) beep(); break;
                     case 'PAUSED': app.state.paused = !!p.paused; renderSettings(); break;
                     case 'HOURS_UPDATE': if (app.pub) { app.pub.hours = p.hours; app.pub.timezone = p.timezone; } renderSetup(); break;
@@ -1444,7 +1533,18 @@
                 case 'save-edit': saveEdit(); break;
                 case 'delete-item': deleteItem(); break;
                 case 'toggle-sold': toggleSold(id); break;
-                case 'set-status': putState({ status: el.getAttribute('data-status') }); break;
+                case 'set-status':
+                    // Opening from closed = start of service: one quick question about the wait.
+                    if (el.getAttribute('data-status') === 'open' && app.state.status === 'closed') openStart();
+                    else putState({ status: el.getAttribute('data-status') });
+                    break;
+                case 'start-pick': app.startPick = parseInt(el.getAttribute('data-n'), 10); renderStartChips(); break;
+                case 'start-cancel': $('startModal').style.display = 'none'; break;
+                case 'start-go': $('startModal').style.display = 'none'; putState({ status: 'open', waitStart: app.startPick }); break;
+                case 'wait-step': stepWait(parseInt(el.getAttribute('data-by'), 10)); break;
+                case 'wait-lock': if (waitShown()) putState({ waitLock: waitShown() }); break;
+                case 'wait-auto': putState({ waitLock: null }); break;
+                case 'go-wait': switchTab('Settings'); setTimeout(function () { var b = $('waitBox'); if (b) b.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 50); break;
                 case 'toggle-pause': putState({ paused: !app.state.paused }); break;
                 case 'pick-logo': $('profEmoji').value = el.getAttribute('data-logo') || ''; renderLogoPicker(); break;
                 case 'connect-stripe': connectStripe(el); break;

@@ -184,3 +184,9 @@ input::placeholder, textarea::placeholder { color: var(--z500); opacity: 1; }
 
 /* ---------- kitchen: big, glove-friendly tap targets on tickets ---------- */
 #ownerOrdersList button { min-height: 46px; }
+
+/* Wait time −5 / +5: big, plain, easy with gloves on. */
+.wait-btn { min-width: 56px; min-height: 46px; border-radius: 12px; font-weight: 700; font-size: 15px;
+  background: var(--z950); color: var(--z200); border: 1px solid var(--z800); }
+.wait-btn:active { background: var(--z800); }
+#cartError.is-note { color: var(--z300); background: var(--z900); border-color: var(--z800); }

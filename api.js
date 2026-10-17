@@ -120,6 +120,19 @@ const limitOrders = rateLimit({
   key: (req) => `${req.tenant && req.tenant.vendor ? req.tenant.vendor.id : 'root'}:${req.ip || 'unknown'}`,
 });
 
+// The wait a customer is told: the honest kitchen number when there is one, otherwise the old
+// sum-of-prep-times guess. Never shorter than what this order itself takes to cook.
+function waitFor(state, prepMinutes) {
+  const own = prepMinutes + (state.rush || 0);
+  const live = state.wait && state.wait.minutes;
+  return live ? Math.max(live, Math.min(prepMinutes, core.WAIT_MAX)) : own;
+}
+
+// Customers get a short window to cancel (or change: cancel and reorder) before the kitchen is
+// committed. Only orders paid at the window: a paid order needs a refund, so that's done in person.
+const CHANGE_WINDOW_MS = 2 * 60 * 1000;
+const changeUntil = (o) => (o.payment_status === 'window' && o.status === 'Preparing' ? o.created_at + CHANGE_WINDOW_MS : 0);
+
 router.post('/orders', limitOrders, requireVendor, async (req, res) => {
   const v = req.tenant.vendor;
   const b = req.body || {};
@@ -192,7 +205,7 @@ router.post('/orders', limitOrders, requireVendor, async (req, res) => {
       res.status(409).json({ error: 'This order is already waiting for payment. Finish paying in the other tab, or refresh the page.' });
       return true;
     }
-    res.status(200).json({ ticket: o.ticket_no, token: o.public_token, tag: core.orderTag(o.public_token), status: o.status, total: o.total, estimatedMinutes: prepMinutes + (state.rush || 0), repeat: true });
+    res.status(200).json({ ticket: o.ticket_no, token: o.public_token, tag: core.orderTag(o.public_token), status: o.status, total: o.total, estimatedMinutes: waitFor(state, prepMinutes), changeUntil: changeUntil(o), now: Date.now(), repeat: true });
     return true;
   };
   if (await sameOrder()) return;
@@ -221,7 +234,9 @@ router.post('/orders', limitOrders, requireVendor, async (req, res) => {
     tag: core.orderTag(token),
     status: orderRow.status,
     total,
-    estimatedMinutes: prepMinutes + (state.rush || 0),
+    estimatedMinutes: waitFor(state, prepMinutes),
+    changeUntil: changeUntil(orderRow),
+    now: Date.now(),
   };
 
   if (payNow) {
@@ -237,6 +252,7 @@ router.post('/orders', limitOrders, requireVendor, async (req, res) => {
   }
 
   await sms.notifyNewOrder(v.id, orderShape(orderRow));
+  core.refreshWait(v.id);
   res.status(201).json(reply);
 });
 
@@ -245,11 +261,37 @@ router.get('/orders/track', requireVendor, async (req, res) => {
   const tokens = String(req.query.tokens || '').split(',').map((t) => t.trim()).filter(Boolean).slice(0, 20);
   if (!tokens.length) return res.json({ orders: [] });
   const rows = await all(
-    `SELECT ticket_no, public_token, customer_name, status, payment_status FROM orders
+    `SELECT ticket_no, public_token, customer_name, status, payment_status, created_at FROM orders
      WHERE vendor_id = ? AND public_token IN (${tokens.map(() => '?').join(',')})`,
     [req.tenant.vendor.id, ...tokens]
   );
-  res.json({ orders: rows.map((o) => ({ ticket: o.ticket_no, token: o.public_token, name: o.customer_name, status: o.status, payment: o.payment_status })) });
+  res.json({
+    now: Date.now(),
+    orders: rows.map((o) => ({ ticket: o.ticket_no, token: o.public_token, name: o.customer_name, status: o.status, payment: o.payment_status, changeUntil: changeUntil(o) })),
+  });
+});
+
+router.post('/orders/:token/cancel', limitOrders, requireVendor, async (req, res) => {
+  const v = req.tenant.vendor;
+  const token = String(req.params.token || '');
+  const now = Date.now();
+  const row = await get(
+    `UPDATE orders SET status = 'Canceled', updated_at = ?, customer_phone = NULL
+     WHERE vendor_id = ? AND public_token = ? AND status = 'Preparing' AND payment_status = 'window' AND created_at > ? RETURNING *`,
+    [now, v.id, token, now - CHANGE_WINDOW_MS]
+  );
+  if (!row) {
+    const o = await get('SELECT status, payment_status FROM orders WHERE vendor_id = ? AND public_token = ?', [v.id, token]);
+    if (!o) return res.status(404).json({ error: 'Order not found.' });
+    if (o.status === 'Canceled') return res.json({ status: 'Canceled' });
+    const msg = o.payment_status === 'paid' ? 'Paid orders can be changed at the window.' : o.status !== 'Preparing' ? 'Your order is already made.' : 'The kitchen has started on it. Please ask at the window.';
+    return res.status(409).json({ error: msg, status: o.status });
+  }
+  core.logOrderEvent(v.id, row.id, 'canceled', 'customer');
+  core.broadcast(v.id, 'ORDER_UPDATE', Object.assign(orderShape(row), { byCustomer: true }), true);
+  core.broadcast(v.id, 'ORDER_STATUS', { tag: core.orderTag(row.public_token), status: 'Canceled' });
+  core.refreshWait(v.id);
+  res.json({ status: 'Canceled' });
 });
 
 /* =====================================================================
@@ -312,6 +354,7 @@ router.patch('/owner/orders/:id', staffOrOwner, async (req, res) => {
   core.broadcast(v.id, 'ORDER_UPDATE', order, true);
   // Customers match by a tag derived from their secret token — the token itself is never broadcast.
   core.broadcast(v.id, 'ORDER_STATUS', { tag: core.orderTag(order.token), status: order.status });
+  core.refreshWait(v.id);
   res.json({ order });
 });
 
@@ -335,8 +378,24 @@ router.put('/owner/state', staffOrOwner, async (req, res) => {
   const role = req.session.role;
   if (b.status !== undefined) {
     if (!['open', 'closed'].includes(b.status)) return res.status(400).json({ error: 'Invalid status.' });
+    const before = await core.getState(v.id);
     await run('UPDATE store_state SET status = ? WHERE vendor_id = ?', [b.status, v.id]);
+    // Start of service: a fresh day. Yesterday's lock and pace don't carry over.
+    if (b.status === 'open' && before.status !== 'open') {
+      await run('UPDATE store_state SET service_started_at = ?, wait_lock = NULL WHERE vendor_id = ?', [Date.now(), v.id]);
+    }
     core.broadcast(v.id, 'STORE_STATUS', { status: b.status });
+  }
+  const waitNum = (x) => { const n = parseInt(x, 10); return Number.isInteger(n) && n >= 1 && n <= core.WAIT_MAX ? n : NaN; };
+  if (b.waitStart !== undefined) {
+    const n = b.waitStart === null ? null : waitNum(b.waitStart);
+    if (Number.isNaN(n)) return res.status(400).json({ error: `Starting wait must be 1 to ${core.WAIT_MAX} minutes.` });
+    await run('UPDATE store_state SET wait_start = ? WHERE vendor_id = ?', [n, v.id]);
+  }
+  if (b.waitLock !== undefined) {
+    const n = b.waitLock === null ? null : waitNum(b.waitLock);
+    if (Number.isNaN(n)) return res.status(400).json({ error: `Wait must be 1 to ${core.WAIT_MAX} minutes.` });
+    await run('UPDATE store_state SET wait_lock = ? WHERE vendor_id = ?', [n, v.id]);
   }
   if (b.paused !== undefined) {
     const paused = b.paused ? 1 : 0;
@@ -359,6 +418,7 @@ router.put('/owner/state', staffOrOwner, async (req, res) => {
     await run('UPDATE store_state SET active_location = ? WHERE vendor_id = ?', [loc, v.id]);
     core.broadcast(v.id, 'LOCATION_UPDATE', { location: loc });
   }
+  await core.refreshWait(v.id);
   res.json(await core.getState(v.id));
 });
 

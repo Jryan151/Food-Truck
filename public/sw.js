@@ -1,6 +1,6 @@
 /* sw.js — makes the pages installable and shows a friendly screen when there's no signal.
    It never caches menus, orders or API calls: everything live always comes from the server. */
-const CACHE = 'ft-offline-v2';
+const CACHE = 'ft-offline-v3';
 const OFFLINE = '/offline.html';
 
 self.addEventListener('install', (e) => {
@@ -15,4 +15,15 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   if (e.request.mode !== 'navigate') return; // let the browser handle everything else normally
   e.respondWith(fetch(e.request).catch(() => caches.match(OFFLINE)));
+});
+
+// "Your order is ready" notification: tapping it brings the order page back to the front.
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      const page = list.find((c) => 'focus' in c);
+      return page ? page.focus() : self.clients.openWindow('/');
+    })
+  );
 });

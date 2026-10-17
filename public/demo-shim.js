@@ -93,6 +93,25 @@
         try { var m = JSON.parse(e.newValue); deliver(m.type, m.payload, m.staffOnly); } catch (er) {}
     });
 
+    // Same rules as the server's honest wait: median order-to-ready of recent tickets (3+),
+    // else the starting wait, never under the oldest open ticket's age, plus Busy; or the owner's lock.
+    function demoWait(d) {
+        var now = Date.now(), st = d.state;
+        var since = Math.max(now - 3 * 60 * 60 * 1000, st.serviceStartedAt || 0);
+        var xs = d.orders.filter(function (o) { return (o.status === 'Fulfilled' || o.status === 'Ready') && o.createdAt >= since; })
+            .map(function (o) { return (o.readyAt || o.updatedAt) - o.createdAt; }).filter(function (x) { return x > 0; }).sort(function (a, b) { return a - b; });
+        var base = null, basis = null;
+        if (xs.length >= 3) { var k = Math.floor(xs.length / 2); base = Math.ceil((xs.length % 2 ? xs[k] : (xs[k - 1] + xs[k]) / 2) / 60000); basis = 'pace'; }
+        else if (st.waitStart) { base = st.waitStart; basis = 'start'; }
+        var open = d.orders.filter(function (o) { return o.status === 'Preparing'; }).map(function (o) { return o.createdAt; });
+        var q = open.length ? Math.round((now - Math.min.apply(null, open)) / 60000) : 0;
+        if (q > (base || 0) && (base !== null || q >= 5)) { base = q; basis = 'queue'; }
+        var sug = base === null ? null : Math.min(90, Math.max(1, base + (st.rush || 0)));
+        return { minutes: st.waitLock || sug, mode: st.waitLock ? 'locked' : 'auto', basis: basis, samples: xs.length, suggested: sug, start: st.waitStart || null };
+    }
+    function stateOut(d) { return Object.assign({}, d.state, { wait: demoWait(d) }); }
+    function emitWait(d) { emit('WAIT', demoWait(d)); }
+
     function FakeEventSource(url) {
         var self = this;
         this.url = url; this.readyState = 0; this._staff = isOwnerPage;
@@ -102,7 +121,7 @@
             if (self.readyState === 2) return;
             self.readyState = 1;
             if (typeof self.onopen === 'function') self.onopen({});
-            var st = load().state;
+            var st = stateOut(load());
             if (typeof self.onmessage === 'function') self.onmessage({ data: JSON.stringify({ type: 'STATE', payload: st }) });
         }, 30);
     }
@@ -142,7 +161,7 @@
     function vendorPublic(d) {
         return {
             isDemo: false, businessName: d.vendor.businessName, slug: SLUG, customDomain: null,
-            ownerIG: d.vendor.ownerIG, emoji: d.vendor.emoji, menu: d.menu, state: d.state,
+            ownerIG: d.vendor.ownerIG, emoji: d.vendor.emoji, menu: d.menu, state: stateOut(d),
             showBranding: true, pinOnly: false, hours: d.hours, timezone: d.timezone, payMode: 'window', smsReady: false
         };
     }
@@ -192,8 +211,9 @@
         };
         o.tag = o.token;
         d.orders.push(o); save(d);
-        emit('ORDER_NEW', o, true);
-        return ok({ ticket: o.ticket, token: o.token, tag: o.tag, status: o.status, total: o.total, estimatedMinutes: prep + (d.state.rush || 0) }, 201);
+        emit('ORDER_NEW', o, true); emitWait(d);
+        var w = demoWait(d).minutes;
+        return ok({ ticket: o.ticket, token: o.token, tag: o.tag, status: o.status, total: o.total, estimatedMinutes: w ? Math.max(w, Math.min(prep, 90)) : prep + (d.state.rush || 0), changeUntil: now + 120000, now: now }, 201);
     }
 
     function handle(method, u, b) {
@@ -206,7 +226,18 @@
         if (p === '/api/orders' && method === 'POST') { if (d.state.paused) return fail(403, 'Online ordering is paused right now. Please order at the window.'); return placeOrder(d, b); }
         if (p === '/api/orders/track') {
             var toks = String(u.searchParams.get('tokens') || '').split(',');
-            return ok({ orders: d.orders.filter(function (o) { return toks.indexOf(o.token) >= 0; }).map(function (o) { return { ticket: o.ticket, token: o.token, name: o.name, status: o.status }; }) });
+            return ok({ now: Date.now(), orders: d.orders.filter(function (o) { return toks.indexOf(o.token) >= 0; }).map(function (o) { return { ticket: o.ticket, token: o.token, name: o.name, status: o.status, changeUntil: o.status === 'Preparing' ? o.createdAt + 120000 : 0 }; }) });
+        }
+        if ((m = p.match(/^\/api\/orders\/([^/]+)\/cancel$/)) && method === 'POST') {
+            var oc = d.orders.filter(function (x) { return x.token === decodeURIComponent(m[1]); })[0];
+            if (!oc) return fail(404, 'Order not found.');
+            if (oc.status === 'Canceled') return ok({ status: 'Canceled' });
+            if (oc.status !== 'Preparing') return fail(409, 'Your order is already made.');
+            if (Date.now() - oc.createdAt > 120000) return fail(409, 'The kitchen has started on it. Please ask at the window.');
+            oc.status = 'Canceled'; oc.updatedAt = Date.now(); save(d);
+            emit('ORDER_UPDATE', Object.assign({}, oc, { byCustomer: true }), true);
+            emit('ORDER_STATUS', { tag: oc.tag, status: 'Canceled' }); emitWait(d);
+            return ok({ status: 'Canceled' });
         }
 
         /* auth: the demo visitor is always the owner */
@@ -239,14 +270,14 @@
             var from = b.action === 'ready' ? ['Preparing'] : ['Preparing', 'Ready'];
             if (!o || from.indexOf(o.status) < 0) return fail(409, 'That order cannot be changed.');
             if (b.action !== 'cancel' && o.allergy && !o.allergyAck) return fail(409, 'Confirm the allergy on this ticket first.');
-            o.status = next; o.updatedAt = Date.now(); save(d);
+            o.status = next; o.updatedAt = Date.now(); if (next === 'Ready') o.readyAt = o.updatedAt; save(d);
             emit('ORDER_UPDATE', o, true);
-            emit('ORDER_STATUS', { tag: o.tag, status: o.status });
+            emit('ORDER_STATUS', { tag: o.tag, status: o.status }); emitWait(d);
             return ok({ order: o });
         }
 
         /* state */
-        if (p === '/api/owner/state' && method === 'GET') return ok(Object.assign({}, d.state, { crewNote: d.crewNote || '', crewNoteAt: d.crewNoteAt || 0 }));
+        if (p === '/api/owner/state' && method === 'GET') return ok(Object.assign(stateOut(d), { crewNote: d.crewNote || '', crewNoteAt: d.crewNoteAt || 0 }));
         if (p === '/api/owner/crew-note' && method === 'PUT') {
             d.crewNote = String(b.note || '').trim().slice(0, 240); d.crewNoteAt = d.crewNote ? Date.now() : 0; save(d);
             emit('CREW_NOTE', { note: d.crewNote, at: d.crewNoteAt }, true);
@@ -255,8 +286,12 @@
         if (p === '/api/owner/state' && method === 'PUT') {
             if (b.status !== undefined) {
                 if (['open', 'closed'].indexOf(b.status) < 0) return fail(400, 'Invalid status.');
+                if (b.status === 'open' && d.state.status !== 'open') { d.state.serviceStartedAt = Date.now(); d.state.waitLock = null; }
                 d.state.status = b.status; emit('STORE_STATUS', { status: b.status });
             }
+            var wn = function (x) { var n = parseInt(x, 10); return n >= 1 && n <= 90 ? n : NaN; };
+            if (b.waitStart !== undefined) { var ws = b.waitStart === null ? null : wn(b.waitStart); if (ws !== ws) return fail(400, 'Starting wait must be 1 to 90 minutes.'); d.state.waitStart = ws; }
+            if (b.waitLock !== undefined) { var wl = b.waitLock === null ? null : wn(b.waitLock); if (wl !== wl) return fail(400, 'Wait must be 1 to 90 minutes.'); d.state.waitLock = wl; }
             if (b.rush !== undefined) {
                 var r = parseInt(b.rush, 10);
                 if ([0, 15, 30].indexOf(r) < 0) return fail(400, 'Invalid rush value.');
@@ -264,8 +299,8 @@
             }
             if (b.location !== undefined) { d.state.location = String(b.location || ''); emit('LOCATION_UPDATE', { location: d.state.location }); }
             if (b.paused !== undefined) { d.state.paused = !!b.paused; emit('PAUSED', { paused: d.state.paused }); }
-            save(d);
-            return ok(d.state);
+            save(d); emitWait(d);
+            return ok(stateOut(d));
         }
 
         /* menu */

@@ -72,10 +72,12 @@
                 </div>
 
                 <div id="rushStatusContainer" class="w-full"></div>
+                <div id="waitLine" class="w-full text-center text-sm font-semibold text-zinc-200 mb-3" style="display:none;font-variant-numeric:tabular-nums"></div>
                 <div id="saleBadgeContainer" class="w-full"></div>
             </div>
 
             <div class="w-full space-y-3 relative mt-3">
+                <div id="usualLanding" style="display:none"></div>
                 <button data-action="open-menu" id="btn-start-order" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-3.5 rounded-xl transition shadow-lg">Start Order</button>
                 <button data-action="open-tracker" id="btn-track-landing" class="w-full bg-zinc-900 border border-zinc-800 text-zinc-300 font-semibold py-3 rounded-xl text-sm transition" style="display:none;" data-i18n="track_orders">Order Status</button>
                 <a href="/catering" id="cateringLink" class="ok-btn-quiet block w-full text-center font-semibold py-3 rounded-xl text-sm transition" style="display:none;"><span data-i18n="catering_cta">Planning an event? Get a catering quote</span> &rarr;</a>
@@ -93,6 +95,7 @@
                 <div id="categoryChips" class="flex gap-2 overflow-x-auto no-scrollbar pb-2"></div>
             </div>
 
+            <div id="usualMenu" class="mb-4" style="display:none"></div>
             <div id="highlightsBox" class="bg-zinc-900 border border-zinc-800 rounded-xl p-3 mb-5 text-xs shadow-lg">
                 <div class="font-bold text-zinc-200 mb-1 flex items-center gap-1"><span>⭐</span> <span data-i18n="featured_title">Featured</span></div>
                 <div id="popularHighlightsContainer" class="grid grid-cols-1 gap-2 text-center mt-2"></div>
@@ -116,7 +119,9 @@
                 <h2 class="font-bold text-lg" data-i18n="tracker_title">Order Status</h2>
                 <div class="w-12"></div>
             </div>
+            <div id="awakeLine" class="text-[11px] text-zinc-500 text-center mb-3" style="display:none" data-i18n="awake"></div>
             <div class="space-y-3" id="activeOrdersList"></div>
+            <div id="trackerAlert" class="mt-4"></div>
         </div>
     </div>
 
@@ -216,6 +221,8 @@
                 <div id="successWait" class="text-xs text-zinc-500 pt-1"></div>
                 <div class="text-xs text-zinc-400 pt-1" id="successPay"></div>
             </div>
+            <div id="successChange" class="text-[11px] text-zinc-500"></div>
+            <div id="successAlert"></div>
             <button data-action="close-success" id="btn-view-tracker" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-3 rounded-xl text-sm transition" data-i18n="view_tracker">Order Status</button>
         </div>
     </div>
@@ -236,6 +243,12 @@
                 open_now: 'Open now • Accepting orders', closed_now: 'Closed right now', paused_now: 'Open for walk-ups • Online ordering paused',
                 start_order: 'Start Order', currently_closed: 'Currently Closed', order_at_window: 'Order at the window',
                 catering_cta: 'Planning an event? Get a catering quote',
+                wait_now: '⏱ About {n} min wait right now', usual_title: 'Your usual', again_title: 'Order again', alert_chime: '🔔 We’ll chime here when it’s ready. Keep this page open.', usual_add: 'Add to cart', usual_out: '{item} is sold out today.',
+                change_left: 'You can change or cancel for {t}', change_btn: 'Change', cancel_btn: 'Cancel',
+                cancel_confirm: 'Cancel this order?', change_confirm: 'Cancel this order and put the items back in your cart so you can change them?',
+                change_done: 'Your items are back in the cart. Change what you need and place the order again.', change_failed: 'Could not change it.',
+                alert_btn: '🔔 Alert me when it’s ready', alert_on: '🔔 We’ll alert you when it’s ready. Keep this page open.', alert_blocked: 'Alerts are off in your browser settings. Keep this page open and your phone will buzz when it’s ready.',
+                ready_title: 'Your order is ready', ready_body: 'Ticket #{n} is ready for pickup.', awake: '☀️ Your screen stays on while your order is cooking.',
                 busy15: '⚠️ Busy: about 15 extra minutes', busy30: '🚨 Very busy: about 30 extra minutes', sale: '🏷️ Sale',
                 track_orders: 'Order Status', back: '← Back', order_menu: 'Order Menu', orders: 'Order Status', featured_title: 'Featured', featured: 'FEATURED',
                 menu: 'Menu', menu_empty: 'The menu is empty right now.', sold_out: 'Sold Out', add: 'Add +', mins: '~{n} min',
@@ -268,6 +281,12 @@
                 open_now: 'Abierto • Aceptando pedidos', closed_now: 'Cerrado ahora', paused_now: 'Abierto en la ventanilla • Pedidos en línea en pausa',
                 start_order: 'Hacer pedido', currently_closed: 'Cerrado', order_at_window: 'Pide en la ventanilla',
                 catering_cta: '¿Un evento? Cotiza el catering',
+                wait_now: '⏱ Espera de unos {n} min ahora', usual_title: 'Lo de siempre', again_title: 'Pedir de nuevo', alert_chime: '🔔 Sonará aquí cuando esté listo. Deja esta página abierta.', usual_add: 'Agregar', usual_out: '{item} está agotado hoy.',
+                change_left: 'Puedes cambiar o cancelar durante {t}', change_btn: 'Cambiar', cancel_btn: 'Cancelar',
+                cancel_confirm: '¿Cancelar este pedido?', change_confirm: '¿Cancelar este pedido y regresar los productos al carrito para cambiarlos?',
+                change_done: 'Tus productos están en el carrito. Cambia lo que necesites y vuelve a enviar el pedido.', change_failed: 'No se pudo cambiar.',
+                alert_btn: '🔔 Avísame cuando esté listo', alert_on: '🔔 Te avisaremos cuando esté listo. Deja esta página abierta.', alert_blocked: 'Las alertas están desactivadas en tu navegador. Deja esta página abierta y tu teléfono vibrará cuando esté listo.',
+                ready_title: 'Tu pedido está listo', ready_body: 'El ticket #{n} está listo para recoger.', awake: '☀️ Tu pantalla se mantiene encendida mientras se prepara tu pedido.',
                 busy15: '⚠️ Mucha gente: unos 15 minutos más', busy30: '🚨 Muchísima gente: unos 30 minutos más', sale: '🏷️ Oferta',
                 track_orders: 'Estado del pedido', back: '← Atrás', order_menu: 'Menú', orders: 'Estado del pedido', featured_title: 'Destacado', featured: 'DESTACADO',
                 menu: 'Menú', menu_empty: 'El menú está vacío por ahora.', sold_out: 'Agotado', add: 'Agregar +', mins: '~{n} min',
@@ -361,6 +380,7 @@
 
         /* ---------- status / rush / sale / location ---------- */
         function isClosed() { return app.state.status === 'closed'; }
+        function liveWait() { return app.state.wait && app.state.wait.minutes ? app.state.wait.minutes : 0; }
         function canOrder() { return !isClosed() && !app.state.paused; }
 
         function renderStatus() {
@@ -380,7 +400,13 @@
 
             var rush = $('rushStatusContainer');
             var r = Number(app.state.rush) || 0;
-            if (canOrder() && r === 15) {
+            // The honest number from the kitchen replaces the old Busy banners when there is one.
+            var wm = liveWait();
+            $('waitLine').style.display = canOrder() && wm ? 'block' : 'none';
+            if (wm) $('waitLine').textContent = t('wait_now', { n: wm });
+            if (wm) {
+                rush.innerHTML = '';
+            } else if (canOrder() && r === 15) {
                 rush.innerHTML = '<div class="bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-2 text-xs mb-3 text-amber-500 flex items-center justify-center font-bold">' + esc(t('busy15')) + '</div>';
             } else if (canOrder() && r === 30) {
                 rush.innerHTML = '<div class="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-2 text-xs mb-3 text-red-500 flex items-center justify-center font-bold">' + esc(t('busy30')) + '</div>';
@@ -393,6 +419,7 @@
                 ? '<div class="bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-2 text-xs mb-3 text-zinc-100 flex items-center justify-center font-bold">' + esc(t('sale')) + '</div>'
                 : '';
 
+            renderUsual();
             // If the truck closes or pauses while someone has the menu open, send them back instead of letting them build a doomed cart.
             if (!canOrder() && app.view === 'menu') show('landing');
             updateCartUI();
@@ -586,7 +613,7 @@
         function renderCartModal() {
             var tt = cartTotals();
             if (!tt.lines.length) { closeCartModal(); return; }
-            $('cartEstimatedWait').textContent = t('mins', { n: tt.prep + (Number(app.state.rush) || 0) });
+            $('cartEstimatedWait').textContent = t('mins', { n: liveWait() ? Math.max(liveWait(), Math.min(tt.prep, 90)) : tt.prep + (Number(app.state.rush) || 0) });
             renderPayChoice();
             $('cartModalTotal').textContent = money(tt.total);
             $('cartItemsList').innerHTML = tt.lines.map(function (x) {
@@ -632,8 +659,11 @@
         function setCartError(msg) {
             var el = $('cartError');
             el.textContent = msg || '';
+            el.classList.remove('is-note');
             el.style.display = msg ? 'block' : 'none';
         }
+        // Same spot as errors, but neutral: for "your items are back in the cart".
+        function setCartNote(msg) { setCartError(msg); $('cartError').classList.add('is-note'); }
 
         /* ---------- placing an order ---------- */
         function placeOrder() {
@@ -643,6 +673,7 @@
             if (tt.lines.some(function (x) { return x.soldOut; })) { setCartError(t('sold_out_in_cart')); return; }
 
             app.placing = true;
+            unlockChime(); // this tap lets the "ready" chime play later
             var btn = $('btn-place-order');
             btn.disabled = true; btn.textContent = t('placing');
             setCartError('');
@@ -685,8 +716,14 @@
                     return;
                 }
                 app.orderKey = null; // the next order gets a fresh key
+                var skew = res.body.now ? Date.now() - res.body.now : 0; // phone clock vs server clock
                 if (!app.tracked.some(function (o) { return o.token === res.body.token; }))
-                    app.tracked.unshift({ token: res.body.token, tag: res.body.tag, ticket: res.body.ticket, name: name || 'Guest', summary: summary, total: res.body.total, status: res.body.status, paid: false });
+                    app.tracked.unshift({
+                        token: res.body.token, tag: res.body.tag, ticket: res.body.ticket, name: name || 'Guest', summary: summary, total: res.body.total, status: res.body.status, paid: false,
+                        changeAt: res.body.changeUntil ? res.body.changeUntil + skew : 0,
+                        lines: app.cart.map(function (l) { return { key: l.key, id: l.id, meat: l.meat || '', option: l.option || '', qty: l.qty }; }),
+                        notes: notes, allergy: $('customerAllergy').value.trim()
+                    });
                 saveTracked();
                 if (res.body.checkoutUrl) {
                     // Keep the cart in case they tap "back" on the payment page, then go to Stripe.
@@ -695,6 +732,7 @@
                     location.href = res.body.checkoutUrl;
                     return 'redirect';
                 }
+                rememberOrder(app.cart);
                 app.cart = [];
                 $('customerNotes').value = ''; $('customerAllergy').value = '';
                 closeCartModal();
@@ -703,6 +741,8 @@
                 $('successTicketNum').textContent = '#' + res.body.ticket;
                 $('successWait').textContent = t('est_wait', { n: res.body.estimatedMinutes });
                 $('successPay').textContent = '💵 ' + t('pay_window_short').replace(/^💵\s*/, '');
+                $('successChange').textContent = res.body.changeUntil ? t('change_left', { t: '2:00' }) : '';
+                renderAlertOffer();
                 $('successModal').style.display = 'flex';
             }).catch(function () {
                 setCartError(t('connection'));
@@ -712,6 +752,173 @@
                 app.placing = false;
                 btn.disabled = false; renderPayChoice();
             });
+        }
+
+
+        /* ---------- your usual ----------
+           Kept on this phone only. The most-ordered cart wins; until something is ordered twice it's "Order again".
+           Items that left the menu are skipped; sold-out ones are named so nothing disappears silently. */
+        function usualKey() { return 'ft_usual_' + (app.vendor ? app.vendor.slug : 'x'); }
+        function loadUsual() { try { return JSON.parse(localStorage.getItem(usualKey()) || '[]') || []; } catch (e) { return []; } }
+        function cartSig(cart) {
+            var lines = cart.map(function (l) { return { key: l.key, id: l.id, meat: l.meat || '', option: l.option || '', qty: l.qty }; })
+                .sort(function (a, b) { return a.key < b.key ? -1 : a.key > b.key ? 1 : 0; });
+            return { lines: lines, sig: JSON.stringify(lines.map(function (l) { return [l.key, l.qty]; })) };
+        }
+        function rememberOrder(cart, undo) {
+            if (!cart || !cart.length) return;
+            var c = cartSig(cart);
+            var list = loadUsual().filter(function (u) { return u && u.sig && u.lines; });
+            var hit = list.find(function (u) { return u.sig === c.sig; });
+            if (undo) { if (!hit) return; hit.n = (hit.n || 1) - 1; list = list.filter(function (u) { return u.n > 0; }); } // a canceled order doesn't count
+            else if (hit) { hit.n = (hit.n || 1) + 1; hit.at = Date.now(); hit.lines = c.lines; }
+            else list.push({ sig: c.sig, lines: c.lines, n: 1, at: Date.now() });
+            list.sort(function (a, b) { return b.at - a.at; });
+            try { localStorage.setItem(usualKey(), JSON.stringify(list.slice(0, 6))); } catch (e) {}
+            renderUsual();
+        }
+        function usualView() {
+            var list = loadUsual().filter(function (u) { return u && u.lines; });
+            if (!list.length) return null;
+            var u = list.slice().sort(function (a, b) { return (b.n - a.n) || (b.at - a.at); })[0];
+            var ok = [], out = [], total = 0;
+            u.lines.forEach(function (l) {
+                var item = app.menu.find(function (m) { return m.id === l.id; });
+                if (!item) return;
+                var meats = meatList(item);
+                if (l.meat && meats.indexOf(l.meat) < 0) return;
+                if (l.option && (item.options || []).indexOf(l.option) < 0) return;
+                if (item.soldOut) { out.push(item.name); return; }
+                ok.push({ line: l, label: l.qty + '× ' + item.name + (l.meat ? ' (' + l.meat + ')' : '') + (l.option ? ' (' + l.option + ')' : '') });
+                total += unitPrice(item, l.meat ? meats.indexOf(l.meat) : 0) * l.qty;
+            });
+            return ok.length ? { u: u, ok: ok, out: out, total: total } : null;
+        }
+        function renderUsual() {
+            var v = app.vendor && canOrder() ? usualView() : null, html = '';
+            if (v) {
+                html = '<div class="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-left">' +
+                    '<div class="flex items-center justify-between gap-3"><div class="min-w-0">' +
+                    '<div class="text-[11px] font-semibold text-zinc-400">' + esc(t(v.u.n >= 2 ? 'usual_title' : 'again_title')) + '</div>' +
+                    '<div class="text-sm text-zinc-100 leading-snug">' + esc(v.ok.map(function (x) { return x.label; }).join(', ')) + '</div></div>' +
+                    '<button data-action="add-usual" class="shrink-0 bg-zinc-100 text-zinc-950 font-semibold text-xs px-3 rounded-lg" style="min-height:42px;white-space:nowrap">' + esc(t('usual_add')) + ' · ' + money(v.total) + '</button></div>' +
+                    (v.out.length ? '<div class="text-[11px] text-zinc-500 mt-1">' + esc(v.out.map(function (n) { return t('usual_out', { item: n }); }).join(' ')) + '</div>' : '') +
+                    '</div>';
+            }
+            ['usualLanding', 'usualMenu'].forEach(function (id) { $(id).innerHTML = html; $(id).style.display = html ? 'block' : 'none'; });
+        }
+        function addUsual() {
+            var v = usualView();
+            if (!v) return;
+            // Max, not sum: tapping it twice doesn't double the order.
+            v.ok.forEach(function (x) {
+                var l = x.line, have = app.cart.find(function (c) { return c.key === l.key; });
+                if (have) have.qty = Math.min(50, Math.max(have.qty, l.qty));
+                else app.cart.push({ key: l.key, id: l.id, meat: l.meat, option: l.option, qty: l.qty });
+            });
+            updateCartUI();
+            if (app.view !== 'menu') show('menu');
+            openCartModal();
+        }
+
+        /* ---------- ready alert + screen on ---------- */
+        function unlockChime() {
+            try {
+                var AC = window.AudioContext || window.webkitAudioContext;
+                if (!AC) return;
+                if (!app.audio) app.audio = new AC();
+                if (app.audio.state === 'suspended') app.audio.resume();
+            } catch (e) {}
+        }
+        function chime() {
+            var a = app.audio;
+            if (!a || a.state !== 'running') return;
+            try {
+                [[880, 0], [1320, 0.18]].forEach(function (n) {
+                    var o = a.createOscillator(), g = a.createGain(), at = a.currentTime + n[1];
+                    o.frequency.value = n[0]; o.connect(g); g.connect(a.destination);
+                    g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(0.25, at + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, at + 0.35);
+                    o.start(at); o.stop(at + 0.4);
+                });
+            } catch (e) {}
+        }
+        function canNotify() { return 'Notification' in window; }
+        function enableAlert() {
+            unlockChime();
+            app.alertArmed = true;
+            try { sessionStorage.setItem('ft_alert', '1'); } catch (e) {}
+            if (canNotify() && Notification.permission === 'default') {
+                try {
+                    var pr = Notification.requestPermission(function () { renderAlertOffer(); });
+                    if (pr && pr.then) pr.then(function () { renderAlertOffer(); });
+                } catch (e) {}
+            }
+            renderAlertOffer();
+        }
+        function hasOpenOrder() { return app.tracked.some(function (o) { return o.status === 'Preparing' || o.status === 'Pending'; }); }
+        function renderAlertOffer() {
+            var html = '';
+            if (hasOpenOrder()) {
+                if (!app.alertArmed) html = '<button data-action="enable-alert" class="w-full bg-zinc-950 border border-zinc-800 text-zinc-200 font-semibold py-3 rounded-xl text-sm">' + esc(t('alert_btn')) + '</button>';
+                else html = '<div class="text-[11px] text-zinc-400 text-center">' + esc(t(canNotify() && Notification.permission === 'granted' ? 'alert_on' : 'alert_chime')) + '</div>';
+            }
+            $('successAlert').innerHTML = html;
+            $('trackerAlert').innerHTML = html;
+        }
+        function announceReady(o) {
+            chime();
+            if (!canNotify() || Notification.permission !== 'granted') return;
+            var title = t('ready_title'), opts = { body: t('ready_body', { n: o.ticket }), tag: 'ready-' + o.token, renotify: true, vibrate: [200, 100, 200] };
+            try {
+                if (navigator.serviceWorker && navigator.serviceWorker.controller) navigator.serviceWorker.ready.then(function (reg) { reg.showNotification(title, opts); });
+                else new Notification(title, opts);
+            } catch (e) {}
+        }
+        // Keeps the phone from sleeping while the order cooks, so the live status (and the chime) keep working.
+        function keepAwake() {
+            var want = app.view === 'tracker' && !document.hidden && app.tracked.some(function (o) { return o.status === 'Preparing' || o.status === 'Pending' || o.status === 'Ready'; });
+            if (want && !app.wakeLock && navigator.wakeLock && !app.wakeAsking) {
+                app.wakeAsking = true;
+                navigator.wakeLock.request('screen').then(function (lock) {
+                    app.wakeLock = lock; app.wakeAsking = false; $('awakeLine').style.display = 'block';
+                    lock.addEventListener('release', function () { app.wakeLock = null; $('awakeLine').style.display = 'none'; });
+                }).catch(function () { app.wakeAsking = false; });
+            } else if (!want && app.wakeLock) {
+                try { app.wakeLock.release(); } catch (e) {}
+            }
+        }
+
+        /* ---------- change or cancel (first 2 minutes, pay-at-window orders) ---------- */
+        function changeLeft(o) { return o.status === 'Preparing' && o.changeAt ? Math.max(0, o.changeAt - Date.now()) : 0; }
+        function fmtLeft(ms) { var s = Math.ceil(ms / 1000); return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2); }
+        function tickChange() {
+            var any = false;
+            document.querySelectorAll('[data-countdown]').forEach(function (el) {
+                var o = app.tracked.find(function (x) { return x.token === el.getAttribute('data-countdown'); });
+                var left = o ? changeLeft(o) : 0;
+                if (left) { any = true; el.textContent = t('change_left', { t: fmtLeft(left) }); }
+                else if (app.view === 'tracker') renderTracker();
+            });
+            return any;
+        }
+        setInterval(function () { if (app.view === 'tracker' && !document.hidden) tickChange(); }, 1000);
+        function cancelOrder(token, thenChange) {
+            var o = app.tracked.find(function (x) { return x.token === token; });
+            if (!o) return;
+            if (!confirm(t(thenChange ? 'change_confirm' : 'cancel_confirm'))) return;
+            fetch('/api/orders/' + encodeURIComponent(token) + '/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+                .then(function (r) { return r.json().catch(function () { return {}; }).then(function (b) { return { ok: r.ok, b: b }; }); })
+                .then(function (res) {
+                    if (!res.ok) { alert(res.b.error || t('change_failed')); refreshTracked(); return; }
+                    o.status = 'Canceled'; o.changeAt = 0; saveTracked();
+                    rememberOrder(o.lines, true);
+                    if (thenChange && o.lines && o.lines.length) {
+                        app.cart = o.lines.map(function (l) { return { key: l.key, id: l.id, meat: l.meat, option: l.option, qty: l.qty }; });
+                        $('customerNotes').value = o.notes || ''; $('customerAllergy').value = o.allergy || '';
+                        updateCartUI(); show('menu'); openCartModal(); setCartNote(t('change_done'));
+                    } else renderTracker();
+                })
+                .catch(function () { alert(t('connection')); });
         }
 
         /* ---------- tracker ---------- */
@@ -732,14 +939,26 @@
             c.innerHTML = app.tracked.map(function (o) {
                 var st = STATUS_STYLE[o.status] ? o.status : 'Preparing';
                 var ready = st === 'Ready';
-                return '<div class="bg-zinc-900 border ' + (ready ? 'border-blue-500/60' : 'border-zinc-800') + ' p-4 rounded-xl flex justify-between items-center gap-3"><div class="min-w-0">' +
+                return '<div data-order-card><div class="bg-zinc-900 border ' + (ready ? 'border-blue-500/60' : 'border-zinc-800') + ' p-4 ' + (changeLeft(o) ? 'rounded-t-xl' : 'rounded-xl') + ' flex justify-between items-center gap-3"><div class="min-w-0">' +
                     '<span class="text-xs font-mono font-bold">' + esc(t('ticket', { n: o.ticket })) + ' • ' + esc(o.name) + '</span>' +
                     '<div class="text-[11px] ' + (ready ? 'text-blue-300 font-semibold' : 'text-zinc-400') + ' mt-0.5">' + esc(t('msg_' + st)) + '</div>' +
                     '<div class="text-[11px] text-zinc-500 mt-0.5 truncate">' + esc(o.summary) + '</div>' +
                     '<span class="inline-block mt-2 px-2.5 py-1 rounded-full text-xs font-medium border ' + STATUS_STYLE[st] + '">' + esc(t('st_' + st)) + '</span>' +
                     (o.paid ? ' <span class="inline-block mt-2 ml-1 px-2 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">' + esc(t('paid_badge')) + '</span>' : '') +
-                    '</div><span class="text-xs font-mono text-zinc-400">' + money(o.total) + '</span></div>';
+                    '</div><span class="text-xs font-mono text-zinc-400">' + money(o.total) + '</span></div>' + changeRow(o) + '</div>';
             }).join('');
+            renderAlertOffer();
+            keepAwake();
+        }
+        function changeRow(o) {
+            var left = changeLeft(o);
+            if (!left) return '';
+            return '<div data-change-row class="bg-zinc-900 border border-zinc-800 border-t-0 rounded-b-xl px-4 py-3 flex items-center justify-between gap-2">' +
+                '<span data-countdown="' + esc(o.token) + '" class="text-[11px] text-zinc-400" style="font-variant-numeric:tabular-nums">' + esc(t('change_left', { t: fmtLeft(left) })) + '</span>' +
+                '<span class="flex gap-2 shrink-0">' +
+                '<button data-action="order-change" data-token="' + esc(o.token) + '" class="text-xs font-semibold px-3 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200" style="min-height:38px">' + esc(t('change_btn')) + '</button>' +
+                '<button data-action="order-cancel" data-token="' + esc(o.token) + '" class="text-xs font-semibold px-3 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-400" style="min-height:38px">' + esc(t('cancel_btn')) + '</button>' +
+                '</span></div>';
         }
 
         function updateTrackButtons() {
@@ -750,14 +969,21 @@
 
         // match = function(order) -> bool
         function applyStatus(match, status) {
-            var changed = false, nowReady = false;
+            var changed = false, readied = [];
             app.tracked.forEach(function (o) {
-                if (match(o) && o.status !== status) { o.status = status; changed = true; if (status === 'Ready') nowReady = true; }
+                if (match(o) && o.status !== status) {
+                    o.status = status; changed = true;
+                    if (status !== 'Preparing') o.changeAt = 0; // the window closes once the kitchen moves it on
+                    if (status === 'Ready') readied.push(o);
+                }
             });
             if (!changed) return;
             saveTracked();
-            if (app.view === 'tracker') renderTracker();
-            if (nowReady) { try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) {} }
+            if (app.view === 'tracker') renderTracker(); else renderAlertOffer();
+            if (readied.length) {
+                try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) {}
+                readied.forEach(announceReady);
+            }
         }
 
         function refreshTracked() {
@@ -766,8 +992,14 @@
             fetch('/api/orders/track?tokens=' + encodeURIComponent(open.map(function (o) { return o.token; }).join(',')))
                 .then(function (r) { return r.ok ? r.json() : { orders: [] }; })
                 .then(function (d) {
+                    var skew = d.now ? Date.now() - d.now : 0;
                     (d.orders || []).forEach(function (s) {
-                        app.tracked.forEach(function (o) { if (o.token === s.token && s.payment === 'paid' && !o.paid) { o.paid = true; saveTracked(); } });
+                        app.tracked.forEach(function (o) {
+                            if (o.token !== s.token) return;
+                            if (s.payment === 'paid' && !o.paid) o.paid = true;
+                            o.changeAt = s.changeUntil ? s.changeUntil + skew : 0;
+                        });
+                        saveTracked();
                         applyStatus(function (o) { return o.token === s.token; }, s.status);
                     });
                     if (app.view === 'tracker') renderTracker();
@@ -829,7 +1061,8 @@
                 try { msg = JSON.parse(e.data); } catch (err) { return; }
                 var p = msg.payload || {};
                 switch (msg.type) {
-                    case 'STATE': app.state = { status: p.status, rush: p.rush, location: p.location || '', paused: !!p.paused }; renderStatus(); renderLocation(); break;
+                    case 'STATE': app.state = { status: p.status, rush: p.rush, location: p.location || '', paused: !!p.paused, wait: p.wait || null }; renderStatus(); renderLocation(); break;
+                    case 'WAIT': app.state.wait = p; renderStatus(); if ($('cartModal').style.display === 'flex') renderCartModal(); break;
                     case 'STORE_STATUS': app.state.status = p.status; renderStatus(); break;
                     case 'PAUSED': app.state.paused = !!p.paused; renderStatus(); break;
                     case 'RUSH_MODE': app.state.rush = Number(p.minutes) || 0; renderStatus(); break;
@@ -869,7 +1102,11 @@
                     postJSON('/api/payments/confirm', { token: token }).then(function (d) {
                         app.tracked.forEach(function (o) { if (o.token === token) { if (d.payment === 'paid') o.paid = true; if (d.status) o.status = d.status; } });
                         saveTracked(); renderTracker();
-                        try { sessionStorage.removeItem('ft_cart_' + app.vendor.slug); } catch (e) {}
+                        try {
+                            var kept = JSON.parse(sessionStorage.getItem('ft_cart_' + app.vendor.slug) || 'null');
+                            if (kept && kept.cart && d.payment === 'paid') rememberOrder(kept.cart);
+                            sessionStorage.removeItem('ft_cart_' + app.vendor.slug);
+                        } catch (e) {}
                         if (d.status === 'Pending' && ++tries < 6) setTimeout(check, 2000);
                     }).catch(function () {});
                 })();
@@ -915,6 +1152,10 @@
                     updateCartUI();
                     break;
                 case 'place-order': placeOrder(); break;
+                case 'add-usual': addUsual(); break;
+                case 'enable-alert': enableAlert(); break;
+                case 'order-cancel': cancelOrder(el.getAttribute('data-token'), false); break;
+                case 'order-change': cancelOrder(el.getAttribute('data-token'), true); break;
                 case 'close-success': $('successModal').style.display = 'none'; show('tracker'); break;
                 case 'toggle-hours': app.hoursOpen = !app.hoursOpen; renderHours(); break;
                 case 'pay-choice': app.payNow = el.getAttribute('data-now') === '1'; renderPayChoice(); break;
@@ -934,10 +1175,12 @@
         // Phones pause pages in the background. When the customer comes back, catch up right away.
         document.addEventListener('visibilitychange', function () {
             if (!document.hidden && app.vendor) { reloadVendor(); refreshTracked(); }
+            if (app.vendor) keepAwake(); // the screen lock drops when the page is hidden; take it back on return
         });
 
         /* ---------- boot ---------- */
         applyStatic();
+        try { app.alertArmed = sessionStorage.getItem('ft_alert') === '1'; } catch (e) {}
         try { var savedName = localStorage.getItem('ft_name'); if (savedName) $('customerName').value = savedName; } catch (e) {}
         if ('serviceWorker' in navigator && !window.__FT_DEMO) navigator.serviceWorker.register('/sw.js').catch(function () {});
 
