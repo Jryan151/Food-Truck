@@ -2,78 +2,68 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ordering Portal</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Order Online</title>
+    <meta name="theme-color" content="#09090b">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <link rel="stylesheet" href="/app.css">
+    <script src="/logo.js"></script>
     <style>
-        /* Bulletproof Walkthrough CSS */
-        .wt-overlay {
-            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-            background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(2px);
-            z-index: 9998; display: none; pointer-events: auto;
-        }
-        .wt-tooltip {
-            position: fixed; z-index: 10000; background: #FFFFFF; color: #181719;
-            padding: 1rem 1.25rem; border-radius: 12px; font-size: 0.9rem; font-weight: 500;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5); max-width: 280px; display: none;
-            flex-direction: column; gap: 0.5rem; pointer-events: auto; font-family: sans-serif;
-            border: 2px solid #52525b; 
-            transition: all 0.3s ease; left: 50%; transform: translateX(-50%);
-        }
-        .wt-tooltip-header { font-weight: 700; font-size: 1.05rem; color: #000; display: flex; justify-content: space-between; align-items: center;}
-        .wt-skip-btn { background: none; border: none; color: #999; font-size: 0.75rem; cursor: pointer; text-decoration: underline; }
-        .wt-tooltip-btn { 
-            background: #181719; color: #fff; border: none; padding: 0.6rem; 
-            border-radius: 6px; font-weight: 600; cursor: pointer; text-align: center; font-size: 0.8rem; margin-top: 0.5rem;
-        }
-        
-        .wt-spotlight { position: relative; z-index: 9999 !important; border-radius: inherit; pointer-events: auto !important; }
-        .wt-parent-override { z-index: 9999 !important; }
-        .wt-spotlight-pulse { animation: wtPulse 2s infinite; }
-        @keyframes wtPulse { 0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.5); } 70% { box-shadow: 0 0 0 10px rgba(255, 255, 255, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); } }
+        .hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { scrollbar-width: none; }
     </style>
 </head>
 <body class="bg-zinc-950 text-zinc-100 font-sans min-h-screen flex flex-col justify-between overflow-x-hidden" id="appBody">
-    
-    <!-- Walkthrough Elements -->
-    <div class="wt-overlay" id="wtOverlay"></div>
-    <div class="wt-tooltip" id="wtTooltip">
-        <div class="wt-tooltip-header">
-            <span id="wtTitle">Welcome!</span>
-            <button class="wt-skip-btn" onclick="endWalkthrough()">Skip Guide</button>
-        </div>
-        <div id="wtText">Let's walk through your new system.</div>
-        <button class="wt-tooltip-btn" id="wtNextBtn">Got it</button>
-    </div>
 
     <div class="max-w-md mx-auto w-full flex-grow relative pb-8">
+
+        <!-- Unavailable -->
+        <div id="errorView" class="p-6 flex flex-col items-center justify-center min-h-[85vh] text-center" style="display:none;">
+            <div class="text-4xl mb-3">🚧</div>
+            <h1 class="text-xl font-bold mb-1" data-i18n="err_title">This page isn't available</h1>
+            <p class="text-zinc-400 text-sm" id="errorText" data-i18n="err_soon">Please check back soon.</p>
+        </div>
+
         <!-- Landing View -->
-        <div id="landingView" class="p-6 flex flex-col items-center justify-center min-h-[85vh] text-center">
-            
-            <!-- Grouped Brand Area for Walkthrough -->
+        <div id="landingView" class="p-6 flex flex-col items-center justify-center min-h-[85vh] text-center" style="display:none;">
+
+            <div class="w-full flex justify-end -mt-2 mb-2">
+                <button data-action="toggle-lang" class="text-[11px] text-zinc-400 hover:text-white border border-zinc-800 rounded-full px-3 py-1" data-i18n="lang_switch">Español</button>
+            </div>
+
             <div id="brand-group" class="w-full flex flex-col items-center relative transition-all rounded-xl pb-1">
-                <div class="w-24 h-24 rounded-full border-2 border-zinc-700 p-1 mb-4 flex items-center justify-center shadow-lg bg-zinc-900 theme-border theme-shadow">
-                    <span class="text-4xl" id="dynamic-emoji">🌮</span>
+                <div class="w-24 h-24 rounded-full border-2 border-zinc-700 p-1 mb-4 flex items-center justify-center shadow-lg bg-zinc-900">
+                    <span class="text-4xl text-zinc-100" id="dynamic-emoji"></span>
                 </div>
                 <h1 id="dynamic-truck-name" class="text-3xl font-serif font-bold italic tracking-wide mb-1">Storefront</h1>
-                <p id="dynamic-subheader" class="text-zinc-400 text-sm mb-3">Fresh Local Eats</p>
+                <p id="dynamic-subheader" class="text-zinc-400 text-sm mb-3" data-i18n="tagline">Fresh Local Eats</p>
                 <div class="mb-5 text-center" id="ig-container" style="display:none;">
-                    <a href="#" target="_blank" id="dynamic-ig-link" class="text-xs text-zinc-300 hover:text-white tracking-wider font-medium flex items-center justify-center gap-1.5 theme-text"><span>📷</span> @<span id="dynamic-ig-text">username</span></a>
+                    <a href="#" target="_blank" rel="noopener" id="dynamic-ig-link" class="text-xs text-zinc-300 hover:text-white tracking-wider font-medium flex items-center justify-center gap-1.5"><span>📷</span> @<span id="dynamic-ig-text">username</span></a>
                 </div>
             </div>
-            
-            <!-- Grouped Status Area for Walkthrough -->
+
             <div id="status-group" class="w-full relative rounded-xl transition-all">
                 <div class="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 mb-3 text-left shadow-md">
                     <div class="flex justify-between items-center mb-1">
-                        <label class="text-[11px] text-zinc-400 font-medium">📍 Active Location (Click to Map):</label>
+                        <label class="text-[11px] text-zinc-400 font-medium" data-i18n="location_label">📍 Where we're parked (tap for map):</label>
                     </div>
-                    <div id="activeLocationDisplay" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 text-xs text-zinc-300 font-medium">Downtown Main Street</div>
+                    <a id="activeLocationDisplay" href="#" target="_blank" rel="noopener" class="block w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 text-xs text-zinc-300 font-medium">Location coming soon</a>
                 </div>
 
-                <div id="storeStatusBadge" class="bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-2 text-xs mb-3 text-emerald-400 flex items-center gap-2 w-full justify-center">
-                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span id="storeStatusText">Open Now • Accepting Orders</span>
+                <div id="hoursBox" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl mb-3 text-left shadow-md" style="display:none;">
+                    <button data-action="toggle-hours" class="w-full flex justify-between items-center p-3 text-xs">
+                        <span class="text-zinc-300"><span>🕒</span> <span id="hoursToday"></span></span>
+                        <span class="text-zinc-500" id="hoursChevron">▾</span>
+                    </button>
+                    <div id="hoursWeek" class="px-3 pb-3 space-y-1 text-[11px]" style="display:none;"></div>
+                </div>
+
+                <div id="storeStatusBadge" class="border rounded-xl px-4 py-2 text-xs mb-3 flex items-center gap-2 w-full justify-center">
+                    <span id="storeStatusDot" class="w-2 h-2 rounded-full animate-pulse"></span>
+                    <span id="storeStatusText" data-i18n="checking">Checking…</span>
                 </div>
 
                 <div id="rushStatusContainer" class="w-full"></div>
@@ -81,621 +71,868 @@
             </div>
 
             <div class="w-full space-y-3 relative mt-3">
-                <button onclick="switchView('menu')" id="btn-start-order" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-3.5 rounded-xl transition shadow-lg theme-bg theme-shadow">Start Order</button>
+                <button data-action="open-menu" id="btn-start-order" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-3.5 rounded-xl transition shadow-lg">Start Order</button>
+                <button data-action="open-tracker" id="btn-track-landing" class="w-full bg-zinc-900 border border-zinc-800 text-zinc-300 font-semibold py-3 rounded-xl text-sm transition" style="display:none;" data-i18n="track_orders">Order Status</button>
             </div>
         </div>
 
         <!-- Menu View -->
-        <div id="menuView" class="p-4 hidden">
-            <div class="flex items-center justify-between mb-4 sticky top-0 bg-zinc-950/90 backdrop-blur py-2 z-10 border-b border-zinc-900">
-                <button onclick="switchView('landing')" class="text-zinc-400 text-sm hover:text-white">← Back</button>
-                <h2 class="font-bold text-lg">Order Menu</h2>
-                <div class="w-10"></div>
+        <div id="menuView" class="p-4" style="display:none;">
+            <div class="sticky top-0 bg-zinc-950/95 backdrop-blur z-10 border-b border-zinc-900 mb-4">
+                <div class="flex items-center justify-between py-2">
+                    <button data-action="open-landing" class="flex-1 text-left text-zinc-400 text-sm hover:text-white" data-i18n="back">← Back</button>
+                    <h2 class="font-bold text-lg whitespace-nowrap px-2" data-i18n="order_menu">Order Menu</h2>
+                    <button data-action="open-tracker" id="btn-track-menu" class="flex-1 text-zinc-400 text-sm hover:text-white text-right" style="visibility:hidden;" data-i18n="orders">Order Status</button>
+                </div>
+                <div id="categoryChips" class="flex gap-2 overflow-x-auto no-scrollbar pb-2"></div>
             </div>
-            
-            <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-3 mb-5 text-xs shadow-lg theme-border">
-                <div class="font-bold text-zinc-200 mb-1 flex items-center gap-1 theme-text"><span>⭐</span> Popular Item Highlights</div>
+
+            <div id="highlightsBox" class="bg-zinc-900 border border-zinc-800 rounded-xl p-3 mb-5 text-xs shadow-lg">
+                <div class="font-bold text-zinc-200 mb-1 flex items-center gap-1"><span>⭐</span> <span data-i18n="featured_title">Featured</span></div>
                 <div id="popularHighlightsContainer" class="grid grid-cols-1 gap-2 text-center mt-2"></div>
             </div>
 
             <div id="menuContainer" class="space-y-6 relative pb-20"></div>
-            
-            <div class="fixed bottom-4 left-4 right-4 max-w-md mx-auto z-40 relative">
-                <button onclick="openCartModal()" id="btn-view-cart" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-3 rounded-xl shadow-xl flex justify-between px-5 items-center transition-all theme-bg">
-                    <span id="cartCountBadge" class="bg-zinc-800 text-zinc-100 px-2 py-0.5 rounded-md text-xs font-bold theme-bg-dark">0 items</span>
-                    <span>View Cart</span>
+
+            <div class="fixed bottom-4 left-4 right-4 max-w-md mx-auto z-40">
+                <button data-action="open-cart" id="btn-view-cart" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-3 rounded-xl shadow-xl flex justify-between px-5 items-center transition-all">
+                    <span id="cartCountBadge" class="bg-zinc-800 text-zinc-100 px-2 py-0.5 rounded-md text-xs font-bold">0 items</span>
+                    <span data-i18n="view_cart">View Cart</span>
                     <span id="cartTotalBadge">$0.00</span>
                 </button>
             </div>
         </div>
 
         <!-- Tracker View -->
-        <div id="trackerView" class="p-4 hidden relative z-10 pb-32">
-            <h2 class="font-bold text-lg mb-4 text-center border-b border-zinc-900 pb-2">Order Tracker</h2>
-            <div class="space-y-3" id="activeOrdersList"></div>
-            
-            <div class="fixed bottom-12 left-4 right-4 max-w-md mx-auto z-40">
-                <button onclick="window.location.href='owner.html'" id="btn-route-owner" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-3.5 rounded-xl transition shadow-lg hidden theme-bg">Enter Owner Backend →</button>
+        <div id="trackerView" class="p-4 relative z-10 pb-32" style="display:none;">
+            <div class="flex items-center justify-between mb-4 border-b border-zinc-900 pb-2">
+                <button data-action="open-menu" class="text-zinc-400 text-sm hover:text-white" data-i18n="to_menu">← Menu</button>
+                <h2 class="font-bold text-lg" data-i18n="tracker_title">Order Status</h2>
+                <div class="w-12"></div>
             </div>
+            <div class="space-y-3" id="activeOrdersList"></div>
         </div>
     </div>
 
-    <!-- Persistent Admin Footer -->
-    <div class="w-full text-center py-5 mt-auto bg-zinc-950 relative z-0 border-t border-zinc-900/50">
-        <a href="owner.html" class="text-[10px] text-zinc-600 hover:text-zinc-400 font-medium tracking-wide uppercase">Admin Portal Login</a>
+    <!-- Footer -->
+    <div class="w-full text-center py-5 mt-auto bg-zinc-950 relative z-0 border-t border-zinc-900/50 space-y-1">
+        <div id="brandingLine" class="text-[10px] text-zinc-600 font-medium tracking-wide" style="display:none;"><span data-i18n="powered_by">Powered by</span> <a id="brandingLink" href="#" target="_blank" rel="noopener" class="underline hover:text-zinc-400">platform</a></div>
+        <div class="text-[10px] text-zinc-600 font-medium tracking-wide space-x-2">
+            <a href="/owner.html" class="hover:text-zinc-400 uppercase" data-i18n="owner_login">Owner login</a>
+            <span>·</span><a href="/terms" class="hover:text-zinc-400" data-i18n="terms">Terms</a>
+            <span>·</span><a href="/privacy" class="hover:text-zinc-400" data-i18n="privacy">Privacy</a>
+            <span>·</span><button data-action="toggle-lang" class="hover:text-zinc-400" data-i18n="lang_switch">Español</button>
+        </div>
     </div>
 
     <!-- Item Modal -->
-    <div id="itemModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-2xl p-5 space-y-4 relative" id="modal-content-box">
-            <div class="flex justify-between items-center"><h3 id="itemModalTitle" class="font-bold text-lg text-zinc-100 theme-text">Add to Order</h3><button onclick="closeItemModal()" class="text-zinc-400 hover:text-white text-sm">✕</button></div>
-            
-            <div id="itemModalMeatSection" class="hidden">
-                <label class="block text-xs text-zinc-400 mb-1 font-medium">Select Modification/Protein</label>
+    <div id="itemModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" style="display:none;">
+        <div class="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-2xl p-5 space-y-4 relative max-h-[90vh] overflow-y-auto">
+            <img id="itemModalPhoto" alt="" class="w-full h-auto max-h-80 object-contain bg-zinc-950 rounded-xl -mt-1" style="display:none;">
+            <div class="flex justify-between items-center gap-3"><h3 id="itemModalTitle" class="font-bold text-lg text-zinc-100">Add to Order</h3><button data-action="close-item" class="text-zinc-400 hover:text-white text-sm" aria-label="Close">✕</button></div>
+            <p id="itemModalDesc" class="text-xs text-zinc-400 -mt-2"></p>
+
+            <div id="itemModalMeatSection" style="display:none;">
+                <label class="block text-xs text-zinc-400 mb-1 font-medium" for="itemMeatSelect" data-i18n="choose_protein">Choose your protein / style</label>
                 <select id="itemMeatSelect" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200"></select>
             </div>
 
-            <div id="itemModalDrinkSection" class="hidden">
-                <label class="block text-xs text-zinc-400 mb-1 font-medium">Select Flavor Option</label>
+            <div id="itemModalDrinkSection" style="display:none;">
+                <label class="block text-xs text-zinc-400 mb-1 font-medium" for="itemDrinkSelect" data-i18n="choose_option">Choose an option</label>
                 <select id="itemDrinkSelect" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200"></select>
             </div>
 
             <div>
-                <label class="block text-xs text-zinc-400 mb-1 font-medium">Quantity</label>
+                <label class="block text-xs text-zinc-400 mb-1 font-medium" data-i18n="quantity">Quantity</label>
                 <div class="flex items-center gap-3">
-                    <button onclick="adjustModalQty(-1)" class="w-10 h-10 bg-zinc-800 hover:bg-zinc-700 rounded-xl text-base font-bold flex items-center justify-center">-</button>
+                    <button data-action="modal-qty" data-delta="-1" aria-label="Less" class="w-10 h-10 bg-zinc-800 hover:bg-zinc-700 rounded-xl text-base font-bold flex items-center justify-center">-</button>
                     <span id="itemModalQty" class="text-lg font-mono font-bold flex-1 text-center">1</span>
-                    <button onclick="adjustModalQty(1)" class="w-10 h-10 bg-zinc-800 hover:bg-zinc-700 rounded-xl text-base font-bold flex items-center justify-center">+</button>
+                    <button data-action="modal-qty" data-delta="1" aria-label="More" class="w-10 h-10 bg-zinc-800 hover:bg-zinc-700 rounded-xl text-base font-bold flex items-center justify-center">+</button>
                 </div>
             </div>
-            <button onclick="confirmAddToCart()" id="btn-confirm-add" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-3 rounded-xl transition shadow-lg theme-bg">Confirm & Add to Cart</button>
+            <button data-action="confirm-add" id="btn-confirm-add" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-3 rounded-xl transition shadow-lg" data-i18n="add_to_cart">Add to Cart</button>
         </div>
     </div>
 
     <!-- Cart Modal -->
-    <div id="cartModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto" id="cart-content-box">
-            <div class="flex justify-between items-center border-b border-zinc-800 pb-3"><h3 class="font-bold text-lg">Your Order</h3><button onclick="closeCartModal()" class="text-zinc-400 hover:text-white text-sm">✕</button></div>
-            
+    <div id="cartModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" style="display:none;">
+        <div class="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b border-zinc-800 pb-3"><h3 class="font-bold text-lg" data-i18n="your_order">Your Order</h3><button data-action="close-cart" class="text-zinc-400 hover:text-white text-sm" aria-label="Close">✕</button></div>
+
             <div id="cartWaitTimeContainer" class="bg-amber-500/10 border border-amber-500/30 rounded-lg p-2.5 flex items-center justify-between text-xs">
-                <span class="text-amber-400 font-medium">⏱️ Wait Time:</span>
+                <span class="text-amber-400 font-medium" data-i18n="wait_time">⏱️ Wait time:</span>
                 <span id="cartEstimatedWait" class="font-bold text-amber-400 font-mono">0 mins</span>
             </div>
 
             <div id="cartItemsList" class="space-y-3 border-b border-zinc-800 pb-3"></div>
-            
+            <div class="flex justify-between items-center text-sm font-semibold"><span data-i18n="total">Total</span><span id="cartModalTotal" class="font-mono">$0.00</span></div>
+
+            <div id="payChoice" class="space-y-2"></div>
+
             <div class="space-y-3 pt-1">
                 <div>
-                    <label class="block text-xs text-zinc-400 mb-1">Special Instructions (Optional)</label>
-                    <textarea id="customerNotes" placeholder="Any requests for the kitchen?" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200 resize-none h-16"></textarea>
+                    <label class="block text-xs text-zinc-400 mb-1" for="customerNotes" data-i18n="notes_label">Special instructions (optional)</label>
+                    <textarea id="customerNotes" maxlength="300" data-i18n-ph="notes_ph" placeholder="Any requests for the kitchen?" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200 resize-none h-16"></textarea>
                 </div>
                 <div>
-                    <label class="block text-xs text-zinc-400 mb-1">Your Name</label>
-                    <input type="text" id="customerName" placeholder="Enter name for order" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200">
+                    <label class="block text-xs text-zinc-400 mb-1" for="customerName" data-i18n="name_label">Your name</label>
+                    <input type="text" id="customerName" maxlength="40" autocomplete="given-name" data-i18n-ph="name_ph" placeholder="So we can call you" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200">
                 </div>
+                <div id="smsBox" style="display:none;">
+                    <label class="block text-xs text-zinc-400 mb-1" for="customerPhone" data-i18n="text_me_label">Text me when it's ready (optional)</label>
+                    <input type="tel" id="customerPhone" maxlength="20" autocomplete="tel-national" inputmode="tel" data-i18n-ph="text_me_ph" placeholder="Mobile number" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200">
+                    <label class="flex items-start gap-2 mt-2 text-[10px] text-zinc-400 leading-snug">
+                        <input type="checkbox" id="smsConsent" class="mt-0.5 w-4 h-4 accent-emerald-500 shrink-0">
+                        <span data-i18n="text_consent">Text me one message when this order is ready. Msg &amp; data rates may apply. Reply STOP to opt out.</span>
+                    </label>
+                </div>
+                <!-- Honeypot: hidden from people, bots fill it in. Leave empty. -->
+                <div class="hp" aria-hidden="true"><label for="website">Website</label><input type="text" id="website" name="website" tabindex="-1" autocomplete="off"></div>
             </div>
-            <button onclick="submitOrder()" id="btn-place-order" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-3 rounded-xl transition theme-bg">Place Test Order</button>
+            <div id="cartError" class="text-xs text-rose-400 text-center" style="display:none;"></div>
+            <button data-action="place-order" id="btn-place-order" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-3 rounded-xl transition" data-i18n="place_order">Place Order</button>
         </div>
     </div>
 
     <!-- Success Modal -->
-    <div id="successModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-2xl p-6 text-center space-y-4 relative" id="success-content-box">
+    <div id="successModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" style="display:none;">
+        <div class="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-2xl p-6 text-center space-y-4 relative">
             <div class="w-16 h-16 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-full flex items-center justify-center mx-auto text-2xl">✓</div>
-            <h3 class="font-bold text-lg text-zinc-100">Order Placed!</h3>
+            <h3 class="font-bold text-lg text-zinc-100" data-i18n="order_placed">Order placed!</h3>
             <div class="bg-zinc-950 p-4 rounded-xl border border-zinc-800 space-y-1">
-                <div class="text-xs text-zinc-400">Assigned Ticket Number:</div>
-                <div id="successTicketNum" class="text-2xl font-mono font-bold text-zinc-100 theme-text">#000</div>
+                <div class="text-xs text-zinc-400" data-i18n="ticket_number">Your ticket number:</div>
+                <div id="successTicketNum" class="text-2xl font-mono font-bold text-zinc-100">#000</div>
+                <div id="successWait" class="text-xs text-zinc-500 pt-1"></div>
+                <div class="text-xs text-zinc-400 pt-1" id="successPay"></div>
             </div>
-            <button onclick="closeSuccessModal()" id="btn-view-tracker" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-3 rounded-xl text-sm transition theme-bg">View Tracker & Continue</button>
+            <button data-action="close-success" id="btn-view-tracker" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-3 rounded-xl text-sm transition" data-i18n="view_tracker">Order Status</button>
         </div>
     </div>
 
     <script>
-        const app = {
-            cart: [], orders: [], menu: [], config: null, wtActive: false, wtStep: 0, firstItemId: 1
-        };
+    (function () {
+        'use strict';
 
-        // CORE ENGINE SETUP
-        const presets = {
-            minimal: {
-                subheader: "Signature House Item", emoji: "🌮",
-                items: [
-                    { 
-                        name: "Signature Street Taco", 
-                        price: 3.50, 
-                        salePrice: 2.75, 
-                        desc: "Freshly made with house ingredients.", 
-                        prep: 2, 
-                        hasMeat: true, 
-                        meats: "Asada, Pollo, Veggie", 
-                        premiumUpcharge: 1.00, 
-                        soldOut: false 
-                    }
-                ]
+        // Change these two lines to rebrand the free-plan footer link.
+        var PLATFORM = { name: 'Online Kitchen', url: 'https://onlinekitchen.fyi' };
+
+        /* ---------- language (English / Spanish). Menu items are shown as the truck wrote them. ---------- */
+        var I18N = {
+            en: {
+                lang_switch: 'Español', tagline: 'Fresh Local Eats', err_title: "This page isn't available", err_soon: 'Please check back soon.',
+                err_inactive: 'This page is not active right now.', err_missing: "We couldn't find this page.", err_load: "We couldn't load this page. Please try again.",
+                location_label: "📍 Where we're parked (tap for map):", location_soon: 'Location coming soon', checking: 'Checking…',
+                open_now: 'Open now • Accepting orders', closed_now: 'Closed right now', paused_now: 'Open for walk-ups • Online ordering paused',
+                start_order: 'Start Order', currently_closed: 'Currently Closed', order_at_window: 'Order at the window',
+                busy15: '⚠️ Busy: about 15 extra minutes', busy30: '🚨 Very busy: about 30 extra minutes', sale: '🏷️ Sale',
+                track_orders: 'Order Status', back: '← Back', order_menu: 'Order Menu', orders: 'Order Status', featured_title: 'Featured', featured: 'FEATURED',
+                menu: 'Menu', menu_empty: 'The menu is empty right now.', sold_out: 'Sold Out', add: 'Add +', mins: '~{n} min',
+                item: '{n} item', items: '{n} items', view_cart: 'View Cart', choose_protein: 'Choose your protein / style', choose_option: 'Choose an option',
+                quantity: 'Quantity', add_to_cart: 'Add to Cart', add_title: 'Add {name}', your_order: 'Your Order', wait_time: '⏱️ Wait time:', total: 'Total',
+                pay_window_long: 'Pay at the window when you pick up. No card needed now.', pay_window_short: '💵 Pay at the window when you pick up.',
+                notes_label: 'Special instructions (optional)', notes_ph: 'Any requests for the kitchen?', name_label: 'Your name', name_ph: 'So we can call you',
+                place_order: 'Place Order', placing: 'Placing order…', sold_out_in_cart: 'An item in your cart just sold out. Please remove it.',
+                order_failed: 'Could not place your order. Please try again.', connection: 'Connection problem. Please check your signal and try again.',
+                order_placed: 'Order placed!', ticket_number: 'Your ticket number:', est_wait: 'Estimated wait: ~{n} min', view_tracker: 'Order Status',
+                to_menu: '← Menu', tracker_title: 'Order Status', no_orders: 'No orders yet.', ticket: 'Ticket #{n}',
+                st_Preparing: 'Preparing', st_Ready: 'Ready', st_Fulfilled: 'Picked up', st_Canceled: 'Canceled',
+                msg_Preparing: 'The kitchen has your order.', msg_Ready: 'Your order is ready for pickup!', msg_Fulfilled: 'Picked up. Enjoy!', msg_Canceled: 'This order was canceled.',
+                powered_by: 'Powered by', owner_login: 'Owner login', terms: 'Terms', privacy: 'Privacy',
+                today: 'Today: {h}', today_closed: 'Closed today', hours_title: 'Hours', closed: 'Closed', sel_extra: ' (+{p})',
+                pay_now_title: '💳 Pay now', pay_now_sub: 'Card, Apple Pay or Google Pay — skip the line at the window.',
+                pay_window_title: '💵 Pay at the window', pay_window_sub: 'Pay when you pick up.',
+                pay_online_only: "💳 You'll pay securely by card on the next screen.", continue_pay: 'Continue to payment', redirecting: 'Opening secure checkout…',
+                st_Pending: 'Waiting for payment', msg_Pending: 'Finish paying to send this order to the kitchen.', paid_badge: '💳 Paid',
+                paid_online: '💳 Paid online. Just give your name at the window.', pay_canceled: 'Payment canceled — your cart is still here.',
+                paying_check: 'Confirming your payment…', text_me_label: "Text me when it's ready (optional)", text_me_ph: 'Mobile number',
+                text_consent: 'Text me one message when this order is ready. Msg & data rates may apply. Reply STOP to opt out.',
+                consent_needed: 'Tick the box to get a text, or leave the number blank.'
+            },
+            es: {
+                lang_switch: 'English', tagline: 'Comida local y fresca', err_title: 'Esta página no está disponible', err_soon: 'Vuelve a intentarlo pronto.',
+                err_inactive: 'Esta página no está activa ahora.', err_missing: 'No encontramos esta página.', err_load: 'No pudimos cargar la página. Inténtalo de nuevo.',
+                location_label: '📍 Dónde estamos (toca para ver el mapa):', location_soon: 'Ubicación próximamente', checking: 'Revisando…',
+                open_now: 'Abierto • Aceptando pedidos', closed_now: 'Cerrado ahora', paused_now: 'Abierto en la ventanilla • Pedidos en línea en pausa',
+                start_order: 'Hacer pedido', currently_closed: 'Cerrado', order_at_window: 'Pide en la ventanilla',
+                busy15: '⚠️ Mucha gente: unos 15 minutos más', busy30: '🚨 Muchísima gente: unos 30 minutos más', sale: '🏷️ Oferta',
+                track_orders: 'Estado del pedido', back: '← Atrás', order_menu: 'Menú', orders: 'Estado del pedido', featured_title: 'Destacado', featured: 'DESTACADO',
+                menu: 'Menú', menu_empty: 'El menú está vacío por ahora.', sold_out: 'Agotado', add: 'Agregar +', mins: '~{n} min',
+                item: '{n} artículo', items: '{n} artículos', view_cart: 'Ver carrito', choose_protein: 'Elige tu proteína / estilo', choose_option: 'Elige una opción',
+                quantity: 'Cantidad', add_to_cart: 'Agregar al carrito', add_title: 'Agregar {name}', your_order: 'Tu pedido', wait_time: '⏱️ Tiempo de espera:', total: 'Total',
+                pay_window_long: 'Pagas en la ventanilla al recoger. No necesitas tarjeta ahora.', pay_window_short: '💵 Pagas en la ventanilla al recoger.',
+                notes_label: 'Instrucciones especiales (opcional)', notes_ph: '¿Algo especial para la cocina?', name_label: 'Tu nombre', name_ph: 'Para llamarte cuando esté listo',
+                place_order: 'Enviar pedido', placing: 'Enviando pedido…', sold_out_in_cart: 'Algo en tu carrito se acaba de agotar. Quítalo, por favor.',
+                order_failed: 'No pudimos enviar tu pedido. Inténtalo de nuevo.', connection: 'Problema de conexión. Revisa tu señal e inténtalo de nuevo.',
+                order_placed: '¡Pedido enviado!', ticket_number: 'Tu número de ticket:', est_wait: 'Espera aproximada: ~{n} min', view_tracker: 'Estado del pedido',
+                to_menu: '← Menú', tracker_title: 'Estado del pedido', no_orders: 'Todavía no hay pedidos.', ticket: 'Ticket #{n}',
+                st_Preparing: 'Preparando', st_Ready: 'Listo', st_Fulfilled: 'Recogido', st_Canceled: 'Cancelado',
+                msg_Preparing: 'La cocina recibió tu pedido.', msg_Ready: '¡Tu pedido está listo para recoger!', msg_Fulfilled: 'Recogido. ¡Buen provecho!', msg_Canceled: 'Este pedido fue cancelado.',
+                powered_by: 'Hecho con', owner_login: 'Acceso del dueño', terms: 'Términos', privacy: 'Privacidad',
+                today: 'Hoy: {h}', today_closed: 'Hoy cerrado', hours_title: 'Horario', closed: 'Cerrado', sel_extra: ' (+{p})',
+                pay_now_title: '💳 Pagar ahora', pay_now_sub: 'Tarjeta, Apple Pay o Google Pay — sin fila en la ventanilla.',
+                pay_window_title: '💵 Pagar en la ventanilla', pay_window_sub: 'Pagas al recoger.',
+                pay_online_only: '💳 Pagarás con tarjeta de forma segura en la siguiente pantalla.', continue_pay: 'Continuar al pago', redirecting: 'Abriendo el pago seguro…',
+                st_Pending: 'Esperando el pago', msg_Pending: 'Termina de pagar para enviar el pedido a la cocina.', paid_badge: '💳 Pagado',
+                paid_online: '💳 Pagado en línea. Solo di tu nombre en la ventanilla.', pay_canceled: 'Pago cancelado — tu carrito sigue aquí.',
+                paying_check: 'Confirmando tu pago…', text_me_label: 'Mándame un mensaje cuando esté listo (opcional)', text_me_ph: 'Número de celular',
+                text_consent: 'Envíame un mensaje cuando este pedido esté listo. Pueden aplicar cargos. Responde STOP para cancelar.',
+                consent_needed: 'Marca la casilla para recibir el mensaje, o deja el número vacío.'
             }
         };
-
-        function applyDemoConfig() {
-    // 1. Fetch live database data synchronously to prevent UI crashes
-
-        let data = null;
-        const urlParams = new URLSearchParams(window.location.search);
-        
-        if (urlParams.get('demo') === 'true') {
-            // Bypass server and load local preview data
-            const savedMenu = sessionStorage.getItem('demoMenu');
-            const savedName = sessionStorage.getItem('demoTruckName');
-            data = {
-                businessName: savedName || "My Custom Menu",
-                menu: savedMenu ? JSON.parse(savedMenu) : []
-            };
-        } else {
-            // Normal behavior: fetch live database data
-            try {
-                const xhr = new XMLHttpRequest();
-                xhr.open('GET', '/api/vendor-data', false);
-                xhr.send(null);
-                if (xhr.status === 200) data = JSON.parse(xhr.responseText);
-            } catch(e) {}
+        var lang = 'en';
+        try { lang = localStorage.getItem('ft_lang') || ''; } catch (e) {}
+        if (lang !== 'en' && lang !== 'es') lang = /^es\b/i.test(navigator.language || '') ? 'es' : 'en';
+        function t(k, vars) {
+            var s = (I18N[lang] && I18N[lang][k] != null) ? I18N[lang][k] : (I18N.en[k] != null ? I18N.en[k] : k);
+            if (vars) for (var v in vars) s = s.split('{' + v + '}').join(vars[v]);
+            return s;
+        }
+        function applyStatic() {
+            document.documentElement.lang = lang;
+            document.querySelectorAll('[data-i18n]').forEach(function (el) { el.textContent = t(el.getAttribute('data-i18n')); });
+            document.querySelectorAll('[data-i18n-ph]').forEach(function (el) { el.setAttribute('placeholder', t(el.getAttribute('data-i18n-ph'))); });
         }
 
-
-    if (!data || data.error) return false;
-
-    // 2. Map database response to your app variables
-    app.config = {
-        truckName: data.businessName,
-        menu: data.menu && data.menu.length > 0 ? data.menu : [
-            {
-                name: "Signature Street Taco", price: 3.50, salePrice: 2.75,
-                desc: "Freshly made with house ingredients.", prep: 2, hasMeat: true,
-                meats: "Asada, Pollo, Veggie", premiumUpcharge: 1.00, soldOut: false
-            }
-        ],
-        cuisineSubheader: "Signature House Item",
-        cuisineEmoji: "🌮",
-        ownerIG: ""
-    };
-    const c = app.config;
-
-            if (c.truckName) { document.getElementById('dynamic-truck-name').innerText = c.truckName; document.title = c.truckName + " - Order"; }
-            if (c.cuisineSubheader) document.getElementById('dynamic-subheader').innerText = c.cuisineSubheader;
-            if (c.cuisineEmoji) document.getElementById('dynamic-emoji').innerText = c.cuisineEmoji;
-            if (c.ownerIG && c.ownerIG !== "") {
-                document.getElementById('ig-container').style.display = 'block';
-                document.getElementById('dynamic-ig-text').innerText = c.ownerIG;
-                document.getElementById('dynamic-ig-link').href = `https://instagram.com/${c.ownerIG}`;
-            }
-
-            if (c.menu && c.menu.length > 0) {
-                app.menu = c.menu.map((item, index) => {
-                    item.id = index + 1;
-                    item.category = "⭐ " + (c.truckName || "Signature") + " Menu";
-                    if(item.salePrice && parseFloat(item.salePrice) > 0) item.salePrice = parseFloat(item.salePrice);
-                    return item;
-                });
-                app.firstItemId = app.menu[0].id;
-            } else {
-                app.menu = presets.minimal.items.map((item, index) => {
-                    item.id = index + 1;
-                    item.category = "⭐ Signature Menu";
-                    return item;
-                });
-                app.firstItemId = app.menu[0].id;
-            }
-
-            // Status & Location Sync
-            const loc = localStorage.getItem('foodtruck_active_location') || "Downtown Main Street (Live View)";
-            document.getElementById('activeLocationDisplay').innerText = loc;
-
-            const storeStatus = localStorage.getItem('foodtruck_store_status') || 'open';
-            const startBtn = document.getElementById('btn-start-order');
-            const statusText = document.getElementById('storeStatusText');
-            const statusBadge = document.getElementById('storeStatusBadge');
-            
-            if(storeStatus === 'closed') {
-                startBtn.disabled = true; startBtn.innerText = "Currently Closed";
-                startBtn.classList.replace('bg-zinc-100', 'bg-zinc-800'); startBtn.classList.remove('theme-bg', 'theme-shadow');
-                statusText.innerText = "Closed Right Now";
-                statusBadge.classList.replace('bg-emerald-500/10', 'bg-rose-500/10'); statusBadge.classList.replace('text-emerald-400', 'text-rose-400'); statusBadge.classList.replace('border-emerald-500/30', 'border-rose-500/30');
-                statusText.previousElementSibling.classList.replace('bg-emerald-500', 'bg-rose-500'); 
-            }
-
-            // Rush Mode Setup
-            let rushModeStr = localStorage.getItem('foodtruck_rush_mode');
-            let rushMode = 0;
-            if (!rushModeStr) {
-                rushMode = 15;
-                localStorage.setItem('foodtruck_rush_mode', '15');
-            } else {
-                rushMode = parseInt(rushModeStr) || 0;
-            }
-
-            const rushContainer = document.getElementById('rushStatusContainer');
-            if(rushMode === 15 && storeStatus !== 'closed') {
-                rushContainer.innerHTML = `<div class="bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-2 text-xs mb-3 text-amber-500 flex items-center justify-center font-bold shadow-lg shadow-amber-500/5">⚠️ Busy: +15 min wait times</div>`;
-            } else if(rushMode === 30 && storeStatus !== 'closed') {
-                rushContainer.innerHTML = `<div class="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-2 text-xs mb-3 text-red-500 flex items-center justify-center font-bold shadow-lg shadow-red-500/5">🚨 Very Busy: +30 min wait times</div>`;
-            } else { rushContainer.innerHTML = ''; }
-
-            // Sale Sync
-            const saleContainer = document.getElementById('saleBadgeContainer');
-            const hasSale = app.menu.some(m => m.salePrice && m.salePrice > 0);
-            if (hasSale && storeStatus !== 'closed') {
-                saleContainer.innerHTML = `<div class="bg-red-600/10 border border-red-600/50 rounded-xl px-4 py-2 text-xs mb-3 text-red-500 flex items-center justify-center font-bold shadow-lg shadow-red-500/10 animate-pulse">🏷️ Sale</div>`;
-            }
-
-            // CSS Override
-            if (c.themeClass) document.body.classList.add(c.themeClass);
-            if (c.themeColor || c.themeClass) {
-                const brandColor = c.themeColor || "#27272a"; 
-                let extraCSS = `.theme-bg { background-color: ${brandColor} !important; color: #fff !important; } .theme-bg-dark { background-color: ${brandColor} !important; filter: brightness(0.8) !important; color: #fff !important; } .theme-text { color: ${brandColor} !important; } .theme-border { border-color: ${brandColor} !important; } .theme-shadow { box-shadow: 0 4px 15px ${brandColor}40 !important; }`;
-                if (c.themeClass === 'theme-cleanslate') extraCSS += `.theme-bg, .theme-bg-dark { background-color: #111 !important; color: #fff !important; } .theme-text { color: #111 !important; } .theme-border { border-color: #333 !important; }`;
-                else if (c.themeClass === 'theme-obsidian') extraCSS += `.theme-bg, .theme-bg-dark { background-color: #fff !important; color: #000 !important; } .theme-text { color: #ddd !important; } .theme-border { border-color: #ddd !important; }`;
-                const style = document.createElement('style'); style.innerHTML = extraCSS; document.head.appendChild(style);
-                document.getElementById('wtTooltip').style.borderColor = c.themeClass === 'theme-cleanslate' ? '#000' : brandColor;
-            }
-            return true;
-        }
-
-        // FULL 11-STEP CUSTOMER WALKTHROUGH ENGINE
-        const walkthroughSteps = [
-            { trigger: () => { const name = app.config?.ownerName || "Partner"; wtShow(`Welcome, ${name}!`, "Your digital storefront is live. Let's place a test order to see the automation.", null, true, 'auto', false, "Next"); } },
-            { trigger: () => { wtShow("Brand Identity", "Your logo, vendor name, subheader, and social links are front-and-center to drive customer engagement.", "brand-group", true, 'extreme-bottom', false, "Next"); } },
-            { trigger: () => { wtShow("Real-Time Sync", "Your active location, open status, and rush-hour wait times update instantly from your kitchen display.", "status-group", true, 'bottom', false, "Next"); } },
-            { trigger: () => { wtShow("The Front Door", "Click the Start Order button to enter your menu.", "btn-start-order", false, 'extreme-bottom'); } },
-            { trigger: () => { 
-                wtShow("Live Menu Control", "Notice the 'Sale' tag and the single streamlined item? You control all of this instantly from the backend.", null, true, 'top', true, "Next"); 
-            }},
-            { trigger: () => {
-                const firstAddBtn = document.querySelector('.btn-add-item:not([disabled])');
-                if(firstAddBtn) { firstAddBtn.id = 'wt-target-add-btn'; wtShow("Smart Menu Structure", "Notice prep times. The system uses these to calculate live wait times. Click 'Add'.", "wt-target-add-btn", false, 'auto', true); } 
-                else { wtNextStep(); }
-            }},
-            { trigger: () => {
-                const meatSelect = document.getElementById('itemMeatSelect');
-                if(meatSelect && meatSelect.options.length > 1) meatSelect.selectedIndex = 1; 
-                wtShow("Upcharges & Logic", "If an item has modifications, the system automatically adjusts the price. Confirm and add this item.", "btn-confirm-add", false, 'top');
-            }},
-            { trigger: () => { wtShow("Dynamic Cart", "The cart icon now tracks your total. Let's check out.", "btn-view-cart", false, 'auto', true); } },
-            { trigger: () => {
-                document.getElementById('customerName').value = app.config?.ownerName || "Test Customer";
-                wtShow("Wait Time Calculation", "Look at the top. The system calculated an exact wait estimate based on prep times. Click Place Order.", "btn-place-order", false, 'extreme-bottom');
-            }},
-            { trigger: () => { wtShow("Ticket Generation", "Success! The system captured your customer's preorder instantly. View the customer tracker.", "btn-view-tracker", false, 'top'); } },
-            { trigger: () => {
-                document.getElementById('btn-route-owner').classList.remove('hidden');
-                wtShow("Backend Handoff", "The customer waits here. Now, let's jump to your Kitchen Display to fulfill this order.", "btn-route-owner", false, 'center', true);
-            }}
-        ];
-
-        function wtShow(title, text, targetId, showNextBtn = false, positionHint = 'auto', hideOverlay = false, customBtnText = "Got it") {
-            app.wtActive = true;
-            document.getElementById('wtOverlay').style.display = hideOverlay ? 'none' : 'block';
-            
-            const tooltip = document.getElementById('wtTooltip');
-            document.getElementById('wtTitle').innerText = title;
-            document.getElementById('wtText').innerText = text;
-            
-            const nextBtn = document.getElementById('wtNextBtn');
-            nextBtn.style.display = showNextBtn ? 'block' : 'none';
-            nextBtn.innerText = customBtnText;
-            nextBtn.onclick = () => { wtNextStep(); };
-            
-            document.querySelectorAll('.wt-spotlight').forEach(el => el.classList.remove('wt-spotlight', 'wt-spotlight-pulse'));
-            document.querySelectorAll('.wt-parent-override').forEach(el => el.classList.remove('wt-parent-override'));
-
-            if (targetId) {
-                const target = document.getElementById(targetId);
-                if (target) {
-                    target.classList.add('wt-spotlight', 'wt-spotlight-pulse');
-                    let current = target.parentElement;
-                    while(current && current.tagName !== 'BODY') {
-                        const style = window.getComputedStyle(current);
-                        if (style.zIndex !== 'auto' && style.zIndex !== '') current.classList.add('wt-parent-override');
-                        current = current.parentElement;
-                    }
-
-                    tooltip.style.display = 'flex';
-                    if (positionHint === 'top') { tooltip.style.bottom = 'auto'; tooltip.style.top = '5%'; tooltip.style.transform = 'translateX(-50%)'; } 
-                    else if (positionHint === 'bottom') { tooltip.style.top = 'auto'; tooltip.style.bottom = '5%'; tooltip.style.transform = 'translateX(-50%)'; } 
-                    else if (positionHint === 'extreme-bottom') { tooltip.style.top = 'auto'; tooltip.style.bottom = '2%'; tooltip.style.transform = 'translateX(-50%)'; } 
-                    else if (positionHint === 'center') { tooltip.style.top = '50%'; tooltip.style.bottom = 'auto'; tooltip.style.transform = 'translate(-50%, -50%)'; }
-                    else {
-                        const rect = target.getBoundingClientRect();
-                        if (rect.top < window.innerHeight / 2) { tooltip.style.top = 'auto'; tooltip.style.bottom = '10%'; tooltip.style.transform = 'translateX(-50%)';} 
-                        else { tooltip.style.bottom = 'auto'; tooltip.style.top = '10%'; tooltip.style.transform = 'translateX(-50%)';}
-                    }
-                }
-            } else {
-                tooltip.style.display = 'flex'; 
-                if (positionHint === 'top') { tooltip.style.bottom = 'auto'; tooltip.style.top = '15%'; tooltip.style.transform = 'translateX(-50%)'; }
-                else { tooltip.style.bottom = 'auto'; tooltip.style.top = '40%'; tooltip.style.transform = 'translateX(-50%)'; }
-            }
-        }
-
-        function wtNextStep() {
-            if (!app.wtActive) return;
-            app.wtStep++; document.getElementById('wtTooltip').style.display = 'none';
-            if (app.wtStep < walkthroughSteps.length) setTimeout(() => { walkthroughSteps[app.wtStep].trigger(); }, 300);
-            else endWalkthrough();
-        }
-
-        function endWalkthrough() {
-            app.wtActive = false; document.getElementById('wtOverlay').style.display = 'none'; document.getElementById('wtTooltip').style.display = 'none';
-            document.querySelectorAll('.wt-spotlight').forEach(el => el.classList.remove('wt-spotlight', 'wt-spotlight-pulse'));
-            document.querySelectorAll('.wt-parent-override').forEach(el => el.classList.remove('wt-parent-override'));
-        }
-
-function startWalkthrough() {
-    app.cart = []; updateCartBadges(); app.wtStep = 0;
-if (!localStorage.getItem('hasSeenTour')) {
-    localStorage.setItem('hasSeenTour', 'true');
-    setTimeout(() => { walkthroughSteps[0].trigger(); }, 500);
-}
-
-}
-
-        function switchView(view) {
-            if(app.wtActive && view !== 'menu' && view !== 'tracker') return; 
-            ['landingView', 'menuView', 'trackerView'].forEach(v => {
-                const el = document.getElementById(v); if (el) el.style.display = 'none';
+        var $ = function (id) { return document.getElementById(id); };
+        var esc = function (s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
             });
-            if (view === 'landing') document.getElementById('landingView').style.display = 'flex';
-            if (view === 'menu') { document.getElementById('menuView').style.display = 'block'; renderMenu(); if(app.wtActive && app.wtStep === 3) wtNextStep(); }
-            if (view === 'tracker') { document.getElementById('trackerView').style.display = 'block'; renderTracker(); }
+        };
+        var money = function (n) { return '$' + (Number(n) || 0).toFixed(2); };
+
+        var app = {
+            vendor: null,
+            menu: [],
+            cart: [],
+            state: { status: 'open', rush: 0, location: '', paused: false },
+            hours: null, timezone: '',
+            tracked: [],       // [{token, tag, ticket, name, summary, total, status}]
+            view: 'landing',
+            modalItem: null,
+            modalQty: 1,
+            placing: false,
+            hoursOpen: false,
+            payNow: true
+        };
+
+        /* ---------- storage (never let a blocked/full storage break ordering) ---------- */
+        function storeKey() { return 'ft_orders_' + (app.vendor ? app.vendor.slug : 'x'); }
+        function loadTracked() {
+            try { app.tracked = JSON.parse(localStorage.getItem(storeKey()) || '[]') || []; } catch (e) { app.tracked = []; }
+            app.tracked = app.tracked.slice(0, 20);
+        }
+        function saveTracked() {
+            try { localStorage.setItem(storeKey(), JSON.stringify(app.tracked.slice(0, 20))); } catch (e) {}
+        }
+
+        /* ---------- views ---------- */
+        function show(view) {
+            app.view = view;
+            ['landing', 'menu', 'tracker'].forEach(function (v) {
+                var el = $(v + 'View');
+                if (el) el.style.display = (v === view) ? (v === 'landing' ? 'flex' : 'block') : 'none';
+            });
+            if (view === 'menu') renderMenu();
+            if (view === 'tracker') { renderTracker(); refreshTracked(); }
+            window.scrollTo(0, 0);
+        }
+
+        function showError(msg) {
+            ['landing', 'menu', 'tracker'].forEach(function (v) { $(v + 'View').style.display = 'none'; });
+            if (msg) $('errorText').textContent = msg;
+            $('errorView').style.display = 'flex';
+        }
+
+        /* ---------- status / rush / sale / location ---------- */
+        function isClosed() { return app.state.status === 'closed'; }
+        function canOrder() { return !isClosed() && !app.state.paused; }
+
+        function renderStatus() {
+            var closed = isClosed(), paused = !closed && app.state.paused;
+            var badge = $('storeStatusBadge');
+            badge.className = 'border rounded-xl px-4 py-2 text-xs mb-3 flex items-center gap-2 w-full justify-center ' +
+                (closed ? 'bg-rose-500/10 border-rose-500/30 text-rose-400' : paused ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400');
+            $('storeStatusDot').className = 'w-2 h-2 rounded-full animate-pulse ' + (closed ? 'bg-rose-500' : paused ? 'bg-amber-500' : 'bg-emerald-500');
+            $('storeStatusText').textContent = closed ? t('closed_now') : paused ? t('paused_now') : t('open_now');
+
+            var btn = $('btn-start-order');
+            btn.disabled = !canOrder();
+            btn.textContent = closed ? t('currently_closed') : paused ? t('order_at_window') : t('start_order');
+            btn.className = !canOrder()
+                ? 'w-full bg-zinc-800 text-zinc-500 font-semibold py-3.5 rounded-xl transition'
+                : 'w-full bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-3.5 rounded-xl transition shadow-lg';
+
+            var rush = $('rushStatusContainer');
+            var r = Number(app.state.rush) || 0;
+            if (canOrder() && r === 15) {
+                rush.innerHTML = '<div class="bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-2 text-xs mb-3 text-amber-500 flex items-center justify-center font-bold">' + esc(t('busy15')) + '</div>';
+            } else if (canOrder() && r === 30) {
+                rush.innerHTML = '<div class="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-2 text-xs mb-3 text-red-500 flex items-center justify-center font-bold">' + esc(t('busy30')) + '</div>';
+            } else {
+                rush.innerHTML = '';
+            }
+
+            var hasSale = app.menu.some(function (m) { return m.salePrice && m.salePrice > 0 && !m.soldOut; });
+            $('saleBadgeContainer').innerHTML = (hasSale && canOrder())
+                ? '<div class="bg-red-600/10 border border-red-600/50 rounded-xl px-4 py-2 text-xs mb-3 text-red-500 flex items-center justify-center font-bold animate-pulse">' + esc(t('sale')) + '</div>'
+                : '';
+
+            // If the truck closes or pauses while someone has the menu open, send them back instead of letting them build a doomed cart.
+            if (!canOrder() && app.view === 'menu') show('landing');
+            updateCartUI();
+        }
+
+        function renderLocation() {
+            var el = $('activeLocationDisplay');
+            var loc = app.state.location;
+            if (loc) {
+                el.textContent = loc;
+                el.href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(loc);
+            } else {
+                el.textContent = t('location_soon');
+                el.removeAttribute('href');
+            }
+        }
+
+        /* ---------- posted hours (shown in the truck's own time zone) ---------- */
+        function fmtTime(hhmm) {
+            var p = String(hhmm).split(':');
+            try { return new Date(2000, 0, 1, +p[0], +p[1]).toLocaleTimeString(lang === 'es' ? 'es-MX' : 'en-US', { hour: 'numeric', minute: '2-digit' }); }
+            catch (e) { return hhmm; }
+        }
+        function todayIndex() {
+            try {
+                var wd = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: app.timezone || undefined }).format(new Date());
+                return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(wd);
+            } catch (e) { return new Date().getDay(); }
+        }
+        function dayName(i) {
+            try { return new Intl.DateTimeFormat(lang === 'es' ? 'es-MX' : 'en-US', { weekday: 'long' }).format(new Date(2024, 0, 7 + i)); }
+            catch (e) { return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][i]; }
+        }
+        function renderHours() {
+            var box = $('hoursBox'), h = app.hours;
+            if (!h || h.length !== 7) { box.style.display = 'none'; return; }
+            box.style.display = 'block';
+            var ti = todayIndex(), today = h[ti] || h[0];
+            $('hoursToday').textContent = today.closed ? t('today_closed') : t('today', { h: fmtTime(today.open) + ' – ' + fmtTime(today.close) });
+            $('hoursWeek').innerHTML = h.map(function (d, i) {
+                var cls = i === ti ? 'text-zinc-100 font-semibold' : 'text-zinc-400';
+                return '<div class="flex justify-between ' + cls + '"><span class="capitalize">' + esc(dayName(i)) + '</span><span>' +
+                    esc(d.closed ? t('closed') : fmtTime(d.open) + ' – ' + fmtTime(d.close)) + '</span></div>';
+            }).join('');
+            $('hoursWeek').style.display = app.hoursOpen ? 'block' : 'none';
+            $('hoursChevron').textContent = app.hoursOpen ? '▴' : '▾';
+        }
+
+        /* ---------- menu ---------- */
+        function unitPrice(item, meatIdx) {
+            var base = (item.salePrice && item.salePrice > 0) ? item.salePrice : item.price;
+            return base + (meatIdx > 0 ? (item.premiumSurcharge || 0) : 0);
+        }
+        function meatList(item) {
+            return item.meats ? item.meats.split(',').map(function (m) { return m.trim(); }).filter(Boolean) : [];
+        }
+        function groups() {
+            var order = [], map = {};
+            app.menu.forEach(function (it) {
+                var c = (it.category || '').trim();
+                if (!map[c]) { map[c] = []; order.push(c); }
+                map[c].push(it);
+            });
+            return order.map(function (c) { return { name: c, items: map[c] }; });
+        }
+        function catId(i) { return 'cat-' + i; }
+
+        function itemCard(item) {
+            var sale = item.salePrice && item.salePrice > 0;
+            var priceHTML = sale
+                ? '<span class="text-sm font-semibold line-through text-zinc-500 mr-1">' + money(item.price) + '</span><span class="text-sm font-bold text-red-500">' + money(item.salePrice) + '</span>'
+                : '<span class="text-sm font-semibold">' + money(item.price) + '</span>';
+            var btn = item.soldOut
+                ? '<button disabled class="text-zinc-500 bg-zinc-800 px-3 py-1.5 rounded-lg text-xs font-bold h-8 min-w-[60px] shrink-0">' + esc(t('sold_out')) + '</button>'
+                : '<button data-action="add-item" data-id="' + item.id + '" class="text-zinc-950 px-3 py-1.5 rounded-lg text-xs font-semibold h-8 min-w-[60px] shrink-0 shadow bg-zinc-100 hover:bg-white">' + esc(t('add')) + '</button>';
+            var photo = item.photo
+                ? '<img src="' + esc(item.photo) + '" alt="" loading="lazy" class="w-16 h-16 rounded-lg object-cover shrink-0 bg-zinc-800"' + (item.soldOut ? '' : ' data-action="add-item" data-id="' + item.id + '"') + '>'
+                : '';
+            return '<div class="bg-zinc-900 border border-zinc-800 p-3 rounded-xl flex items-center gap-3' + (item.soldOut ? ' opacity-50 grayscale' : '') + '">' + photo +
+                '<div class="min-w-0 flex-1"><h4 class="font-bold text-sm">' + esc(item.name) + '</h4>' +
+                (item.desc ? '<p class="text-xs text-zinc-400 mt-0.5">' + esc(item.desc) + '</p>' : '') +
+                '<div class="flex items-center gap-3 mt-1.5">' + priceHTML + '<span class="text-[10px] text-zinc-500">' + esc(t('mins', { n: item.prep || 2 })) + '</span></div></div>' + btn + '</div>';
         }
 
         function renderMenu() {
-            const container = document.getElementById('menuContainer');
-            const highlights = document.getElementById('popularHighlightsContainer');
-            if (!container || app.menu.length === 0) return;
-
-            if (highlights) {
-                highlights.innerHTML = app.menu.slice(0,1).map((item) => `
-                    <div onclick="openItemModal(${item.id})" class="bg-zinc-950/60 p-2.5 rounded-lg border border-zinc-800 cursor-pointer transition theme-border">
-                        <span class="text-[9px] text-zinc-400 block font-semibold">FEATURED ITEM</span>
-                        <span class="font-bold text-zinc-200 text-xs truncate block theme-text">${item.name}</span>
-                    </div>
-                `).join('');
+            var container = $('menuContainer');
+            var highlights = $('popularHighlightsContainer');
+            var chips = $('categoryChips');
+            if (!app.menu.length) {
+                container.innerHTML = '<div class="text-center text-zinc-500 text-sm py-10">' + esc(t('menu_empty')) + '</div>';
+                highlights.innerHTML = ''; chips.innerHTML = ''; $('highlightsBox').style.display = 'none';
+                return;
+            }
+            var first = app.menu.filter(function (m) { return !m.soldOut; })[0];
+            $('highlightsBox').style.display = first ? 'block' : 'none';
+            if (first) {
+                highlights.innerHTML =
+                    '<div data-action="add-item" data-id="' + first.id + '" class="bg-zinc-950/60 p-2.5 rounded-lg border border-zinc-800 cursor-pointer transition flex items-center gap-3 text-left">' +
+                    (first.photo ? '<img src="' + esc(first.photo) + '" alt="" class="w-10 h-10 rounded-md object-cover">' : '') +
+                    '<div class="min-w-0"><span class="text-[9px] text-zinc-400 block font-semibold">' + esc(t('featured')) + '</span>' +
+                    '<span class="font-bold text-zinc-200 text-xs truncate block">' + esc(first.name) + '</span></div></div>';
             }
 
-            const categories = [...new Set(app.menu.map(i => i.category))];
-            container.innerHTML = categories.map(cat => `
-                <div>
-                    <h3 class="font-bold mb-3 text-sm theme-text">${cat}</h3>
-                    <div class="space-y-3">
-                        ${app.menu.filter(i => i.category === cat).map(item => {
-                            let priceHTML = `<span class="text-sm font-semibold menu-item-price theme-text">$${item.price.toFixed(2)}</span>`;
-                            if(item.salePrice && item.salePrice > 0) {
-                                priceHTML = `<span class="text-sm font-semibold line-through text-zinc-500 mr-1">$${item.price.toFixed(2)}</span><span class="text-sm font-bold text-red-500">$${item.salePrice.toFixed(2)}</span>`;
-                            }
-                            
-                            const isSoldOut = item.soldOut;
-                            const opacityClass = isSoldOut ? 'opacity-50 grayscale pointer-events-none' : '';
-                            const btnHtml = isSoldOut 
-                                ? `<button disabled class="text-zinc-500 bg-zinc-800 px-3 py-1.5 rounded-lg text-xs font-bold h-8 min-w-[55px]">Sold Out</button>`
-                                : `<button onclick="openItemModal(${item.id})" class="btn-add-item text-zinc-950 px-3 py-1.5 rounded-lg text-xs font-semibold h-8 min-w-[55px] shadow bg-zinc-100 hover:bg-white theme-bg">Add +</button>`;
-                            
-                            return `
-                            <div class="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex justify-between items-center ${opacityClass}">
-                                <div>
-                                    <h4 class="font-bold text-sm">${item.name}</h4>
-                                    <p class="text-xs text-zinc-400 mt-0.5">${item.desc}</p>
-                                    <div class="flex items-center gap-3 mt-2">
-                                        ${priceHTML}
-                                        <span class="text-[10px] text-zinc-500">(~${item.prep} mins)</span>
-                                    </div>
-                                </div>
-                                ${btnHtml}
-                            </div>
-                        `}).join('')}
-                    </div>
-                </div>
-            `).join('');
-            updateCartBadges();
+            var gs = groups();
+            var named = gs.filter(function (g) { return g.name; }).length > 0;
+            chips.innerHTML = named && gs.length > 1 ? gs.map(function (g, i) {
+                return '<button data-action="jump-cat" data-target="' + catId(i) + '" class="shrink-0 text-[11px] font-semibold px-3 py-1.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-300">' + esc(g.name || t('menu')) + '</button>';
+            }).join('') : '';
+            chips.style.display = chips.innerHTML ? 'flex' : 'none';
+
+            container.innerHTML = gs.map(function (g, i) {
+                var heading = named ? (g.name || t('menu')) : ('⭐ ' + (app.vendor.businessName || '') + ' — ' + t('menu'));
+                return '<section id="' + catId(i) + '" style="scroll-margin-top:96px"><h3 class="font-bold mb-3 text-sm">' + esc(heading) + '</h3><div class="space-y-3">' +
+                    g.items.map(itemCard).join('') + '</div></section>';
+            }).join('');
         }
 
-        let currentModalItem = null;
-        let currentModalQtyVal = 1;
-
+        /* ---------- item modal ---------- */
         function openItemModal(id) {
-            if(app.wtActive && id !== app.firstItemId) return; 
-            
-            const item = app.menu.find(m => m.id === id);
-            currentModalItem = item;
-            currentModalQtyVal = 1;
-            document.getElementById('itemModalQty').innerText = currentModalQtyVal;
-            document.getElementById('itemModalTitle').innerText = `Add ${item.name}`;
+            var item = app.menu.find(function (m) { return m.id === id; });
+            if (!item || item.soldOut) return;
+            app.modalItem = item;
+            app.modalQty = 1;
+            $('itemModalQty').textContent = '1';
+            $('itemModalTitle').textContent = t('add_title', { name: item.name });
+            $('itemModalDesc').textContent = item.desc || '';
+            $('itemModalDesc').style.display = item.desc ? 'block' : 'none';
+            var ph = $('itemModalPhoto');
+            if (item.photo) { ph.src = item.photo; ph.style.display = 'block'; } else { ph.removeAttribute('src'); ph.style.display = 'none'; }
 
-            const meatSec = document.getElementById('itemModalMeatSection');
-            const drinkSec = document.getElementById('itemModalDrinkSection');
+            var meats = meatList(item);
+            $('itemModalMeatSection').style.display = meats.length ? 'block' : 'none';
+            $('itemMeatSelect').innerHTML = meats.map(function (m, i) {
+                var up = (i > 0 && item.premiumSurcharge) ? t('sel_extra', { p: money(item.premiumSurcharge) }) : '';
+                return '<option value="' + esc(m) + '">' + esc(m) + esc(up) + '</option>';
+            }).join('');
 
-            meatSec.classList.add('hidden'); drinkSec.classList.add('hidden');
+            var opts = item.options || [];
+            $('itemModalDrinkSection').style.display = opts.length ? 'block' : 'none';
+            $('itemDrinkSelect').innerHTML = opts.map(function (o) { return '<option value="' + esc(o) + '">' + esc(o) + '</option>'; }).join('');
 
-            if (item.meats) {
-                meatSec.classList.remove('hidden');
-                const meatOptions = item.meats.split(',').map(m => m.trim());
-                document.getElementById('itemMeatSelect').innerHTML = meatOptions.map((m, index) => {
-                    let isUpcharge = '';
-                    if (index > 0 && item.premiumUpcharge) isUpcharge = ` (+$${item.premiumUpcharge.toFixed(2)})`;
-                    return `<option value="${m}">${m}${isUpcharge}</option>`;
-                }).join('');
+            $('itemModal').style.display = 'flex';
+        }
+        function closeItemModal() { $('itemModal').style.display = 'none'; }
+
+        function confirmAdd() {
+            var item = app.modalItem;
+            if (!item) return;
+            var meats = meatList(item);
+            var meatIdx = meats.length ? $('itemMeatSelect').selectedIndex : 0;
+            var meat = meats.length ? meats[meatIdx] : '';
+            var option = (item.options && item.options.length) ? $('itemDrinkSelect').value : '';
+            var key = [item.id, meat, option].join('|');
+            var line = app.cart.find(function (l) { return l.key === key; });
+            if (line) line.qty = Math.min(50, line.qty + app.modalQty);
+            else app.cart.push({ key: key, id: item.id, meat: meat, option: option, qty: app.modalQty });
+            closeItemModal();
+            updateCartUI();
+        }
+
+        /* ---------- cart ---------- */
+        // Display data comes from the live menu each time, so a price/sold-out change is reflected immediately.
+        function cartLines() {
+            var lines = [];
+            app.cart.forEach(function (l) {
+                var item = app.menu.find(function (m) { return m.id === l.id; });
+                if (!item) return;
+                var meats = meatList(item);
+                var idx = l.meat ? Math.max(0, meats.indexOf(l.meat)) : 0;
+                var label = item.name + (l.meat ? ' (' + l.meat + ')' : '') + (l.option ? ' (' + l.option + ')' : '');
+                lines.push({ line: l, item: item, label: label, unit: unitPrice(item, idx), soldOut: item.soldOut });
+            });
+            return lines;
+        }
+        function cartTotals() {
+            var lines = cartLines();
+            var count = 0, total = 0, prep = 0;
+            lines.forEach(function (x) { count += x.line.qty; total += x.unit * x.line.qty; prep += (x.item.prep || 2) * x.line.qty; });
+            return { count: count, total: total, prep: prep, lines: lines };
+        }
+
+        function updateCartUI() {
+            // drop lines whose item was removed from the menu
+            app.cart = app.cart.filter(function (l) { return app.menu.some(function (m) { return m.id === l.id; }); });
+            var tt = cartTotals();
+            $('cartCountBadge').textContent = t(tt.count === 1 ? 'item' : 'items', { n: tt.count });
+            $('cartTotalBadge').textContent = money(tt.total);
+            if ($('cartModal').style.display === 'flex') renderCartModal();
+        }
+
+        function renderCartModal() {
+            var tt = cartTotals();
+            if (!tt.lines.length) { closeCartModal(); return; }
+            $('cartEstimatedWait').textContent = t('mins', { n: tt.prep + (Number(app.state.rush) || 0) });
+            renderPayChoice();
+            $('cartModalTotal').textContent = money(tt.total);
+            $('cartItemsList').innerHTML = tt.lines.map(function (x) {
+                return '<div class="flex justify-between items-center bg-zinc-950 p-3 rounded-xl border border-zinc-800 text-sm gap-2">' +
+                    '<div class="min-w-0"><div class="font-bold truncate">' + esc(x.label) + '</div>' +
+                    '<div class="text-xs font-semibold">' + money(x.unit * x.line.qty) + (x.soldOut ? ' <span class="text-rose-400">• ' + esc(t('sold_out')) + '</span>' : '') + '</div></div>' +
+                    '<div class="flex items-center gap-2 shrink-0">' +
+                    '<button data-action="cart-qty" data-key="' + esc(x.line.key) + '" data-delta="-1" aria-label="Less" class="w-7 h-7 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm font-bold">-</button>' +
+                    '<span class="text-xs font-mono w-5 text-center">' + x.line.qty + '</span>' +
+                    '<button data-action="cart-qty" data-key="' + esc(x.line.key) + '" data-delta="1" aria-label="More" class="w-7 h-7 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm font-bold">+</button>' +
+                    '<button data-action="cart-remove" data-key="' + esc(x.line.key) + '" aria-label="Remove" class="text-rose-400 hover:text-rose-300 text-xs ml-1">✕</button>' +
+                    '</div></div>';
+            }).join('');
+        }
+
+        function payMode() { return (app.vendor && app.vendor.payMode) || 'window'; }
+        function willPayNow() { var m = payMode(); return m === 'online' || (m === 'both' && app.payNow); }
+        function renderPayChoice() {
+            var m = payMode(), box = $('payChoice');
+            if (m === 'both') {
+                var opt = function (now, title, sub) {
+                    var on = app.payNow === now;
+                    return '<button data-action="pay-choice" data-now="' + (now ? 1 : 0) + '" class="w-full text-left p-3 rounded-xl border text-xs ' +
+                        (on ? 'border-emerald-500 bg-emerald-500/10' : 'border-zinc-800 bg-zinc-950') + '">' +
+                        '<div class="flex items-center gap-2"><span class="w-4 h-4 rounded-full border-2 shrink-0 ' + (on ? 'border-emerald-400 bg-emerald-400' : 'border-zinc-600') + '"></span>' +
+                        '<span class="font-bold text-zinc-100">' + esc(title) + '</span></div><div class="text-zinc-400 mt-1 pl-6">' + esc(sub) + '</div></button>';
+                };
+                box.innerHTML = opt(true, t('pay_now_title'), t('pay_now_sub')) + opt(false, t('pay_window_title'), t('pay_window_sub'));
+            } else {
+                box.innerHTML = '<div class="bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 text-xs text-zinc-300">' + esc(m === 'online' ? t('pay_online_only') : '💵 ' + t('pay_window_long')) + '</div>';
             }
-            if (item.options) {
-                drinkSec.classList.remove('hidden');
-                document.getElementById('itemDrinkSelect').innerHTML = item.options.map(o => `<option value="${o}">${o}</option>`).join('');
-            }
-
-            document.getElementById('itemModal').style.display = 'flex';
-            if(app.wtActive && app.wtStep === 5) wtNextStep(); 
-        }
-
-        function closeItemModal() {
-            if(app.wtActive) return; 
-            document.getElementById('itemModal').style.display = 'none';
-        }
-
-        function adjustModalQty(delta) {
-            currentModalQtyVal += delta;
-            if (currentModalQtyVal < 1) currentModalQtyVal = 1;
-            document.getElementById('itemModalQty').innerText = currentModalQtyVal;
-        }
-
-        function confirmAddToCart() {
-            if (!currentModalItem) return;
-            let itemName = currentModalItem.name;
-            let itemUpcharge = 0;
-
-            if (currentModalItem.meats) {
-                const meatSelect = document.getElementById('itemMeatSelect');
-                if (meatSelect.selectedIndex > 0 && currentModalItem.premiumUpcharge) itemUpcharge += currentModalItem.premiumUpcharge;
-            }
-
-            const basePrice = (currentModalItem.salePrice && currentModalItem.salePrice > 0) ? currentModalItem.salePrice : currentModalItem.price;
-            const effectivePrice = basePrice + itemUpcharge;
-            const prepMins = parseInt(currentModalItem.prep) || 3; 
-
-            app.cart.push({ name: itemName, price: effectivePrice, quantity: currentModalQtyVal, prep: prepMins });
-            document.getElementById('itemModal').style.display = 'none';
-            updateCartBadges();
-            if(app.wtActive && app.wtStep === 6) wtNextStep(); 
-        }
-
-        function updateCartBadges() {
-            const count = app.cart.reduce((sum, item) => sum + item.quantity, 0);
-            const total = app.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-            document.getElementById('cartCountBadge').innerText = `${count} items`;
-            document.getElementById('cartTotalBadge').innerText = `$${total.toFixed(2)}`;
+            $('smsBox').style.display = (app.vendor && app.vendor.smsReady) ? 'block' : 'none';
+            $('btn-place-order').textContent = willPayNow() ? t('continue_pay') : t('place_order');
         }
 
         function openCartModal() {
-            if (app.cart.length === 0 && !app.wtActive) return;
-            
-            const rushMode = parseInt(localStorage.getItem('foodtruck_rush_mode')) || 0;
-            const itemsWaitTime = app.cart.reduce((sum, item) => sum + (item.prep * item.quantity), 0);
-            const totalWaitTime = itemsWaitTime + rushMode;
-            
-            document.getElementById('cartEstimatedWait').innerText = `~${totalWaitTime} mins`;
-
-            document.getElementById('cartItemsList').innerHTML = app.cart.map((item) => `
-                <div class="flex justify-between items-center bg-zinc-950 p-3 rounded-xl border border-zinc-800 text-sm">
-                    <div>
-                        <div class="font-bold">${item.name}</div>
-                        <div class="text-xs font-semibold theme-text">$${(item.price * item.quantity).toFixed(2)}</div>
-                    </div>
-                    <span class="text-xs font-mono whitespace-nowrap">Qty: ${item.quantity}</span>
-                </div>
-            `).join('');
-            
-            document.getElementById('cartModal').style.display = 'flex';
-            if(app.wtActive && app.wtStep === 7) wtNextStep(); 
+            if (!app.cart.length) return;
+            setCartError('');
+            renderCartModal();
+            $('cartModal').style.display = 'flex';
+        }
+        function closeCartModal() { $('cartModal').style.display = 'none'; }
+        function setCartError(msg) {
+            var el = $('cartError');
+            el.textContent = msg || '';
+            el.style.display = msg ? 'block' : 'none';
         }
 
-        function closeCartModal() { 
-            if(app.wtActive) return; 
-            document.getElementById('cartModal').style.display = 'none'; 
+        /* ---------- placing an order ---------- */
+        function placeOrder() {
+            if (app.placing) return;
+            var tt = cartTotals();
+            if (!tt.lines.length) return;
+            if (tt.lines.some(function (x) { return x.soldOut; })) { setCartError(t('sold_out_in_cart')); return; }
+
+            app.placing = true;
+            var btn = $('btn-place-order');
+            btn.disabled = true; btn.textContent = t('placing');
+            setCartError('');
+
+            var name = $('customerName').value.trim();
+            var notes = $('customerNotes').value.trim();
+            var summary = tt.lines.map(function (x) { return x.line.qty + 'x ' + x.label; }).join(', ');
+            try { if (name) localStorage.setItem('ft_name', name); } catch (e) {}
+            var phone = app.vendor.smsReady ? $('customerPhone').value.trim() : '';
+            var consent = app.vendor.smsReady && $('smsConsent').checked;
+            if (phone && !consent) { setCartError(t('consent_needed')); app.placing = false; btn.disabled = false; renderPayChoice(); return; }
+            var payNow = willPayNow();
+
+            fetch('/api/orders', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    customerName: name,
+                    notes: notes,
+                    website: $('website').value,
+                    payNow: payNow,
+                    customerPhone: phone || undefined,
+                    smsConsent: consent || undefined,
+                    items: tt.lines.map(function (x) { return { id: x.line.id, qty: x.line.qty, meat: x.line.meat || undefined, option: x.line.option || undefined }; })
+                })
+            }).then(function (r) {
+                return r.json().catch(function () { return {}; }).then(function (body) { return { ok: r.ok, status: r.status, body: body }; });
+            }).then(function (res) {
+                if (!res.ok) {
+                    setCartError(res.body.error || t('order_failed'));
+                    if (res.status === 403 || res.status === 409 || res.status === 400) reloadVendor();
+                    return;
+                }
+                app.tracked.unshift({ token: res.body.token, tag: res.body.tag, ticket: res.body.ticket, name: name || 'Guest', summary: summary, total: res.body.total, status: res.body.status, paid: false });
+                saveTracked();
+                if (res.body.checkoutUrl) {
+                    // Keep the cart in case they tap "back" on the payment page, then go to Stripe.
+                    try { sessionStorage.setItem('ft_cart_' + app.vendor.slug, JSON.stringify({ cart: app.cart, notes: notes })); } catch (e) {}
+                    btn.textContent = t('redirecting');
+                    location.href = res.body.checkoutUrl;
+                    return 'redirect';
+                }
+                app.cart = [];
+                $('customerNotes').value = '';
+                closeCartModal();
+                updateCartUI();
+                updateTrackButtons();
+                $('successTicketNum').textContent = '#' + res.body.ticket;
+                $('successWait').textContent = t('est_wait', { n: res.body.estimatedMinutes });
+                $('successPay').textContent = '💵 ' + t('pay_window_short').replace(/^💵\s*/, '');
+                $('successModal').style.display = 'flex';
+            }).catch(function () {
+                setCartError(t('connection'));
+                return null;
+            }).then(function (r) {
+                if (r === 'redirect') return; // leaving the page
+                app.placing = false;
+                btn.disabled = false; renderPayChoice();
+            });
         }
 
-        function submitOrder() {
-            let nextId = parseInt(localStorage.getItem('foodtruck_next_order_id')) || 101;
-            const ticketId = nextId.toString();
-            localStorage.setItem('foodtruck_next_order_id', nextId + 1);
-
-            let nameInput = document.getElementById('customerName').value.trim() || "Guest";
-            let notesInput = document.getElementById('customerNotes').value.trim();
-            let notesString = notesInput ? `\nNote: ${notesInput}` : '';
-            
-            const summary = app.cart.map(i => `${i.quantity}x ${i.name}`).join(', ') + notesString;
-            const total = app.cart.reduce((sum, i) => sum + (i.price * i.quantity), 0);
-            
-            const newOrder = { id: ticketId, name: nameInput, items: summary, status: "Preparing", total, timestamp: Date.now() };
-
-            let sharedOrders = JSON.parse(localStorage.getItem('foodtruck_orders')) || [];
-            sharedOrders.unshift(newOrder);
-            localStorage.setItem('foodtruck_orders', JSON.stringify(sharedOrders));
-            
-            app.orders.unshift(newOrder);
-            app.cart = []; 
-            document.getElementById('cartModal').style.display = 'none'; 
-            document.getElementById('customerNotes').value = ''; 
-            updateCartBadges(); 
-
-            document.getElementById('successTicketNum').innerText = `#${newOrder.id}`;
-            document.getElementById('successModal').style.display = 'flex';
-            
-            document.getElementById('btn-route-owner').classList.remove('hidden');
-            localStorage.setItem('wt_incoming_demo', 'true');
-            if(app.wtActive && app.wtStep === 8) wtNextStep(); 
-        }
-
-        function closeSuccessModal() {
-            document.getElementById('successModal').style.display = 'none';
-            switchView('tracker');
-            if(app.wtActive && app.wtStep === 9) wtNextStep(); 
-        }
+        /* ---------- tracker ---------- */
+        var STATUS_STYLE = {
+            Preparing: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
+            Ready: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+            Fulfilled: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+            Canceled: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+            Pending: 'bg-zinc-500/10 text-zinc-300 border-zinc-500/30'
+        };
 
         function renderTracker() {
-            const container = document.getElementById('activeOrdersList');
-            container.innerHTML = app.orders.map(o => `
-                <div class="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex justify-between items-center">
-                    <div>
-                        <span class="text-xs font-mono font-bold theme-text">Ticket #${o.id} • ${o.name}</span>
-                        <div class="text-[11px] text-zinc-400 mt-0.5">Kitchen received order.</div>
-                        <span class="inline-block mt-2 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20">${o.status}</span>
-                    </div>
-                </div>
-            `).join('');
-            
-            if(app.orders.length > 0) document.getElementById('btn-route-owner').classList.remove('hidden');
+            var c = $('activeOrdersList');
+            if (!app.tracked.length) {
+                c.innerHTML = '<div class="text-center text-zinc-500 py-6 text-xs bg-zinc-900 border border-zinc-800 rounded-xl">' + esc(t('no_orders')) + '</div>';
+                return;
+            }
+            c.innerHTML = app.tracked.map(function (o) {
+                var st = STATUS_STYLE[o.status] ? o.status : 'Preparing';
+                var ready = st === 'Ready';
+                return '<div class="bg-zinc-900 border ' + (ready ? 'border-blue-500/60' : 'border-zinc-800') + ' p-4 rounded-xl flex justify-between items-center gap-3"><div class="min-w-0">' +
+                    '<span class="text-xs font-mono font-bold">' + esc(t('ticket', { n: o.ticket })) + ' • ' + esc(o.name) + '</span>' +
+                    '<div class="text-[11px] ' + (ready ? 'text-blue-300 font-semibold' : 'text-zinc-400') + ' mt-0.5">' + esc(t('msg_' + st)) + '</div>' +
+                    '<div class="text-[11px] text-zinc-500 mt-0.5 truncate">' + esc(o.summary) + '</div>' +
+                    '<span class="inline-block mt-2 px-2.5 py-1 rounded-full text-xs font-medium border ' + STATUS_STYLE[st] + '">' + esc(t('st_' + st)) + '</span>' +
+                    (o.paid ? ' <span class="inline-block mt-2 ml-1 px-2 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">' + esc(t('paid_badge')) + '</span>' : '') +
+                    '</div><span class="text-xs font-mono text-zinc-400">' + money(o.total) + '</span></div>';
+            }).join('');
         }
 
-window.onload = () => { applyDemoConfig(); startWalkthrough(); };
-
-    // --- REALTIME SSE LISTENER ---
-    (function initRealtimeSync() {
-      const evtSource = new EventSource('/api/live-stream?v=1');
-
-      evtSource.onmessage = function(e) {
-        try {
-          const { type, payload } = JSON.parse(e.data);
-          
-          if (type === 'STORE_STATUS') {
-            const isClosed = payload.status === 'closed';
-            const startBtn = document.getElementById('btn-start-order');
-            const statusText = document.getElementById('storeStatusText');
-            if (startBtn) startBtn.disabled = isClosed;
-            if (statusText) statusText.innerText = isClosed ? "Closed Right Now" : "Open Now";
-          }
-
-          if (type === 'LOCATION_UPDATE') {
-            const locEl = document.getElementById('activeLocationDisplay');
-            if (locEl && payload.location) locEl.innerText = payload.location;
-          }
-
-          if (type === 'RUSH_MODE') {
-            const extra = parseInt(payload.minutes) || 0;
-            const waitEl = document.getElementById('cartEstimatedWait');
-            if (waitEl) waitEl.innerText = `~${10 + extra} mins`;
-          }
-
-          if (type === 'SOLD_OUT') {
-            const itemEl = document.querySelector(`[data-item-id="${payload.itemId}"]`);
-            if (itemEl) itemEl.classList.toggle('opacity-50', payload.soldOut);
-          }
-        } catch(err) {
-          console.error("Live sync parse error:", err);
+        function updateTrackButtons() {
+            var has = app.tracked.length > 0;
+            $('btn-track-landing').style.display = has ? 'block' : 'none';
+            $('btn-track-menu').style.visibility = has ? 'visible' : 'hidden';
         }
-      };
 
-      evtSource.onerror = function() {
-        console.warn("Live stream disconnected, retrying automatically...");
-      };
+        // match = function(order) -> bool
+        function applyStatus(match, status) {
+            var changed = false, nowReady = false;
+            app.tracked.forEach(function (o) {
+                if (match(o) && o.status !== status) { o.status = status; changed = true; if (status === 'Ready') nowReady = true; }
+            });
+            if (!changed) return;
+            saveTracked();
+            if (app.view === 'tracker') renderTracker();
+            if (nowReady) { try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) {} }
+        }
+
+        function refreshTracked() {
+            var open = app.tracked.filter(function (o) { return o.status === 'Preparing' || o.status === 'Ready' || o.status === 'Pending'; });
+            if (!open.length) return;
+            fetch('/api/orders/track?tokens=' + encodeURIComponent(open.map(function (o) { return o.token; }).join(',')))
+                .then(function (r) { return r.ok ? r.json() : { orders: [] }; })
+                .then(function (d) {
+                    (d.orders || []).forEach(function (s) {
+                        app.tracked.forEach(function (o) { if (o.token === s.token && s.payment === 'paid' && !o.paid) { o.paid = true; saveTracked(); } });
+                        applyStatus(function (o) { return o.token === s.token; }, s.status);
+                    });
+                    if (app.view === 'tracker') renderTracker();
+                })
+                .catch(function () {});
+        }
+
+        /* ---------- loading + live sync ---------- */
+        function applyVendor(d) {
+            app.vendor = d;
+            app.menu = d.menu || [];
+            app.state = d.state || app.state;
+            app.hours = d.hours || null;
+            app.timezone = d.timezone || '';
+            document.title = d.businessName;
+            $('dynamic-truck-name').textContent = d.businessName;
+            TruckLogo.set($('dynamic-emoji'), d.emoji, '#18181b');
+            if (d.ownerIG) {
+                $('ig-container').style.display = 'block';
+                $('dynamic-ig-text').textContent = d.ownerIG;
+                $('dynamic-ig-link').href = 'https://instagram.com/' + encodeURIComponent(d.ownerIG);
+            } else {
+                $('ig-container').style.display = 'none';
+            }
+            if (d.showBranding) {
+                $('brandingLine').style.display = 'block';
+                $('brandingLink').textContent = PLATFORM.name;
+                $('brandingLink').href = PLATFORM.url;
+            } else {
+                $('brandingLine').style.display = 'none';
+            }
+            renderAll();
+        }
+        function renderAll() {
+            renderStatus();
+            renderLocation();
+            renderHours();
+            if (app.view === 'menu') renderMenu();
+            if (app.view === 'tracker') renderTracker();
+            updateCartUI();
+        }
+
+        function reloadVendor() {
+            return fetch('/api/vendor-data', { cache: 'no-store' })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (d) { if (d && !d.isDemo) applyVendor(d); })
+                .catch(function () {});
+        }
+
+        function startLive() {
+            if (!window.EventSource) return;
+            var es = new EventSource('/api/live-stream');
+            var wasDown = false;
+            es.onopen = function () { if (wasDown) { wasDown = false; reloadVendor(); refreshTracked(); } };
+            es.onerror = function () { wasDown = true; /* the browser reconnects by itself */ };
+            es.onmessage = function (e) {
+                var msg;
+                try { msg = JSON.parse(e.data); } catch (err) { return; }
+                var p = msg.payload || {};
+                switch (msg.type) {
+                    case 'STATE': app.state = { status: p.status, rush: p.rush, location: p.location || '', paused: !!p.paused }; renderStatus(); renderLocation(); break;
+                    case 'STORE_STATUS': app.state.status = p.status; renderStatus(); break;
+                    case 'PAUSED': app.state.paused = !!p.paused; renderStatus(); break;
+                    case 'RUSH_MODE': app.state.rush = Number(p.minutes) || 0; renderStatus(); break;
+                    case 'LOCATION_UPDATE': app.state.location = p.location || ''; renderLocation(); break;
+                    case 'PAY_MODE': if (app.vendor) { app.vendor.payMode = p.payMode; if ($('cartModal').style.display === 'flex') renderPayChoice(); } break;
+                    case 'HOURS_UPDATE': app.hours = p.hours || null; app.timezone = p.timezone || ''; renderHours(); break;
+                    case 'SOLD_OUT':
+                        app.menu.forEach(function (m) { if (m.id === p.itemId) m.soldOut = !!p.soldOut; });
+                        if (app.view === 'menu') renderMenu();
+                        renderStatus();
+                        break;
+                    case 'MENU_UPDATE':
+                        app.menu = p.menu || [];
+                        if (app.view === 'menu') renderMenu();
+                        renderStatus();
+                        break;
+                    // The server sends a tag, never the secret token. Older saved orders without a tag catch up via refreshTracked().
+                    case 'ORDER_STATUS': if (p.tag) applyStatus(function (o) { return o.tag === p.tag; }, p.status); break;
+                }
+            };
+        }
+
+        /* ---------- coming back from Stripe Checkout ---------- */
+        function postJSON(url, body) {
+            return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+                .then(function (r) { return r.json().catch(function () { return {}; }); });
+        }
+        function handleStripeReturn() {
+            var q = new URLSearchParams(location.search), paid = q.get('paid'), canceled = q.get('canceled');
+            if (!paid && !canceled) return;
+            history.replaceState(null, '', location.pathname);
+            var token = paid || canceled;
+            if (paid) {
+                show('tracker');
+                var tries = 0;
+                (function check() {
+                    postJSON('/api/payments/confirm', { token: token }).then(function (d) {
+                        app.tracked.forEach(function (o) { if (o.token === token) { if (d.payment === 'paid') o.paid = true; if (d.status) o.status = d.status; } });
+                        saveTracked(); renderTracker();
+                        try { sessionStorage.removeItem('ft_cart_' + app.vendor.slug); } catch (e) {}
+                        if (d.status === 'Pending' && ++tries < 6) setTimeout(check, 2000);
+                    }).catch(function () {});
+                })();
+            } else {
+                postJSON('/api/payments/cancel', { token: token }).then(function (d) {
+                    if (d.status === 'Canceled') app.tracked = app.tracked.filter(function (o) { return o.token !== token; });
+                    else app.tracked.forEach(function (o) { if (o.token === token) { o.status = d.status; o.paid = d.payment === 'paid'; } });
+                    saveTracked(); updateTrackButtons();
+                    if (d.status !== 'Canceled') { show('tracker'); return; }
+                    var saved = null;
+                    try { saved = JSON.parse(sessionStorage.getItem('ft_cart_' + app.vendor.slug) || 'null'); } catch (e) {}
+                    if (saved && saved.cart && saved.cart.length) {
+                        app.cart = saved.cart; $('customerNotes').value = saved.notes || '';
+                        updateCartUI(); show('menu'); openCartModal(); setCartError(t('pay_canceled'));
+                    }
+                }).catch(function () {});
+            }
+        }
+
+        /* ---------- events (no inline handlers) ---------- */
+        document.addEventListener('click', function (e) {
+            var el = e.target.closest('[data-action]');
+            if (!el) return;
+            var a = el.getAttribute('data-action');
+            var key = el.getAttribute('data-key');
+            var line;
+            switch (a) {
+                case 'open-menu': if (canOrder()) show('menu'); else show('landing'); break;
+                case 'open-landing': show('landing'); break;
+                case 'open-tracker': show('tracker'); break;
+                case 'open-cart': openCartModal(); break;
+                case 'close-cart': closeCartModal(); break;
+                case 'add-item': openItemModal(parseInt(el.getAttribute('data-id'), 10)); break;
+                case 'close-item': closeItemModal(); break;
+                case 'modal-qty': app.modalQty = Math.max(1, Math.min(50, app.modalQty + parseInt(el.getAttribute('data-delta'), 10))); $('itemModalQty').textContent = String(app.modalQty); break;
+                case 'confirm-add': confirmAdd(); break;
+                case 'cart-qty':
+                    line = app.cart.find(function (l) { return l.key === key; });
+                    if (line) { line.qty = Math.max(1, Math.min(50, line.qty + parseInt(el.getAttribute('data-delta'), 10))); updateCartUI(); }
+                    break;
+                case 'cart-remove':
+                    app.cart = app.cart.filter(function (l) { return l.key !== key; });
+                    updateCartUI();
+                    break;
+                case 'place-order': placeOrder(); break;
+                case 'close-success': $('successModal').style.display = 'none'; show('tracker'); break;
+                case 'toggle-hours': app.hoursOpen = !app.hoursOpen; renderHours(); break;
+                case 'pay-choice': app.payNow = el.getAttribute('data-now') === '1'; renderPayChoice(); break;
+                case 'jump-cat':
+                    var target = $(el.getAttribute('data-target'));
+                    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    break;
+                case 'toggle-lang':
+                    lang = lang === 'es' ? 'en' : 'es';
+                    try { localStorage.setItem('ft_lang', lang); } catch (er) {}
+                    applyStatic();
+                    if (app.vendor) renderAll();
+                    break;
+            }
+        });
+
+        // Phones pause pages in the background. When the customer comes back, catch up right away.
+        document.addEventListener('visibilitychange', function () {
+            if (!document.hidden && app.vendor) { reloadVendor(); refreshTracked(); }
+        });
+
+        /* ---------- boot ---------- */
+        applyStatic();
+        try { var savedName = localStorage.getItem('ft_name'); if (savedName) $('customerName').value = savedName; } catch (e) {}
+        if ('serviceWorker' in navigator && !window.__FT_DEMO) navigator.serviceWorker.register('/sw.js').catch(function () {});
+
+        fetch('/api/vendor-data', { cache: 'no-store' })
+            .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, status: r.status, d: d }; }); })
+            .then(function (res) {
+                if (!res.ok || res.d.isDemo) {
+                    showError(res.status === 503 ? t('err_inactive') : t('err_missing'));
+                    return;
+                }
+                applyVendor(res.d);
+                loadTracked();
+                updateTrackButtons();
+                show('landing');
+                handleStripeReturn();
+                startLive();
+                refreshTracked();
+                setInterval(function () { if (!document.hidden) refreshTracked(); }, 30000);
+            })
+            .catch(function () { showError(t('err_load')); });
     })();
-
-
-
     </script>
 </body>
 </html>

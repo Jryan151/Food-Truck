@@ -2,690 +2,1424 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Management Portal</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="theme-color" content="#09090b">
+    <link rel="manifest" href="/manifest-owner.webmanifest">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Kitchen">
+    <link rel="stylesheet" href="/app.css">
+    <script src="/qr.js"></script>
+    <script src="/logo.js"></script>
     <style>
-        /* Bulletproof Walkthrough CSS */
-        .wt-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(2px); z-index: 9998; display: none; pointer-events: auto; }
-        .wt-tooltip { position: fixed; z-index: 10000; background: #FFFFFF; color: #181719; padding: 1rem 1.25rem; border-radius: 12px; font-size: 0.9rem; font-weight: 500; box-shadow: 0 10px 25px rgba(0,0,0,0.5); max-width: 280px; display: none; flex-direction: column; gap: 0.5rem; pointer-events: auto; font-family: sans-serif; border: 2px solid #52525b; transition: all 0.3s ease; left: 50%; transform: translateX(-50%); }
-        .wt-tooltip-header { font-weight: 700; font-size: 1.05rem; color: #000; display: flex; justify-content: space-between; align-items: center; }
-        .wt-skip-btn { background: none; border: none; color: #999; font-size: 0.75rem; cursor: pointer; text-decoration: underline; }
-        .wt-tooltip-btn { background: #181719; color: #fff; border: none; padding: 0.6rem; border-radius: 6px; font-weight: 600; cursor: pointer; text-align: center; font-size: 0.8rem; margin-top: 0.5rem; }
-        .wt-spotlight { position: relative; z-index: 9999 !important; border-radius: inherit; pointer-events: auto !important; }
-        .wt-parent-override { z-index: 9999 !important; }
-        .wt-spotlight-pulse { animation: wtPulse 2s infinite; }
-        @keyframes wtPulse { 0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.5); } 70% { box-shadow: 0 0 0 10px rgba(255, 255, 255, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); } }
-        /* Toggle Switch */
-        .toggle-checkbox:checked { right: 0; border-color: #52525b; }
-        .toggle-checkbox:checked + .toggle-label { background-color: #52525b; }
+        .switch { position: relative; width: 40px; height: 20px; border-radius: 999px; background: #3f3f46; transition: background .2s; flex-shrink: 0; }
+        .switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 999px; background: #fff; transition: transform .2s; }
+        .switch.on { background: #e11d48; }
+        .switch.on::after { transform: translateX(20px); }
+        .switch.amber.on { background: #f59e0b; }
+        .guide-flash { outline: 2px solid #34d399; outline-offset: 3px; border-radius: 12px; transition: outline-color .4s; }
+        /* Printing the QR sign: only the sign itself goes on paper. */
+        @media print {
+            body > *:not(#qrModal) { display: none !important; }
+            #qrModal { position: static !important; background: #fff !important; padding: 0 !important; display: block !important; }
+            #qrModal .no-print { display: none !important; }
+            #qrSheet { box-shadow: none !important; border: 0 !important; margin: 0 auto !important; }
+        }
     </style>
 </head>
 <body class="bg-zinc-950 text-zinc-100 font-sans min-h-screen flex flex-col overflow-x-hidden" id="appBody">
-    
-    <!-- Walkthrough Elements -->
-    <div class="wt-overlay" id="wtOverlay"></div>
-    <div class="wt-tooltip" id="wtTooltip">
-        <div class="wt-tooltip-header"><span id="wtTitle">Kitchen Display</span><button class="wt-skip-btn" onclick="endWalkthrough()">Skip Guide</button></div>
-        <div id="wtText">Welcome to the backend.</div>
-        <button class="wt-tooltip-btn" id="wtNextBtn">Got it</button>
-    </div>
 
     <div class="max-w-md mx-auto w-full flex-grow relative pb-20">
-        <!-- Password Lock Screen -->
-        <div id="loginView" class="p-6 flex flex-col items-center justify-center min-h-[85vh] text-center relative z-10">
-            <div class="w-24 h-24 rounded-full border-2 border-zinc-700 p-1 mb-4 flex items-center justify-center shadow-lg bg-zinc-950 theme-border theme-shadow">
-                <span class="text-4xl" id="dynamic-emoji-login">🌮</span>
+
+        <!-- Login -->
+        <div id="loginView" class="p-6 flex flex-col items-center justify-center min-h-[85vh] text-center relative z-10" style="display:none;">
+            <div class="w-24 h-24 rounded-full border-2 border-zinc-700 p-1 mb-4 flex items-center justify-center shadow-lg bg-zinc-950">
+                <span class="text-4xl text-zinc-100" id="login-emoji"></span>
             </div>
-            <h1 id="dynamic-truck-name-login" class="text-3xl font-serif font-bold italic tracking-wide mb-1">Storefront</h1>
+            <h1 id="login-name" class="text-3xl font-serif font-bold italic tracking-wide mb-1">Storefront</h1>
             <p class="text-zinc-400 text-sm mb-6">Kitchen Management</p>
-            <div class="w-full bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-xl" id="login-box">
+
+            <!-- Email + password (owners) -->
+            <form id="emailForm" class="w-full bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-xl text-left">
                 <div>
-                    <label class="block text-xs text-zinc-400 mb-1 font-medium text-left">Enter Password/PIN</label>
-                    <input type="text" id="ownerPinInput" placeholder="1234" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200 text-center tracking-widest font-mono">
+                    <label class="block text-xs text-zinc-400 mb-1 font-medium">Email</label>
+                    <input type="email" id="loginEmail" autocomplete="username" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200">
                 </div>
-                <button onclick="verifyOwnerPin()" id="btn-unlock" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-3 rounded-xl transition shadow-lg theme-bg">Unlock Portal</button>
-            </div>
+                <div>
+                    <label class="block text-xs text-zinc-400 mb-1 font-medium">Password</label>
+                    <input type="password" id="loginPassword" autocomplete="current-password" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200">
+                </div>
+                <div id="loginError" class="text-xs text-rose-400 text-center" style="display:none;"></div>
+                <button type="submit" id="btn-unlock" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-3 rounded-xl transition shadow-lg">Log In</button>
+                <div class="flex justify-between text-[11px]">
+                    <button type="button" data-action="forgot" class="text-zinc-400 hover:text-white underline">Forgot password?</button>
+                    <button type="button" data-action="show-pin" class="text-zinc-400 hover:text-white underline">Staff? Use PIN</button>
+                </div>
+            </form>
+
+            <!-- PIN (staff, or older owner-only accounts) -->
+            <form id="pinForm" class="w-full bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-xl text-left" style="display:none;">
+                <div>
+                    <label id="pinLabel" class="block text-xs text-zinc-400 mb-1 font-medium text-left">Staff PIN</label>
+                    <input type="password" id="loginPin" inputmode="text" autocomplete="off" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200 text-center tracking-widest font-mono">
+                </div>
+                <div id="pinError" class="text-xs text-rose-400 text-center" style="display:none;"></div>
+                <button type="submit" id="btn-pin" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-3 rounded-xl transition shadow-lg">Unlock</button>
+                <div class="text-center text-[11px]"><button type="button" data-action="show-email" id="btn-back-email" class="text-zinc-400 hover:text-white underline">Owner login with email</button></div>
+            </form>
+            <a href="/" class="mt-6 text-[11px] text-zinc-600 hover:text-zinc-400">← Back to the menu</a>
         </div>
 
         <!-- Dashboard Header -->
-        <div id="dashboardHeader" class="p-4 hidden border-b border-zinc-900 pb-3 mb-4">
+        <div id="dashboardHeader" class="p-4 border-b border-zinc-900 pb-3 mb-4" style="display:none;">
             <div class="flex items-center justify-between">
-                <div class="flex items-center gap-2.5">
-                    <div class="w-8 h-8 rounded-full border border-zinc-700 bg-zinc-900 flex items-center justify-center text-sm theme-border" id="dynamic-emoji-dash">🌮</div>
-                    <div>
-                        <h2 id="dynamic-truck-name-dash" class="font-bold text-base font-serif italic">Storefront</h2>
-                        <p class="text-[10px] text-zinc-400">Welcome, <span id="dynamic-owner-name">Partner</span></p>
+                <div class="flex items-center gap-2.5 min-w-0">
+                    <div class="w-8 h-8 rounded-full border border-zinc-700 bg-zinc-900 flex items-center justify-center text-sm shrink-0 text-zinc-100" id="dash-emoji"></div>
+                    <div class="min-w-0">
+                        <h2 id="dash-name" class="font-bold text-base font-serif italic truncate">Storefront</h2>
+                        <p class="text-[10px] text-zinc-400">Welcome, <span id="dash-owner">Partner</span> <span id="dash-role" class="ml-1 px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 uppercase tracking-wider"></span></p>
                     </div>
                 </div>
-                <div class="flex items-center gap-2" id="header-controls">
-                    <div id="time-clock-widget" onclick="openTimeClock()" class="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 rounded-full px-2.5 py-1 cursor-pointer hover:bg-zinc-800 transition">
-                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                        <span class="text-[10px] font-medium text-zinc-300">2 on shift</span>
-                    </div>
-                    <button onclick="lockOwnerPortal()" class="text-xs text-rose-400 hover:text-rose-300 ml-1">Lock</button>
+                <div class="flex items-center gap-2 shrink-0">
+                    <span id="planChip" class="text-[10px] font-bold px-2 py-1 rounded-full border border-zinc-700 text-zinc-300">FREE</span>
+                    <span id="liveDot" title="Live updates" class="w-2 h-2 rounded-full bg-zinc-600"></span>
+                    <button data-action="logout" class="text-xs text-rose-400 hover:text-rose-300 ml-1">Log out</button>
                 </div>
             </div>
+            <div class="mt-3 flex gap-2">
+                <a href="/" target="_blank" rel="noopener" id="viewPageLink" class="flex-1 text-center bg-zinc-900 border border-zinc-800 hover:border-zinc-600 text-zinc-200 text-xs font-semibold py-2 rounded-xl transition">👀 View my customer page ↗</a>
+                <button data-action="install" id="installBtn" class="bg-zinc-900 border border-zinc-800 hover:border-zinc-600 text-zinc-200 text-xs font-semibold py-2 px-3 rounded-xl" style="display:none;">📲 Install app</button>
+            </div>
+            <p id="iosInstallHint" class="text-[10px] text-zinc-500 mt-2 text-center" style="display:none;">📲 To install: tap the Share button, then “Add to Home Screen”.</p>
         </div>
 
-        <!-- Owner Portal Dashboard Content -->
-        <div id="ownerDashboardView" class="px-4 hidden">
-            <!-- Tabs -->
-            <div class="grid grid-cols-4 gap-1.5 mb-4 relative">
-                <button onclick="switchOwnerTab('Orders')" id="tabBtnOrders" class="bg-zinc-100 text-zinc-950 font-semibold py-2 rounded-xl text-[10px] transition shadow theme-bg">Orders</button>
-                <button onclick="switchOwnerTab('Menu')" id="tabBtnMenu" class="bg-zinc-900 border border-zinc-800 text-zinc-300 font-semibold py-2 rounded-xl text-[10px] transition">Inventory</button>
-                <button onclick="switchOwnerTab('Settings')" id="tabBtnSettings" class="bg-zinc-900 border border-zinc-800 text-zinc-300 font-semibold py-2 rounded-xl text-[10px] transition">Settings</button>
-                <button onclick="switchOwnerTab('Analytics')" id="tabBtnAnalytics" class="bg-zinc-900 border border-zinc-800 text-zinc-300 font-semibold py-2 rounded-xl text-[10px] transition">Analytics</button>
+        <!-- Dashboard -->
+        <div id="ownerDashboardView" class="px-4" style="display:none;">
+            <div id="billingBanner" class="mb-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-xs px-4 py-2.5 text-center" style="display:none;"></div>
+
+            <div id="tabBar" class="grid grid-cols-5 gap-1.5 mb-4 relative">
+                <button data-action="tab" data-tab="Orders" id="tabBtnOrders" class="bg-zinc-100 text-zinc-950 font-semibold py-2 rounded-xl text-[10px] transition shadow">Orders<span id="newOrdersBadge" class="ml-1 px-1.5 rounded-full bg-rose-600 text-white" style="display:none;">0</span></button>
+                <button data-action="tab" data-tab="Menu" id="tabBtnMenu" class="bg-zinc-900 border border-zinc-800 text-zinc-300 font-semibold py-2 rounded-xl text-[10px] transition">Inventory</button>
+                <button data-action="tab" data-tab="Settings" id="tabBtnSettings" class="bg-zinc-900 border border-zinc-800 text-zinc-300 font-semibold py-2 rounded-xl text-[10px] transition">Settings</button>
+                <button data-action="tab" data-tab="Analytics" id="tabBtnAnalytics" data-owner class="bg-zinc-900 border border-zinc-800 text-zinc-300 font-semibold py-2 rounded-xl text-[10px] transition">Analytics</button>
+                <button data-action="tab" data-tab="Guide" id="tabBtnGuide" data-owner class="bg-zinc-900 border border-zinc-800 text-zinc-300 font-semibold py-2 rounded-xl text-[10px] transition">Guide</button>
             </div>
 
-            <!-- Tab 1: Orders -->
+            <!-- Orders -->
             <div id="ownerTabOrders" class="space-y-4">
+                <div id="setupCard" class="bg-zinc-900 border border-emerald-500/30 rounded-xl p-4" data-owner style="display:none;">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="font-bold text-sm text-zinc-100">🚀 Get ready for your first customers <span id="setupCount" class="text-zinc-500 font-normal text-xs"></span></h3>
+                        <button data-action="dismiss-setup" class="text-[10px] text-zinc-500 hover:text-zinc-300">Hide</button>
+                    </div>
+                    <div class="h-1 bg-zinc-800 rounded-full mb-3 overflow-hidden"><div id="setupBar" class="h-full bg-emerald-500 transition-all" style="width:0%"></div></div>
+                    <div id="setupList" class="space-y-1.5"></div>
+                </div>
+                <button data-action="enable-sound" id="soundPrompt" class="w-full bg-amber-500/10 border border-amber-500/40 text-amber-400 text-xs font-bold py-3 rounded-xl" style="display:none;">🔇 Tap here to turn on new-order sounds</button>
                 <div class="flex justify-between items-center mb-1">
                     <h3 class="font-semibold text-sm text-zinc-400">Live Incoming Tickets</h3>
-                    <button onclick="renderOwnerPortal()" class="text-xs text-zinc-300 hover:underline theme-text">Refresh ↻</button>
+                    <div class="flex items-center gap-3">
+                        <button data-action="toggle-sound" id="btnSound" class="text-xs text-zinc-400 hover:text-white">🔔 Sound on</button>
+                        <button data-action="refresh-orders" class="text-xs text-zinc-300 hover:underline">Refresh ↻</button>
+                    </div>
                 </div>
-                
-                <!-- Order Filters -->
+                <div id="awakeNote" class="text-[10px] text-zinc-500 -mt-2" style="display:none;">☀️ Screen will stay on while this page is open.</div>
                 <div id="order-filter-tabs" class="flex gap-2 mb-3 bg-zinc-950 p-1.5 rounded-xl border border-zinc-800/50 w-max">
-                    <button onclick="renderOrders('Active')" id="filterActive" class="px-4 py-1.5 rounded-lg text-[11px] font-bold bg-zinc-100 text-zinc-950 theme-bg shadow transition">Active</button>
-                    <button onclick="renderOrders('Fulfilled')" id="filterFulfilled" class="px-4 py-1.5 rounded-lg text-[11px] font-bold text-zinc-400 hover:text-zinc-200 transition">Fulfilled</button>
-                    <button onclick="renderOrders('Canceled')" id="filterCanceled" class="px-4 py-1.5 rounded-lg text-[11px] font-bold text-zinc-400 hover:text-zinc-200 transition">Canceled</button>
+                    <button data-action="filter" data-filter="Active" id="filterActive" class="px-4 py-1.5 rounded-lg text-[11px] font-bold bg-zinc-100 text-zinc-950 shadow transition">Active</button>
+                    <button data-action="filter" data-filter="Fulfilled" id="filterFulfilled" class="px-4 py-1.5 rounded-lg text-[11px] font-bold text-zinc-400 hover:text-zinc-200 transition">Fulfilled</button>
+                    <button data-action="filter" data-filter="Canceled" id="filterCanceled" class="px-4 py-1.5 rounded-lg text-[11px] font-bold text-zinc-400 hover:text-zinc-200 transition">Canceled</button>
                 </div>
-
                 <div class="space-y-3 relative" id="ownerOrdersList"></div>
             </div>
 
-            <!-- Tab 2: Menu / Inventory -->
-            <div id="ownerTabMenu" class="space-y-4 hidden">
-                <div class="flex justify-between items-center"><h3 class="font-semibold text-sm text-zinc-400">Live Inventory Control (Single Item Active)</h3></div>
+            <!-- Inventory -->
+            <div id="ownerTabMenu" class="space-y-4" style="display:none;">
+                <div class="flex justify-between items-center">
+                    <h3 class="font-semibold text-sm text-zinc-400">Live Inventory Control</h3>
+                    <button data-action="add-item" data-owner class="bg-zinc-100 text-zinc-950 px-3 py-1.5 rounded-lg text-[11px] font-bold">+ Add Item</button>
+                </div>
                 <div id="ownerMenuList" class="space-y-3 relative"></div>
             </div>
 
-            <!-- Tab 3: Settings & Locations -->
-            <div id="ownerTabSettings" class="space-y-5 hidden relative">
-                <!-- Status & Rush -->
+            <!-- Settings -->
+            <div id="ownerTabSettings" class="space-y-5 relative" style="display:none;">
                 <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" id="statusRushBox">
                     <h3 class="font-bold text-sm text-zinc-100 mb-3 border-b border-zinc-800 pb-2">Operational Status</h3>
                     <div class="flex gap-2">
-                        <button id="btnStatusOpen" onclick="setStoreStatus('open')" class="flex-1 py-2 rounded-lg text-xs font-bold transition bg-emerald-600 text-white">Open Now</button>
-                        <button id="btnStatusClosed" onclick="setStoreStatus('closed')" class="flex-1 py-2 rounded-lg text-xs font-bold transition bg-zinc-950 text-zinc-500 border border-zinc-800">Closed</button>
+                        <button id="btnStatusOpen" data-action="set-status" data-status="open" class="flex-1 py-2 rounded-lg text-xs font-bold transition">Open Now</button>
+                        <button id="btnStatusClosed" data-action="set-status" data-status="closed" class="flex-1 py-2 rounded-lg text-xs font-bold transition">Closed</button>
+                    </div>
+                    <div class="flex items-center justify-between gap-3 mt-4 bg-zinc-950 border border-zinc-800 rounded-lg p-3">
+                        <div class="min-w-0">
+                            <div class="text-xs font-bold text-zinc-200">Pause online orders</div>
+                            <div class="text-[10px] text-zinc-500">Stay open for walk-ups, stop new online orders for a bit.</div>
+                        </div>
+                        <button data-action="toggle-pause" id="pauseSwitch" aria-label="Pause online orders" class="switch amber"></button>
                     </div>
                     <h3 class="font-bold text-sm text-zinc-100 mb-2 mt-5 border-b border-zinc-800 pb-2">Rush Mode (Wait Times)</h3>
                     <div class="grid grid-cols-3 gap-2">
-                        <button id="btnRush0" onclick="setRushMode(0)" class="py-2 rounded-lg text-[10px] font-bold transition bg-zinc-100 text-zinc-950 theme-bg">Normal</button>
-                        <button id="btnRush15" onclick="setRushMode(15)" class="py-2 rounded-lg text-[10px] font-bold transition bg-zinc-950 text-amber-500 border border-amber-500/30">+15 Mins</button>
-                        <button id="btnRush30" onclick="setRushMode(30)" class="py-2 rounded-lg text-[10px] font-bold transition bg-zinc-950 text-red-500 border border-red-500/30">+30 Mins</button>
+                        <button id="btnRush0" data-action="set-rush" data-rush="0" class="py-2 rounded-lg text-[10px] font-bold transition">Normal</button>
+                        <button id="btnRush15" data-action="set-rush" data-rush="15" class="py-2 rounded-lg text-[10px] font-bold transition">+15 Mins</button>
+                        <button id="btnRush30" data-action="set-rush" data-rush="30" class="py-2 rounded-lg text-[10px] font-bold transition">+30 Mins</button>
                     </div>
                 </div>
 
-                <!-- Locations -->
-                <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" id="locationManagerBox">
+                <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" id="pageBox">
+                    <h3 class="font-bold text-sm text-zinc-100 mb-3 border-b border-zinc-800 pb-2">Your Ordering Page</h3>
+                    <div class="flex gap-2">
+                        <input type="text" id="shareLink" readonly class="flex-1 min-w-0 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-300">
+                        <button data-action="copy-link" id="btnCopyLink" class="bg-zinc-800 hover:bg-zinc-700 text-white px-3 rounded-lg text-xs font-bold">Copy</button>
+                    </div>
+                    <p class="text-[10px] text-zinc-500 mt-2">Share this link on social media, and print a QR sign for your window.</p>
+                    <button data-action="open-qr" class="mt-3 w-full bg-zinc-100 hover:bg-white text-zinc-950 py-2.5 rounded-lg text-xs font-bold">🖨️ Print QR code sign</button>
+                </div>
+
+                <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" data-owner id="hoursBox">
+                    <h3 class="font-bold text-sm text-zinc-100 mb-1 border-b border-zinc-800 pb-2">Posted Hours</h3>
+                    <p class="text-[10px] text-zinc-500 mb-3">Shown on your page so customers know when to find you. Use Open / Closed above to start and stop taking orders.</p>
+                    <div id="hoursRows" class="space-y-2"></div>
+                    <label class="block text-[10px] text-zinc-400 mt-3 mb-1" for="hoursTz">Time zone</label>
+                    <select id="hoursTz" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200"></select>
+                    <button data-action="save-hours" class="mt-3 w-full bg-zinc-100 hover:bg-white text-zinc-950 py-2.5 rounded-lg text-xs font-bold">Save Hours</button>
+                    <div id="hoursMsg" class="text-[11px] text-center mt-2" style="display:none;"></div>
+                </div>
+
+                <!-- Plan & billing -->
+                <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" data-owner id="planBox">
+                    <h3 class="font-bold text-sm text-zinc-100 mb-3 border-b border-zinc-800 pb-2">Plan &amp; Billing</h3>
+                    <div id="planBody"></div>
+                    <div id="planError" class="text-xs text-rose-400 mt-2" style="display:none;"></div>
+                </div>
+
+                <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" data-owner id="paymentsBox">
+                    <h3 class="font-bold text-sm text-zinc-100 mb-1 border-b border-zinc-800 pb-2 flex items-center justify-between">💳 Online Payments <span class="text-[10px] font-bold text-emerald-400 border border-emerald-500/40 rounded-full px-2 py-0.5">PRO</span></h3>
+                    <div id="paymentsBody" class="text-xs text-zinc-400 mt-2">Loading…</div>
+                    <div id="paymentsMsg" class="text-[11px] text-center mt-2" style="display:none;"></div>
+                </div>
+
+                <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" data-owner id="smsSettingsBox">
+                    <h3 class="font-bold text-sm text-zinc-100 mb-1 border-b border-zinc-800 pb-2 flex items-center justify-between">📱 Text Alerts <span class="text-[10px] font-bold text-emerald-400 border border-emerald-500/40 rounded-full px-2 py-0.5">PRO</span></h3>
+                    <div id="smsBody" class="text-xs text-zinc-400 mt-2">Loading…</div>
+                    <div id="smsMsg" class="text-[11px] text-center mt-2" style="display:none;"></div>
+                </div>
+
+                <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" data-owner id="locationManagerBox">
                     <h3 class="font-bold text-sm text-zinc-100 mb-3 border-b border-zinc-800 pb-2">Location Manager</h3>
                     <div class="flex gap-2 mb-3">
-                        <input type="text" id="newLocationInput" placeholder="Add new location..." class="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200">
-                        <button onclick="addLocation()" class="bg-zinc-800 hover:bg-zinc-700 text-white px-3 rounded-lg text-xs font-bold">+</button>
+                        <input type="text" id="newLocationInput" maxlength="80" placeholder="Add new location..." class="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200">
+                        <button data-action="add-location" class="bg-zinc-800 hover:bg-zinc-700 text-white px-3 rounded-lg text-xs font-bold">+</button>
                     </div>
                     <div class="space-y-2 mb-4" id="activeLocationsList"></div>
                     <h4 class="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Recently Deleted (Trash)</h4>
                     <div class="space-y-2" id="deletedLocationsList"></div>
                 </div>
 
-                <!-- Security -->
-                <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-                    <h3 class="font-bold text-sm text-zinc-100 mb-3 border-b border-zinc-800 pb-2">Security Settings</h3>
-                    <label class="block text-xs text-zinc-400 mb-1">Set New Password/PIN (4-6 chars)</label>
-                    <div class="flex flex-col gap-2">
-                        <div class="flex gap-2">
-                            <input type="text" id="newPinInput" maxlength="6" placeholder="New PIN" class="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200 text-center tracking-widest font-mono">
-                            <input type="text" id="confirmPinInput" maxlength="6" placeholder="Confirm" class="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200 text-center tracking-widest font-mono">
-                        </div>
-                        <button onclick="updatePin()" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 py-2.5 rounded-lg text-xs font-bold theme-bg">Save New PIN</button>
+                <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" data-owner id="profileBox">
+                    <h3 class="font-bold text-sm text-zinc-100 mb-3 border-b border-zinc-800 pb-2">Business Profile</h3>
+                    <div class="space-y-2">
+                        <input type="text" id="profName" maxlength="60" placeholder="Business name" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200">
+                        <label class="block text-[10px] text-zinc-400 mt-1">Logo</label>
+                        <input type="hidden" id="profEmoji">
+                        <div id="logoPicker" class="grid grid-cols-7 gap-1.5"></div>
+                        <input type="text" id="profEmojiCustom" maxlength="4" placeholder="Or type any emoji" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200">
+                        <input type="text" id="profIG" maxlength="31" placeholder="Instagram handle" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200">
+                        <input type="text" id="profOwner" maxlength="60" placeholder="Your name" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200">
+                        <button data-action="save-profile" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 py-2.5 rounded-lg text-xs font-bold">Save Profile</button>
+                        <div id="profMsg" class="text-[11px] text-center" style="display:none;"></div>
                     </div>
+                </div>
+
+                <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" data-owner id="securityBox">
+                    <h3 class="font-bold text-sm text-zinc-100 mb-3 border-b border-zinc-800 pb-2">Security Settings</h3>
+                    <label class="block text-xs text-zinc-400 mb-1">Staff PIN (4-8 letters or numbers)</label>
+                    <p class="text-[10px] text-zinc-500 mb-2">Staff use this to open the kitchen screen only. Changing it signs staff out.</p>
+                    <div class="flex gap-2 mb-4">
+                        <input type="text" id="newStaffPin" maxlength="8" placeholder="New staff PIN" class="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200 text-center tracking-widest font-mono">
+                        <button data-action="save-pin" class="bg-zinc-100 hover:bg-white text-zinc-950 px-4 rounded-lg text-xs font-bold">Save</button>
+                    </div>
+                    <label class="block text-xs text-zinc-400 mb-1">Change password</label>
+                    <div class="space-y-2">
+                        <input type="email" id="pwEmail" placeholder="Email (needed once for older accounts)" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200" style="display:none;">
+                        <input type="password" id="pwCurrent" placeholder="Current password" autocomplete="current-password" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200">
+                        <input type="password" id="pwNew" placeholder="New password (8+ characters)" autocomplete="new-password" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200">
+                        <button data-action="save-password" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 py-2.5 rounded-lg text-xs font-bold">Update Password</button>
+                    </div>
+                    <div id="secMsg" class="text-[11px] text-center mt-2" style="display:none;"></div>
+                </div>
+
+                <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" data-owner id="accountBox">
+                    <h3 class="font-bold text-sm text-zinc-100 mb-3 border-b border-zinc-800 pb-2">Account</h3>
+                    <label class="block text-xs text-zinc-400 mb-1">Login email</label>
+                    <p class="text-[11px] text-zinc-300 mb-2" id="currentEmail"></p>
+                    <div class="space-y-2 mb-2">
+                        <input type="email" id="emailNew" placeholder="New email" autocomplete="email" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200">
+                        <input type="password" id="emailPw" placeholder="Current password" autocomplete="current-password" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200">
+                        <button data-action="save-email" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 py-2.5 rounded-lg text-xs font-bold">Change Email</button>
+                    </div>
+                    <div id="emailMsg" class="text-[11px] text-center mb-3" style="display:none;"></div>
+
+                    <details class="mt-4 border-t border-zinc-800 pt-3">
+                        <summary class="text-xs text-rose-400 cursor-pointer">Delete my account</summary>
+                        <p class="text-[11px] text-zinc-400 mt-2 mb-2">This permanently deletes your page, menu, orders and settings, and cancels Pro if you have it. It cannot be undone.</p>
+                        <div class="space-y-2">
+                            <input type="password" id="delPassword" placeholder="Your password" autocomplete="current-password" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200">
+                            <input type="text" id="delConfirm" placeholder="Type DELETE to confirm" autocapitalize="characters" class="w-full bg-zinc-950 border border-rose-500/30 rounded-lg p-2 text-xs text-zinc-200">
+                            <button data-action="delete-account" class="w-full bg-rose-600 hover:bg-rose-500 text-white py-2.5 rounded-lg text-xs font-bold">Permanently delete account</button>
+                        </div>
+                        <div id="delMsg" class="text-[11px] text-center mt-2" style="display:none;"></div>
+                    </details>
                 </div>
             </div>
 
-            <!-- Tab 4: Analytics -->
-            <div id="ownerTabAnalytics" class="space-y-4 hidden relative">
+            <!-- Analytics -->
+            <!-- Guide (owner only) -->
+            <div id="ownerTabGuide" class="space-y-4" style="display:none;">
+                <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+                    <h3 class="font-bold text-sm text-zinc-100">📖 How everything works</h3>
+                    <p class="text-[11px] text-zinc-400 mt-1">A quick tour of every feature. Tap <b class="text-zinc-200">Take me there</b> to jump straight to it. Features marked <span class="text-[9px] font-bold text-emerald-400 border border-emerald-500/40 rounded px-1">PRO</span> need the Pro plan.</p>
+                </div>
+                <div id="guideList" class="space-y-5"></div>
+            </div>
+
+            <div id="ownerTabAnalytics" class="space-y-4 relative" style="display:none;">
                 <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5" id="analytics-dash">
                     <div class="flex justify-between items-center border-b border-zinc-800 pb-3 mb-4">
-                        <h3 class="font-bold text-sm text-zinc-300 theme-text">📊 Real-Time Financials</h3>
+                        <h3 class="font-bold text-sm text-zinc-300">📊 Real-Time Financials</h3>
                         <span class="text-[10px] text-zinc-500 font-mono bg-zinc-950 px-2 py-1 rounded-md border border-zinc-800">Today</span>
                     </div>
                     <div class="grid grid-cols-2 gap-3 text-xs">
                         <div class="p-3 bg-zinc-950 rounded-lg border border-zinc-800"><span class="text-zinc-500 block mb-1">Gross Revenue</span><span id="statDaily" class="font-mono font-bold text-emerald-400 text-lg">$0.00</span></div>
                         <div class="p-3 bg-zinc-950 rounded-lg border border-zinc-800"><span class="text-zinc-500 block mb-1">Ticket Volume</span><span id="statVolume" class="font-mono font-bold text-zinc-100 text-lg">0</span></div>
                         <div class="p-3 bg-zinc-950 rounded-lg border border-zinc-800"><span class="text-zinc-500 block mb-1">Avg. Order Value</span><span id="statAov" class="font-mono font-bold text-zinc-100 text-lg">$0.00</span></div>
-                        <div class="p-3 bg-zinc-950 rounded-lg border border-zinc-800"><span class="text-zinc-500 block mb-1">Top Item</span><span id="statTopItem" class="font-bold text-zinc-300 truncate block theme-text">N/A</span></div>
+                        <div class="p-3 bg-zinc-950 rounded-lg border border-zinc-800"><span class="text-zinc-500 block mb-1">Top Item</span><span id="statTopItem" class="font-bold text-zinc-300 truncate block">N/A</span></div>
                     </div>
-                    <button onclick="clearHistoryLogs()" class="w-full bg-zinc-800 hover:bg-zinc-700 text-rose-400 py-2 rounded-xl text-xs font-semibold transition mt-4">Clear Order Data</button>
+                    <button data-action="clear-history" class="w-full bg-zinc-800 hover:bg-zinc-700 text-rose-400 py-2 rounded-xl text-xs font-semibold transition mt-4">Clear Order History</button>
                 </div>
-            </div>
-        </div>
-
-        <!-- Post-Demo Landing Page -->
-        <div id="postDemoView" class="p-6 hidden flex-col items-center mt-10 text-center animate-fade-in relative z-20">
-            <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-2xl max-w-sm w-full space-y-5 text-left">
-                <div class="text-zinc-300 text-3xl theme-text text-center">🚀</div>
-                <p class="text-sm text-zinc-200 leading-relaxed">
-                    Thank you for trying my demo. There are still many features in development. Everything shown in this tutorial will be available for free coming soon.
-                </p>
-                <p class="text-sm text-zinc-200 leading-relaxed">
-                    Payment processing, Custom domain, SMS alerts, Loyalty program, and much more will be available at a fixed low monthly price.
-                </p>
-                <p class="text-sm text-emerald-400 font-semibold leading-relaxed">
-                    If you would like to try a functional free trial before release, please DM me.
-                </p>
-                <div class="flex gap-3 pt-2">
-                    <button onclick="exitDemo()" class="flex-1 bg-zinc-950 border border-zinc-800 hover:bg-zinc-800 text-zinc-300 font-semibold py-3 rounded-xl text-sm transition">Exit</button>
-                    <button onclick="continueDemo()" class="flex-1 bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-3 rounded-xl text-sm transition shadow-lg theme-bg">Continue</button>
+                <div id="exportBox" class="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+                    <h3 class="font-bold text-sm text-zinc-300 mb-1">⬇️ Export orders</h3>
+                    <p class="text-[10px] text-zinc-500 mb-3">A spreadsheet (CSV) of every order in the dates you pick — opens in Excel, Numbers or Google Sheets.</p>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label class="block text-[10px] text-zinc-400 mb-1" for="exportFrom">From</label><input type="date" id="exportFrom" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200"></div>
+                        <div><label class="block text-[10px] text-zinc-400 mb-1" for="exportTo">To</label><input type="date" id="exportTo" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200"></div>
+                    </div>
+                    <button data-action="export-csv" class="mt-3 w-full bg-zinc-100 hover:bg-white text-zinc-950 py-2.5 rounded-lg text-xs font-bold">Download CSV</button>
+                    <div id="exportMsg" class="text-[11px] text-center mt-2" style="display:none;"></div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Modals -->
-    <div id="timeClockModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-2xl p-5 space-y-4 relative">
-            <div class="flex justify-between items-center"><h3 class="font-bold text-lg">Employee Time Tracker</h3><button onclick="closeTimeClock()" class="text-zinc-400 hover:text-white text-sm">✕</button></div>
-            <div class="bg-zinc-950 p-3 rounded-xl border border-zinc-800 flex justify-between items-center"><div class="flex items-center gap-2"><div class="w-2 h-2 bg-emerald-500 rounded-full"></div><span class="text-sm font-medium">Alex M.</span></div><span class="text-xs text-zinc-500">In: 8:00 AM</span></div>
-            <div class="bg-zinc-950 p-3 rounded-xl border border-zinc-800 flex justify-between items-center"><div class="flex items-center gap-2"><div class="w-2 h-2 bg-emerald-500 rounded-full"></div><span class="text-sm font-medium">Sarah J.</span></div><span class="text-xs text-zinc-500">In: 9:15 AM</span></div>
-            <button onclick="closeTimeClock()" id="btn-close-timeclock" class="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-semibold py-3 rounded-xl transition mt-2">Close Tracker</button>
-        </div>
-    </div>
-
-    <!-- Expanded Live Editor Modal -->
-    <div id="editItemModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-2xl p-5 space-y-4 relative overflow-y-auto max-h-[90vh]">
-            <div class="flex justify-between items-center"><h3 class="font-bold text-lg text-zinc-300 theme-text">Live Editor</h3><button onclick="closeEditItem()" class="text-zinc-400 hover:text-white text-sm">✕</button></div>
+    <!-- Item editor -->
+    <div id="editItemModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" style="display:none;">
+        <div class="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-2xl p-5 space-y-3 relative overflow-y-auto max-h-[90vh]">
+            <div class="flex justify-between items-center"><h3 id="editTitle" class="font-bold text-lg text-zinc-300">Live Editor</h3><button data-action="close-edit" class="text-zinc-400 hover:text-white text-sm" aria-label="Close">✕</button></div>
+            <div>
+                <label class="block text-xs text-zinc-400 mb-1">Photo (optional)</label>
+                <div class="flex items-center gap-3">
+                    <div class="w-20 h-20 rounded-xl bg-zinc-950 border border-zinc-800 overflow-hidden flex items-center justify-center text-zinc-600 text-xs shrink-0"><img id="editPhotoImg" alt="" class="w-full h-full object-cover" style="display:none;"><span id="editPhotoNone">No photo</span></div>
+                    <div class="space-y-1.5">
+                        <label class="inline-block bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3 py-1.5 rounded-lg text-[11px] font-semibold cursor-pointer">
+                            <span id="editPhotoLabel">Choose photo</span>
+                            <input type="file" id="editPhotoFile" accept="image/*" class="hidden">
+                        </label>
+                        <button data-action="remove-photo" id="editPhotoRemove" class="block text-[11px] text-rose-400" style="display:none;">Remove photo</button>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <label class="block text-xs text-zinc-400 mb-1" for="editCategory">Category (optional)</label>
+                <input type="text" id="editCategory" maxlength="40" list="categoryList" placeholder="e.g. Tacos, Sides, Drinks" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200">
+                <datalist id="categoryList"></datalist>
+            </div>
             <div>
                 <label class="block text-xs text-zinc-400 mb-1">Item Name</label>
-                <input type="text" id="editName" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200">
+                <input type="text" id="editName" maxlength="80" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200">
             </div>
             <div>
                 <label class="block text-xs text-zinc-400 mb-1">Description</label>
-                <textarea id="editDesc" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200 h-16 resize-none"></textarea>
+                <textarea id="editDesc" maxlength="300" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200 h-16 resize-none"></textarea>
             </div>
             <div class="grid grid-cols-3 gap-2">
-                <div><label class="block text-[10px] text-zinc-400 mb-1">Reg. Price ($)</label><input type="number" id="editPrice" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2 text-sm text-zinc-200"></div>
-                <div><label class="block text-[10px] text-zinc-400 mb-1">Sale Price ($)</label><input type="number" id="editSalePrice" placeholder="Optional" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2 text-sm text-zinc-200 border-red-500/30 focus:border-red-500 focus:bg-red-500/5"></div>
-                <div><label class="block text-[10px] text-zinc-400 mb-1">Prep (Mins)</label><input type="number" id="editPrep" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2 text-sm text-zinc-200"></div>
+                <div><label class="block text-[10px] text-zinc-400 mb-1">Reg. Price ($)</label><input type="number" step="0.01" min="0" inputmode="decimal" id="editPrice" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2 text-sm text-zinc-200"></div>
+                <div><label class="block text-[10px] text-zinc-400 mb-1">Sale Price ($)</label><input type="number" step="0.01" min="0" inputmode="decimal" id="editSalePrice" placeholder="Optional" class="w-full bg-zinc-950 border border-red-500/30 focus:border-red-500 rounded-xl p-2 text-sm text-zinc-200"></div>
+                <div><label class="block text-[10px] text-zinc-400 mb-1">Prep (Mins)</label><input type="number" step="1" min="1" max="120" inputmode="numeric" id="editPrep" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2 text-sm text-zinc-200"></div>
             </div>
-            <button onclick="saveEditItem()" id="btn-save-edit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 rounded-xl transition shadow-lg mt-2">Save & Sync Live</button>
+            <div>
+                <label class="block text-xs text-zinc-400 mb-1">Protein / modification choices (comma separated, optional)</label>
+                <input type="text" id="editMeats" maxlength="200" placeholder="Asada, Pollo, Veggie" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200">
+            </div>
+            <div>
+                <label class="block text-xs text-zinc-400 mb-1">Upcharge for choices after the first ($)</label>
+                <input type="number" step="0.01" min="0" inputmode="decimal" id="editUpcharge" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200">
+            </div>
+            <div>
+                <label class="block text-xs text-zinc-400 mb-1" for="editOptions">Flavor / size options (comma separated, optional, no extra charge)</label>
+                <input type="text" id="editOptions" maxlength="400" placeholder="Horchata, Jamaica, Tamarindo" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200">
+            </div>
+            <div id="editError" class="text-xs text-rose-400 text-center" style="display:none;"></div>
+            <button data-action="save-edit" id="btn-save-edit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 rounded-xl transition shadow-lg mt-2">Save &amp; Sync Live</button>
+            <button data-action="delete-item" id="btn-delete-item" class="w-full text-rose-400 hover:text-rose-300 text-xs py-1" style="display:none;">Delete this item</button>
         </div>
     </div>
 
-    <!-- ROI Modal -->
-    <div id="roiModal" class="fixed inset-0 bg-black/90 z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-zinc-900 border border-emerald-500/30 w-full max-w-sm rounded-2xl p-6 text-center space-y-5 shadow-2xl shadow-emerald-500/20 relative" id="roi-box-container">
-            <div class="w-20 h-20 bg-emerald-500/10 border border-emerald-500/50 text-emerald-400 rounded-full flex items-center justify-center mx-auto text-4xl mb-2">💸</div>
-            <h3 class="font-bold text-xl text-white">System Validated.</h3>
-            <div class="bg-zinc-950 p-4 rounded-xl border border-zinc-800 space-y-3 text-left">
-                <p class="text-sm text-zinc-300">By routing this order through your automated storefront, you successfully:</p>
-                <ul class="text-xs text-zinc-400 space-y-2 list-disc pl-4">
-                    <li><strong class="text-emerald-400">Saved 3 minutes</strong> of manual phone/register entry.</li>
-                    <li><strong class="text-emerald-400">Captured 100%</strong> of the revenue upfront.</li>
-                    <li>Presented your business professionally and easy to use.</li>
-                </ul>
+    <!-- QR sign (printable) -->
+    <div id="qrModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto" style="display:none;">
+        <div class="w-full max-w-sm">
+            <div id="qrSheet" class="bg-white text-zinc-950 rounded-2xl p-8 text-center shadow-2xl">
+                <div id="qrEmoji" class="text-6xl mb-2 flex justify-center text-zinc-950"></div>
+                <div id="qrName" class="text-3xl font-serif font-bold italic mb-1">Your Truck</div>
+                <div class="text-lg font-bold mb-4">Scan to order ahead</div>
+                <div id="qrCode" class="flex justify-center mb-4"></div>
+                <div class="text-sm font-semibold mb-1">Skip the line — pay at the window.</div>
+                <div class="text-xs text-zinc-500 mb-3">Escanea para pedir · Paga en la ventanilla</div>
+                <div id="qrUrl" class="text-xs font-mono text-zinc-700 break-all"></div>
             </div>
-            <button onclick="closeRoiModal()" id="btn-roi-close" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3.5 rounded-xl transition shadow-lg mt-2">Explore Dashboard</button>
+            <div class="no-print flex gap-2 mt-3">
+                <button data-action="print-qr" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 rounded-xl text-sm">🖨️ Print</button>
+                <button data-action="download-qr" class="flex-1 bg-zinc-100 text-zinc-950 font-semibold py-3 rounded-xl text-sm">Save QR image</button>
+                <button data-action="close-qr" class="px-4 bg-zinc-800 text-zinc-200 font-semibold py-3 rounded-xl text-sm">Close</button>
+            </div>
         </div>
     </div>
 
     <script>
+    (function () {
+        'use strict';
 
-    // --- START LIVE DATA INJECTION ---
-    try {
-        const xhr = new XMLHttpRequest();
-        xhr.open('GET', '/api/vendor-data', false);
-        xhr.send(null);
-        if (xhr.status === 200) {
-            const data = JSON.parse(xhr.responseText);
-            if (!data.error) {
-                // Prime the subdomain's local storage with the live database info
-                localStorage.setItem('demo_config', JSON.stringify({
-                    truckName: data.businessName,
+        var $ = function (id) { return document.getElementById(id); };
+        var esc = function (s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+            });
+        };
+        var money = function (n) { return '$' + (Number(n) || 0).toFixed(2); };
 
+        var app = {
+            me: null, role: null, pub: null,
+            orders: [], filter: 'Active',
+            menu: [],
+            state: { status: 'open', rush: 0, location: '' },
+            locations: { active: [], deleted: [] },
+            proPrice: '$34.99/mo',
+            tab: 'Orders', editId: null, newCount: 0,
+            sound: true, es: null, audio: null, wakeLock: null,
+            editPhoto: '', uploading: false, installEvt: null
+        };
+        try { app.sound = localStorage.getItem('ft_sound') !== 'off'; } catch (e) {}
 
-                    menu: data.menu && data.menu.length > 0 ? data.menu : [
-                        {
-                            name: "Signature Street Taco", price: 3.50, salePrice: 2.75,
-                            desc: "Freshly made with house ingredients.", prep: 2, hasMeat: true,
-                            meats: "Asada, Pollo, Veggie", premiumUpcharge: 1.00, soldOut: false
-                        }
-                    ]
-
-                }));
-            }
+        /* ---------- network ---------- */
+        function api(method, url, body) {
+            var opts = { method: method, headers: {}, cache: 'no-store' };
+            if (body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+            return fetch(url, opts).then(function (r) {
+                return r.json().catch(function () { return {}; }).then(function (data) {
+                    if (r.status === 401 && app.me) { sessionEnded('Your session ended. Please log in again.'); }
+                    return { ok: r.ok, status: r.status, data: data };
+                });
+            }).catch(function () { return { ok: false, status: 0, data: { error: 'Connection problem. Please try again.' } }; });
         }
-    } catch(e) {}
+        function say(id, msg, good) {
+            var el = $(id); if (!el) return;
+            el.textContent = msg || '';
+            el.className = el.className.replace(/\btext-(rose|emerald)-\d+\b/g, '') + ' ' + (good ? 'text-emerald-400' : 'text-rose-400');
+            el.style.display = msg ? 'block' : 'none';
+        }
+        var isOwner = function () { return app.role === 'owner'; };
 
+        /* ---------- sound: browsers only allow audio after a tap, so unlock it on the first one ---------- */
+        function audioCtor() { return window.AudioContext || window.webkitAudioContext || null; }
+        function ensureAudio() {
+            var C = audioCtor(); if (!C) return null;
+            try {
+                if (!app.audio) app.audio = new C();
+                if (app.audio.state === 'suspended' && app.audio.resume) app.audio.resume().then(renderSoundPrompt, function () {});
+            } catch (e) {}
+            return app.audio;
+        }
+        function soundReady() {
+            if (!app.sound || !audioCtor()) return true;
+            return !!(app.audio && app.audio.state === 'running');
+        }
+        function renderSoundPrompt() {
+            var p = $('soundPrompt'); if (!p) return;
+            p.style.display = (app.me && !soundReady()) ? 'block' : 'none';
+        }
+        function beep() {
+            try { if (navigator.vibrate) navigator.vibrate(200); } catch (e) {}
+            if (!app.sound) return;
+            try {
+                var ctx = ensureAudio(); if (!ctx) return;
+                var o = ctx.createOscillator(), g = ctx.createGain();
+                o.connect(g); g.connect(ctx.destination); o.frequency.value = 880;
+                g.gain.setValueAtTime(0.15, ctx.currentTime);
+                g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+                o.start(); o.stop(ctx.currentTime + 0.4);
+            } catch (e) {}
+        }
+        // Any tap anywhere unlocks audio for the rest of the session.
+        document.addEventListener('pointerdown', function () { if (app.me && app.sound) ensureAudio(); setTimeout(renderSoundPrompt, 50); }, true);
 
-    // --- END LIVE DATA INJECTION ---
-
-
-
-
-        const app = {
-            config: null, wtActive: false, wtStep: 0, currentEditId: null,
-            get orders() { return JSON.parse(localStorage.getItem('foodtruck_orders')) || []; },
-            set orders(val) { localStorage.setItem('foodtruck_orders', JSON.stringify(val)); },
-            get history() { return JSON.parse(localStorage.getItem('foodtruck_history')) || []; },
-            set history(val) { localStorage.setItem('foodtruck_history', JSON.stringify(val)); },
-            get canceledOrders() { return JSON.parse(localStorage.getItem('foodtruck_canceled')) || []; },
-            set canceledOrders(val) { localStorage.setItem('foodtruck_canceled', JSON.stringify(val)); },
-            get menu() { 
-                const c = JSON.parse(localStorage.getItem('demo_config'));
-                if (c && c.menu) return c.menu.map((item, index) => ({ 
-                    id: 900 + index, name: item.name, desc: item.desc || "Signature house item.", 
-                    price: parseFloat(item.price)||0, salePrice: parseFloat(item.salePrice)||null, 
-                    prep: parseInt(item.prep)||3, soldOut: item.soldOut || false 
-                }));
-                return [{ id: 900, name: "Signature Street Taco", desc: "Freshly made with house ingredients.", price: 3.50, salePrice: 2.75, prep: 2, soldOut: false }]; 
-            },
-            get locations() { return JSON.parse(localStorage.getItem('ft_locations')) || ["Downtown Main Street", "City Park", "Food Truck Row"]; },
-            set locations(val) { localStorage.setItem('ft_locations', JSON.stringify(val)); },
-            get deletedLocations() { return JSON.parse(localStorage.getItem('ft_deleted_locs')) || []; },
-            set deletedLocations(val) { localStorage.setItem('ft_deleted_locs', JSON.stringify(val)); }
-        };
-
-        const minimalPreset = {
-            subheader: "Signature House Item", emoji: "🌮",
-            items: [
-                { 
-                    name: "Signature Street Taco", 
-                    price: 3.50, 
-                    salePrice: 2.75, 
-                    desc: "Freshly made with house ingredients.", 
-                    prep: 2, 
-                    hasMeat: true, 
-                    meats: "Asada, Pollo, Veggie", 
-                    premiumUpcharge: 1.00, 
-                    soldOut: false 
-                }
-            ]
-        };
-
-        function applyDemoConfig() {
-            let configData = JSON.parse(localStorage.getItem('demo_config'));
-            if (!configData) {
-                configData = {
-                    ownerName: "Partner",
-                    ownerIG: "storefront",
-                    truckName: "Storefront",
-                    cuisineSubheader: minimalPreset.subheader,
-                    cuisineEmoji: minimalPreset.emoji,
-                    menu: minimalPreset.items
-                };
-                localStorage.setItem('demo_config', JSON.stringify(configData));
-            }
-            app.config = configData; 
-            const c = app.config;
-
-            if (c.truckName) { document.getElementById('dynamic-truck-name-login').innerText = c.truckName; document.getElementById('dynamic-truck-name-dash').innerText = c.truckName; }
-            if (c.cuisineEmoji) { document.getElementById('dynamic-emoji-login').innerText = c.cuisineEmoji; document.getElementById('dynamic-emoji-dash').innerText = c.cuisineEmoji; }
-            if (c.ownerName) document.getElementById('dynamic-owner-name').innerText = c.ownerName;
-
-            if (c.themeClass) document.body.classList.add(c.themeClass);
-            if (c.themeColor || c.themeClass) {
-                const brandColor = c.themeColor || "#27272a";
-                let extraCSS = `.theme-bg { background-color: ${brandColor} !important; color: #fff !important; } .theme-text { color: ${brandColor} !important; } .theme-border { border-color: ${brandColor} !important; }`;
-                if (c.themeClass === 'theme-cleanslate') extraCSS += `.theme-bg { background-color: #111 !important; color: #fff !important; } .theme-text { color: #111 !important; } .theme-border { border-color: #333 !important; }`;
-                else if (c.themeClass === 'theme-obsidian') extraCSS += `.theme-bg { background-color: #fff !important; color: #000 !important; } .theme-text { color: #ddd !important; } .theme-border { border-color: #ddd !important; }`;
-                const style = document.createElement('style'); style.innerHTML = extraCSS; document.head.appendChild(style);
-            }
+        /* ---------- keep the screen on while the dashboard is open (phones sleep and drop the live feed) ---------- */
+        function keepAwake() {
+            if (!app.me || document.hidden || app.wakeLock || !('wakeLock' in navigator)) return;
+            navigator.wakeLock.request('screen').then(function (lock) {
+                app.wakeLock = lock; $('awakeNote').style.display = 'block';
+                lock.addEventListener('release', function () { app.wakeLock = null; $('awakeNote').style.display = 'none'; });
+            }).catch(function () { /* low battery mode or unsupported: nothing to do */ });
+        }
+        function releaseAwake() {
+            if (app.wakeLock) { try { app.wakeLock.release(); } catch (e) {} app.wakeLock = null; }
+            $('awakeNote').style.display = 'none';
         }
 
-        // WALKTHROUGH ENGINE (17 Steps)
-        const walkthroughSteps = [
-            { trigger: () => { wtShow("Security First", "Your backend is PIN-protected. Enter your PIN and click Unlock.", "login-box", false, 'top'); } },
-            { trigger: () => { 
-                const firstOrder = document.querySelector('#ownerOrdersList > div');
-                if(firstOrder) { 
-                    firstOrder.id = 'wt-first-order'; 
-                    wtShow("Incoming Orders", "Here is the order your customer just placed. You have three options: Cancel, Mark Ready, or Fulfill.", "wt-first-order", true, 'bottom', "Next"); 
-                } else wtNextStep();
-            }},
-            { trigger: () => { 
-                wtShow("Order Management", "You can easily view your active, fulfilled, or canceled orders using these tabs.", "order-filter-tabs", true, 'bottom', "Next"); 
-            }},
-            { trigger: () => { 
-                const btnReady = document.querySelector('.btn-wt-ready');
-                if(btnReady) { btnReady.id = 'wt-target-ready'; wtShow("Keep Customers Updated", "Click 'Mark Ready' to instantly text the customer that their food is hot.", "wt-target-ready", false, 'bottom'); } else wtNextStep();
-            }},
-            { trigger: () => { 
-                const btnFulfill = document.querySelector('.btn-wt-fulfill');
-                if(btnFulfill) { btnFulfill.id = 'wt-target-fulfill'; wtShow("Capture Revenue", "The customer picked up the food. Click 'Fulfill' to clear the screen.", "wt-target-fulfill", false, 'bottom'); } else wtNextStep();
-            }},
-            { trigger: () => { wtShow("System Validated", "Click 'Explore Dashboard' to see the rest of your tools.", "btn-roi-close", false, 'top'); } },
-            { trigger: () => { wtShow("Team Management", "Track employee hours easily. Click the Time Clock widget at the top right of your screen.", "time-clock-widget", false, 'bottom'); } },
-            { trigger: () => { wtShow("Time Clock", "Staff can quickly clock in or out here. Close this window.", "btn-close-timeclock", false, 'top'); } },
-            { trigger: () => { wtShow("Live Inventory", "Let's manage your live menu. Click the Inventory tab.", "tabBtnMenu", false, 'bottom'); } },
-            { trigger: () => { 
-                const btnEdit = document.querySelector('.btn-wt-edit');
-                if(btnEdit) { btnEdit.id = 'wt-target-edit'; wtShow("Edit on the Fly", "Click Edit to instantly change prices, prep times, or descriptions.", "wt-target-edit", false, 'bottom'); } else wtNextStep();
-            }},
-            { trigger: () => { wtShow("Live Editor", "Update anything here and it syncs instantly to the customer site. Save and close for now.", "btn-save-edit", false, 'top'); } },
-            { trigger: () => { 
-                const btnToggle = document.querySelector('.toggle-wrapper');
-                if(btnToggle) { btnToggle.id = 'wt-target-toggle'; wtShow("Instant Removal", "Click this toggle to instantly mark the item 'Sold Out' on the customer menu.", "wt-target-toggle", false, 'bottom'); } else wtNextStep();
-            }},
-            { trigger: () => { wtShow("Store Control", "You can also control operations on the fly. Click the Settings tab.", "tabBtnSettings", false, 'bottom'); } },
-            { trigger: () => { wtShow("Operational Status", "Instantly close the store or add +15 to +30 minute wait times to the customer site during a rush.", "statusRushBox", true, 'bottom', "Next"); } },
-            { trigger: () => { wtShow("Location Manager", "You can manage your parking locations here. Let's move on.", "locationManagerBox", true, 'top', "Next"); } },
-            { trigger: () => { wtShow("Financial Reporting", "Finally, let's look at the numbers. Click the Analytics tab.", "tabBtnAnalytics", false, 'bottom'); } },
-            { trigger: () => { wtShow("Real-Time Tracking", "Your revenue and volume update automatically. Your system tour is complete!", "analytics-dash", true, 'extreme-bottom', "Finish Tour"); } }
+        /* ---------- login / session ---------- */
+        function showLogin(msg) {
+            stopLive();
+            releaseAwake();
+            app.me = null; app.role = null;
+            renderSoundPrompt();
+            $('dashboardHeader').style.display = 'none';
+            $('ownerDashboardView').style.display = 'none';
+            $('loginView').style.display = 'flex';
+            if (msg) say('loginError', msg);
+            // Older accounts (created before email logins) can only use a PIN.
+            var pinOnly = app.pub && app.pub.pinOnly;
+            $('emailForm').style.display = pinOnly ? 'none' : 'block';
+            $('pinForm').style.display = pinOnly ? 'block' : 'none';
+            $('pinLabel').textContent = pinOnly ? 'Owner PIN' : 'Staff PIN';
+            $('btn-back-email').style.display = pinOnly ? 'none' : 'inline';
+        }
+        function sessionEnded(msg) { showLogin(msg); }
+
+        function applyPublic(d) {
+            app.pub = d;
+            $('login-name').textContent = d.businessName;
+            TruckLogo.set($('login-emoji'), d.emoji, '#09090b');
+            document.title = d.businessName + ' - Manage';
+        }
+
+        function enterDashboard() {
+            $('loginView').style.display = 'none';
+            $('dashboardHeader').style.display = 'block';
+            $('ownerDashboardView').style.display = 'block';
+            var v = app.me.vendor;
+            $('dash-name').textContent = v.businessName;
+            TruckLogo.set($('dash-emoji'), v.emoji, '#18181b');
+            $('dash-owner').textContent = v.ownerName || 'Partner';
+            $('dash-role').textContent = app.role === 'staff' ? 'Staff' : '';
+            $('dash-role').style.display = app.role === 'staff' ? 'inline' : 'none';
+            $('planChip').textContent = v.plan === 'pro' ? 'PRO' : 'FREE';
+            $('planChip').className = 'text-[10px] font-bold px-2 py-1 rounded-full border ' + (v.plan === 'pro' ? 'border-emerald-500/40 text-emerald-400' : 'border-zinc-700 text-zinc-300');
+            document.querySelectorAll('[data-owner]').forEach(function (el) { el.style.display = isOwner() ? '' : 'none'; });
+            $('tabBar').className = 'grid gap-1.5 mb-4 relative ' + (isOwner() ? 'grid-cols-5' : 'grid-cols-3');
+            $('shareLink').value = location.origin + '/';
+            $('profName').value = v.businessName || '';
+            $('profEmoji').value = v.emoji || '';
+            renderLogoPicker();
+            $('profIG').value = v.ownerIG || '';
+            $('profOwner').value = v.ownerName || '';
+            $('pwEmail').style.display = (isOwner() && !v.hasPassword) ? 'block' : 'none';
+            $('pwCurrent').style.display = v.hasPassword ? 'block' : 'none';
+            $('currentEmail').textContent = v.email || 'No email set yet — add one under Change password.';
+            renderSound();
+            renderSoundPrompt();
+            keepAwake();
+            renderInstall();
+            initExportDates();
+            if (isOwner()) buildHoursEditor();
+            switchTab('Orders');
+            Promise.all([loadOrders(), loadMenu(), loadState(), isOwner() ? loadLocations() : null]).then(function () { renderSettings(); renderSetup(); });
+            startLive();
+        }
+
+        function loadMe() {
+            return api('GET', '/api/auth/me').then(function (r) {
+                if (!r.ok) return false;
+                app.me = r.data; app.role = r.data.role;
+                return true;
+            });
+        }
+
+        function boot() {
+            fetch('/api/vendor-data', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+                if (!d || d.isDemo) { document.body.innerHTML = '<div class="p-8 text-center text-zinc-400">We could not find this page.</div>'; return; }
+                applyPublic(d);
+                return loadMe().then(function (ok) { if (ok) enterDashboard(); else showLogin(); });
+            }).catch(function () { document.body.innerHTML = '<div class="p-8 text-center text-zinc-400">Could not load. Please refresh.</div>'; });
+
+            fetch('/api/plans').then(function (r) { return r.json(); }).then(function (d) { if (d && d.pro) { app.proPrice = d.pro.price; renderPlan(); } }).catch(function () {});
+
+            // Returning from Stripe Checkout: the webhook can take a few seconds, so poll briefly.
+            var q = new URLSearchParams(location.search);
+            if (q.get('billing') === 'success') {
+                var b = $('billingBanner'); b.textContent = 'Payment received. Upgrading your plan…'; b.style.display = 'block';
+                var tries = 0;
+                var t = setInterval(function () {
+                    tries++;
+                    loadMe().then(function (ok) {
+                        if (ok && app.me.vendor.plan === 'pro') {
+                            clearInterval(t); b.textContent = '🎉 Welcome to Pro! Your upgrade is active.'; $('planChip').textContent = 'PRO';
+                            renderPlan(); loadMenu();
+                            setTimeout(function () { b.style.display = 'none'; }, 6000);
+                        } else if (tries >= 12) { clearInterval(t); b.textContent = 'Your payment is processing. Refresh in a minute to see Pro.'; }
+                    });
+                }, 2500);
+                history.replaceState(null, '', location.pathname);
+            } else if (q.get('billing') === 'cancel') {
+                history.replaceState(null, '', location.pathname);
+            }
+            // Back from Stripe's sign-up pages: show the payments box with fresh status.
+            if (q.get('connect')) {
+                var again = q.get('connect') === 'refresh';
+                history.replaceState(null, '', location.pathname);
+                var waitMe = setInterval(function () {
+                    if (!app.me) return;
+                    clearInterval(waitMe);
+                    switchTab('Settings');
+                    if (again) connectStripe(null);
+                    else loadPayments().then(function () { $('paymentsBox').scrollIntoView({ block: 'start' }); });
+                }, 300);
+            }
+        }
+
+        /* ---------- tabs ---------- */
+        function switchTab(name) {
+            if ((name === 'Analytics' || name === 'Guide') && !isOwner()) name = 'Orders';
+            app.tab = name;
+            ['Orders', 'Menu', 'Settings', 'Analytics', 'Guide'].forEach(function (t) {
+                var el = $('ownerTab' + t), btn = $('tabBtn' + t);
+                if (el) el.style.display = (t === name) ? 'block' : 'none';
+                if (btn) btn.className = (t === name)
+                    ? 'bg-zinc-100 text-zinc-950 font-semibold py-2 rounded-xl text-[10px] transition shadow'
+                    : 'bg-zinc-900 border border-zinc-800 text-zinc-300 font-semibold py-2 rounded-xl text-[10px] transition';
+            });
+            if (name === 'Orders') { app.newCount = 0; renderBadge(); loadOrders(); }
+            if (name === 'Menu') { loadMenu(); setFlag('menu'); }
+            if (name === 'Settings') { renderSettings(); if (isOwner()) { loadLocations().then(renderSettings); loadPayments(); loadSms(); } }
+            if (name === 'Analytics') loadAnalytics();
+            if (name === 'Guide') renderGuide();
+        }
+
+        /* ---------- guide ---------- */
+        // [section, [title, description, tab, target element id, pro?]]
+        var GUIDE = [
+            ['Orders', [
+                ['Live order tickets', 'New orders pop in instantly. Tap a ticket to move it along: Pending → Preparing → Ready → Fulfilled. The customer sees each change on their Order Status screen.', 'Orders', 'ownerOrdersList'],
+                ['Order sound', 'A chime plays for every new order. Tap the bell to turn it on or off. Your phone or tablet screen stays awake while this page is open.', 'Orders', 'btnSound'],
+                ['Active, Fulfilled and Canceled', 'Switch between these to see what is cooking now, what is done, and what was canceled. Old orders tidy themselves up automatically: ready orders close after 3 hours, and abandoned orders cancel on their own.', 'Orders', 'order-filter-tabs'],
+                ['Setup checklist', 'The green checklist walks you through getting ready for your first customers. Hide it any time.', 'Orders', 'setupCard']
+            ]],
+            ['Menu', [
+                ['Add and edit items', 'Add items with a name, price, description, category and photo. Add choices like sizes or toppings with their own prices. Up to 200 items.', 'Menu', 'ownerMenuList'],
+                ['Sold out', 'Ran out of something? Mark it sold out and customers can still see it but can’t order it. Turn it back on when you restock.', 'Menu', 'ownerMenuList'],
+                ['Reorder items', 'Use the arrows to move items up or down. Customers see them in this order, grouped by category.', 'Menu', 'ownerMenuList']
+            ]],
+            ['Your truck & page', [
+                ['Pause online orders', 'Slammed at the window? Pause online orders. Your page stays up and tells customers to order at the window. Unpause when you catch up.', 'Settings', 'statusRushBox'],
+                ['Rush mode (wait times)', 'Set how busy you are so customers see an honest estimated wait before they order.', 'Settings', 'statusRushBox'],
+                ['Your ordering page link', 'This is the link customers use to order. Copy it for Instagram, Facebook or Google. Customers can switch the page to Spanish.', 'Settings', 'pageBox'],
+                ['QR code sign', 'Print a QR sign for your window or download the image. Customers scan it to order from their phone.', 'Settings', 'pageBox'],
+                ['Posted hours', 'Set your hours and time zone. Your page shows customers whether you are open now.', 'Settings', 'hoursBox'],
+                ['Locations', 'Save the spots you park at and pick where you are today. Customers see your current location.', 'Settings', 'locationManagerBox'],
+                ['Business profile & logo', 'Change your truck name, Instagram, your name, and pick a logo from the presets or type any emoji.', 'Settings', 'profileBox']
+            ]],
+            ['Pro features', [
+                ['Online payments', 'Let customers pay when they order with card, Apple Pay or Google Pay. Money goes straight to your own Stripe account. On the Free plan customers pay at the window.', 'Settings', 'paymentsBox', true],
+                ['Text alerts', 'Get a text when a new order comes in, and text customers when their food is ready (only if they opt in).', 'Settings', 'smsSettingsBox', true],
+                ['Your own domain', 'Use your own domain (like order.yourtruck.com) instead of the Online Kitchen address. Email us after upgrading and we’ll set it up.', 'Settings', 'planBox', true],
+                ['No “Powered by” footer', 'Removes the Online Kitchen footer from your ordering page.', 'Settings', 'planBox', true],
+                ['Plan & billing', 'Upgrade to Pro, change your card, or cancel any time.', 'Settings', 'planBox']
+            ]],
+            ['Sales', [
+                ['Real-time financials', 'See today’s sales, order count and best sellers as orders come in.', 'Analytics', 'ownerTabAnalytics'],
+                ['Export orders', 'Download your orders for any date range as a spreadsheet file (CSV) for your bookkeeping or taxes.', 'Analytics', 'exportBox']
+            ]],
+            ['Staff & account', [
+                ['Staff PIN', 'Give staff a PIN so they can run the kitchen screen without seeing your settings, payments or sales. Changing it signs all staff out.', 'Settings', 'securityBox'],
+                ['Password', 'Change your password here. Forgot it? Use “Forgot password?” on the log in page.', 'Settings', 'securityBox'],
+                ['Install as an app', 'Add the kitchen portal to your home screen so it opens like an app. Look for the Install button at the top, or use your browser’s “Add to Home Screen”.', 'Orders', 'installBtn'],
+                ['Account', 'Change your login email, or delete your account and all its data.', 'Settings', 'accountBox']
+            ]]
         ];
+        function renderGuide() {
+            var html = '';
+            GUIDE.forEach(function (sec) {
+                html += '<div><h4 class="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-2">' + esc(sec[0]) + '</h4><div class="space-y-2">';
+                sec[1].forEach(function (f) {
+                    html += '<div class="bg-zinc-900 border border-zinc-800 rounded-xl p-3">' +
+                        '<div class="flex items-center gap-2"><div class="font-semibold text-sm text-zinc-100 flex-1">' + esc(f[0]) + '</div>' +
+                        (f[4] ? '<span class="text-[9px] font-bold text-emerald-400 border border-emerald-500/40 rounded px-1">PRO</span>' : '') + '</div>' +
+                        '<p class="text-[11px] text-zinc-400 mt-1 leading-relaxed">' + esc(f[1]) + '</p>' +
+                        '<button data-action="guide-go" data-tab="' + f[2] + '" data-target="' + f[3] + '" class="mt-2 text-[11px] font-bold text-zinc-200 bg-zinc-800 hover:bg-zinc-700 px-3 py-1.5 rounded-lg">Take me there →</button>' +
+                        '</div>';
+                });
+                html += '</div></div>';
+            });
+            $('guideList').innerHTML = html;
+        }
+        function guideGo(tab, target) {
+            switchTab(tab);
+            setTimeout(function () {
+                var el = $(target);
+                if (!el || el.offsetParent === null) { el = $('ownerTab' + tab); }
+                if (!el) return;
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                el.classList.add('guide-flash');
+                setTimeout(function () { el.classList.remove('guide-flash'); }, 1800);
+            }, 80);
+        }
 
-        function wtShow(title, text, targetId, showNextBtn = false, positionHint = 'auto', customBtnText = "Next") {
-            app.wtActive = true; document.getElementById('wtOverlay').style.display = 'block';
-            const tooltip = document.getElementById('wtTooltip');
-            document.getElementById('wtTitle').innerText = title; document.getElementById('wtText').innerText = text;
-            const nextBtn = document.getElementById('wtNextBtn');
-            nextBtn.style.display = showNextBtn ? 'block' : 'none'; nextBtn.innerText = customBtnText;
-            nextBtn.onclick = () => { wtNextStep(); };
-            
-            document.querySelectorAll('.wt-spotlight, .wt-parent-override').forEach(el => el.classList.remove('wt-spotlight', 'wt-spotlight-pulse', 'wt-parent-override'));
+        /* ---------- orders ---------- */
+        function fmtTime(ts) { try { return new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; } }
 
-            if (targetId) {
-                const target = document.getElementById(targetId);
-                if (target) {
-                    target.classList.add('wt-spotlight', 'wt-spotlight-pulse');
-                    let current = target.parentElement;
-                    while(current && current.tagName !== 'BODY') {
-                        const style = window.getComputedStyle(current);
-                        if (style.zIndex !== 'auto' && style.zIndex !== '') current.classList.add('wt-parent-override');
-                        current = current.parentElement;
-                    }
-                    tooltip.style.display = 'flex';
-                    if (positionHint === 'top') { tooltip.style.bottom = 'auto'; tooltip.style.top = '5%'; tooltip.style.transform = 'translateX(-50%)'; } 
-                    else if (positionHint === 'bottom') { tooltip.style.top = 'auto'; tooltip.style.bottom = '5%'; tooltip.style.transform = 'translateX(-50%)'; } 
-                    else if (positionHint === 'extreme-bottom') { tooltip.style.top = 'auto'; tooltip.style.bottom = '2%'; tooltip.style.transform = 'translateX(-50%)'; }
-                    else {
-                        const rect = target.getBoundingClientRect();
-                        if (rect.top < window.innerHeight / 2) { tooltip.style.top = 'auto'; tooltip.style.bottom = '10%'; tooltip.style.transform = 'translateX(-50%)'; } else { tooltip.style.bottom = 'auto'; tooltip.style.top = '10%'; tooltip.style.transform = 'translateX(-50%)'; }
-                    }
+        function loadOrders() {
+            return api('GET', '/api/owner/orders?status=' + encodeURIComponent(app.filter)).then(function (r) {
+                if (r.ok) { app.orders = r.data.orders || []; renderOrders(); if (app.orders.length) setFlag('test'); }
+            });
+        }
+
+        function renderOrders() {
+            var active = 'px-4 py-1.5 rounded-lg text-[11px] font-bold bg-zinc-100 text-zinc-950 shadow transition';
+            var inactive = 'px-4 py-1.5 rounded-lg text-[11px] font-bold text-zinc-400 hover:text-zinc-200 transition';
+            ['Active', 'Fulfilled', 'Canceled'].forEach(function (f) { $('filter' + f).className = (f === app.filter) ? active : inactive; });
+
+            var c = $('ownerOrdersList');
+            if (!app.orders.length) {
+                c.innerHTML = '<div class="text-center text-zinc-500 py-6 text-xs bg-zinc-900 border border-zinc-800 rounded-xl">No ' + esc(app.filter.toLowerCase()) + ' orders.</div>';
+                return;
+            }
+            c.innerHTML = app.orders.map(function (o) {
+                var ready = o.status === 'Ready';
+                var color = app.filter === 'Fulfilled' ? 'text-emerald-400' : app.filter === 'Canceled' ? 'text-rose-400' : (ready ? 'text-blue-400' : 'text-amber-500');
+                var buttons = '';
+                if (app.filter === 'Active') {
+                    buttons = '<div class="flex gap-2 pt-2 border-t border-zinc-800/80">' +
+                        '<button data-action="order" data-act="cancel" data-id="' + o.id + '" class="bg-zinc-950 text-rose-400 border border-rose-500/30 px-3 py-2 rounded-lg text-xs font-medium">Cancel</button>' +
+                        '<button data-action="order" data-act="ready" data-id="' + o.id + '" class="flex-1 ' + (ready ? 'bg-zinc-800 text-zinc-500' : 'bg-blue-600 hover:bg-blue-500 text-white') + ' py-2 rounded-lg text-xs font-bold shadow-lg transition"' + (ready ? ' disabled' : '') + '>' + (ready ? 'Marked Ready ✓' : 'Mark Ready') + '</button>' +
+                        '<button data-action="order" data-act="fulfill" data-id="' + o.id + '" class="flex-1 bg-emerald-600 hover:bg-emerald-500 py-2 rounded-lg text-xs font-bold text-white shadow-lg shadow-emerald-600/20">Fulfill ✓</button></div>';
                 }
-            } else { tooltip.style.display = 'flex'; tooltip.style.bottom = 'auto'; tooltip.style.top = '40%'; tooltip.style.transform = 'translateX(-50%)'; }
-        }
-
-        function wtNextStep() {
-            if (!app.wtActive) return;
-            app.wtStep++; document.getElementById('wtTooltip').style.display = 'none';
-            if (app.wtStep < walkthroughSteps.length) {
-                setTimeout(() => { walkthroughSteps[app.wtStep].trigger(); }, 300);
-            } else {
-                endWalkthrough(); showPostDemoView();
-            }
-        }
-
-        function endWalkthrough() {
-            app.wtActive = false; localStorage.removeItem('wt_incoming_demo');
-            document.getElementById('wtOverlay').style.display = 'none'; document.getElementById('wtTooltip').style.display = 'none';
-            document.querySelectorAll('.wt-spotlight, .wt-parent-override').forEach(el => el.classList.remove('wt-spotlight', 'wt-spotlight-pulse', 'wt-parent-override'));
-        }
-
-        window.onload = function() {
-            applyDemoConfig(); document.getElementById('loginView').style.display = 'flex';
-            if (localStorage.getItem('wt_incoming_demo') === 'true') {
-                app.wtStep = 0; document.getElementById('ownerPinInput').value = localStorage.getItem('foodtruck_pin') || '1234';
-                setTimeout(() => { walkthroughSteps[0].trigger(); }, 500);
-            }
-        };
-
-        // NATIVE LOGIC
-        function verifyOwnerPin() {
-            const input = document.getElementById('ownerPinInput').value.trim();
-            const savedPin = localStorage.getItem('foodtruck_pin') || '1234';
-            if (input === savedPin) { 
-                document.getElementById('loginView').style.display = 'none';
-                document.getElementById('dashboardHeader').style.display = 'block';
-                document.getElementById('ownerDashboardView').style.display = 'block';
-                initOwnerPortal();
-                if(app.wtActive && app.wtStep === 0) wtNextStep();
-            } else { alert(`Incorrect PIN! (Hint: ${savedPin})`); }
-        }
-
-        function lockOwnerPortal() {
-            document.getElementById('dashboardHeader').style.display = 'none'; document.getElementById('ownerDashboardView').style.display = 'none'; document.getElementById('postDemoView').style.display = 'none';
-            document.getElementById('loginView').style.display = 'flex'; document.getElementById('ownerPinInput').value = '';
-        }
-
-        function openTimeClock() { document.getElementById('timeClockModal').style.display = 'flex'; if(app.wtActive && app.wtStep === 6) wtNextStep(); }
-        function closeTimeClock() { document.getElementById('timeClockModal').style.display = 'none'; if(app.wtActive && app.wtStep === 7) wtNextStep(); }
-
-        function switchOwnerTab(tabName) {
-            if(app.wtActive && app.wtStep < 12 && tabName !== 'Menu' && tabName !== 'Orders') return;
-            ['Orders', 'Menu', 'Settings', 'Analytics'].forEach(t => {
-                const el = document.getElementById(`ownerTab${t}`); const btn = document.getElementById(`tabBtn${t}`);
-                if (el) el.style.display = (t === tabName) ? 'block' : 'none';
-                if (btn) btn.className = (t === tabName) ? "bg-zinc-100 text-zinc-950 font-semibold py-2 rounded-xl text-[10px] transition shadow theme-bg" : "bg-zinc-900 border border-zinc-800 text-zinc-300 font-semibold py-2 rounded-xl text-[10px] transition";
-            });
-            if (tabName === 'Orders') renderOwnerPortal();
-            if (tabName === 'Menu') { renderOwnerMenuEditor(); if(app.wtActive && app.wtStep === 8) wtNextStep(); }
-            if (tabName === 'Settings') { renderSettings(); if(app.wtActive && app.wtStep === 12) wtNextStep(); }
-            if (tabName === 'Analytics') { renderAnalytics(); if(app.wtActive && app.wtStep === 15) wtNextStep(); }
-        }
-
-        function initOwnerPortal() { renderOwnerPortal(); renderOwnerMenuEditor(); renderSettings(); renderAnalytics(); }
-
-        // ORDERS & FILTERING
-        let currentOrderFilter = 'Active';
-        function renderOrders(filter = currentOrderFilter) {
-            currentOrderFilter = filter;
-            
-            const activeClass = "px-4 py-1.5 rounded-lg text-[11px] font-bold bg-zinc-100 text-zinc-950 theme-bg shadow transition";
-            const inactiveClass = "px-4 py-1.5 rounded-lg text-[11px] font-bold text-zinc-400 hover:text-zinc-200 transition";
-            
-            ['Active', 'Fulfilled', 'Canceled'].forEach(f => {
-                const btn = document.getElementById(`filter${f}`);
-                if (btn) btn.className = (f === filter) ? activeClass : inactiveClass;
-            });
-
-            const container = document.getElementById('ownerOrdersList'); if(!container) return;
-            
-            let displayOrders = [];
-            if (filter === 'Active') displayOrders = app.orders;
-            if (filter === 'Fulfilled') displayOrders = app.history;
-            if (filter === 'Canceled') displayOrders = app.canceledOrders;
-
-            if (displayOrders.length === 0) { 
-                container.innerHTML = `<div class="text-center text-zinc-500 py-6 text-xs bg-zinc-900 border border-zinc-800 rounded-xl">No ${filter.toLowerCase()} orders.</div>`; 
-            } else {
-                container.innerHTML = displayOrders.map(o => {
-                    const isReady = o.status.includes('Ready');
-                    let actionBtns = '';
-                    if (filter === 'Active') {
-                        actionBtns = `<div class="flex gap-2 pt-2 border-t border-zinc-800/80"><button onclick="cancelOrder('${o.id}')" class="bg-zinc-950 text-rose-400 border border-rose-500/30 px-3 py-2 rounded-lg text-xs font-medium">Cancel</button><button onclick="markReady('${o.id}')" class="flex-1 btn-wt-ready ${isReady ? 'bg-zinc-800 text-zinc-500' : 'bg-blue-600 hover:bg-blue-500 text-white'} py-2 rounded-lg text-xs font-bold shadow-lg transition" ${isReady ? 'disabled' : ''}>${isReady ? 'SMS Sent ✓' : 'Mark Ready'}</button><button onclick="completeOrder('${o.id}')" class="flex-1 btn-wt-fulfill bg-emerald-600 hover:bg-emerald-500 py-2 rounded-lg text-xs font-bold text-white shadow-lg shadow-emerald-600/20">Fulfill ✓</button></div>`;
-                    }
-                    
-                    let statusColor = 'text-amber-500';
-                    if (filter === 'Fulfilled') statusColor = 'text-emerald-400';
-                    if (filter === 'Canceled') statusColor = 'text-rose-400';
-                    if (filter === 'Active' && isReady) statusColor = 'text-blue-400';
-
-                    return `<div class="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex flex-col gap-3 relative"><div class="flex justify-between items-start"><div><span class="text-xs font-mono font-bold theme-text">#${o.id} (${o.name})</span><h4 class="font-bold text-sm mt-1 whitespace-pre-line">${o.items}</h4><div class="text-[10px] ${statusColor} mt-1 font-semibold">${o.status}</div></div><span class="font-bold text-emerald-400">$${o.total.toFixed(2)}</span></div>${actionBtns}</div>`;
-                }).join('');
-            }
-        }
-        
-        function renderOwnerPortal() { renderOrders(); }
-        
-        function cancelOrder(id) { 
-            if(app.wtActive) return; 
-            if(confirm("Cancel this order?")) { 
-                let orders = app.orders; 
-                const idx = orders.findIndex(x => x.id === id); 
-                if (idx > -1) { 
-                    const canceled = orders.splice(idx, 1)[0]; 
-                    canceled.status = "Canceled"; 
-                    app.orders = orders; 
-                    let cList = app.canceledOrders; 
-                    cList.unshift(canceled); 
-                    app.canceledOrders = cList; 
-                    renderOwnerPortal(); 
-                } 
-            } 
-        }
-        
-        function markReady(id) { let orders = app.orders; const idx = orders.findIndex(x => x.id === id); if (idx > -1) { orders[idx].status = "Ready (SMS Sent)"; app.orders = orders; renderOwnerPortal(); if(app.wtActive && app.wtStep === 3) wtNextStep(); } }
-        function completeOrder(id) { let orders = app.orders; const idx = orders.findIndex(x => x.id === id); if (idx > -1) { const completed = orders.splice(idx, 1)[0]; completed.status = "Fulfilled"; app.orders = orders; let history = app.history; history.unshift(completed); app.history = history; renderOwnerPortal(); renderAnalytics(); document.getElementById('roiModal').style.display = 'flex'; if(app.wtActive && app.wtStep === 4) wtNextStep(); } }
-        function closeRoiModal() { document.getElementById('roiModal').style.display = 'none'; if(app.wtActive && app.wtStep === 5) wtNextStep(); }
-
-        // MENU (Single Item Editor)
-        function renderOwnerMenuEditor() {
-            const container = document.getElementById('ownerMenuList'); if (!container || app.menu.length === 0) return;
-            container.innerHTML = app.menu.map((item) => {
-                let priceStr = `$${item.price.toFixed(2)}`;
-                if(item.salePrice && item.salePrice > 0) priceStr = `<span class="line-through text-zinc-600 mr-1">$${item.price.toFixed(2)}</span> <span class="text-red-500 font-bold">$${item.salePrice.toFixed(2)}</span>`;
-                return `
-                <div class="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex justify-between items-center text-xs">
-                    <div><div class="font-bold text-zinc-100">${item.name}</div><div class="theme-text text-[11px] mt-0.5">${priceStr} • Prep: ${item.prep} mins</div></div>
-                    <div class="flex items-center gap-3"><button onclick="openEditItem(${item.id})" class="btn-wt-edit bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1.5 rounded-lg text-[10px] font-semibold transition">Edit</button><span class="text-[10px] text-zinc-500 font-medium uppercase tracking-wider hidden sm:inline">Instant Removal</span><div class="relative inline-block w-10 mr-1 align-middle select-none transition duration-200 ease-in toggle-wrapper" onclick="toggleSoldOut(this)"><input type="checkbox" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-zinc-700 z-10 transition-transform duration-200 ease-in-out"/><label class="toggle-label block overflow-hidden h-5 rounded-full bg-zinc-700 cursor-pointer"></label></div></div>
-                </div>`
+                var items = (o.items || []).map(function (i) { return esc(i.qty + 'x ' + i.name); }).join('<br>');
+                return '<div class="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex flex-col gap-3 relative">' +
+                    '<div class="flex justify-between items-start gap-3"><div class="min-w-0">' +
+                    '<span class="text-xs font-mono font-bold">#' + esc(o.ticket) + ' (' + esc(o.name) + ') <span class="text-zinc-500 font-normal">' + esc(fmtTime(o.createdAt)) + '</span></span>' +
+                    '<h4 class="font-bold text-sm mt-1">' + items + '</h4>' +
+                    '<div class="mt-1.5 flex flex-wrap gap-1">' +
+                    (o.payment === 'paid' ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">💳 PAID ONLINE</span>'
+                        : o.payment === 'refunded' ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-zinc-700 text-zinc-300">↩ REFUNDED</span>'
+                        : '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">💵 PAY AT WINDOW</span>') +
+                    (o.textMe ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-300 border border-blue-500/30">📱 texts when ready</span>' : '') +
+                    '</div>' +
+                    (o.notes ? '<div class="text-[11px] text-zinc-400 mt-1 whitespace-pre-line">Note: ' + esc(o.notes) + '</div>' : '') +
+                    '<div class="text-[10px] ' + color + ' mt-1 font-semibold">' + esc(o.status) + '</div></div>' +
+                    '<span class="font-bold text-emerald-400">' + money(o.total) + '</span></div>' + buttons + '</div>';
             }).join('');
         }
-        function openEditItem(id) { 
-            const item = app.menu.find(m => m.id === id); app.currentEditId = id;
-            document.getElementById('editName').value = item.name;
-            document.getElementById('editDesc').value = item.desc || "";
-            document.getElementById('editPrice').value = item.price.toFixed(2);
-            document.getElementById('editSalePrice').value = item.salePrice ? item.salePrice.toFixed(2) : "";
-            document.getElementById('editPrep').value = item.prep;
-            document.getElementById('editItemModal').style.display = 'flex'; 
-            if(app.wtActive && app.wtStep === 9) wtNextStep(); 
-        }
-        function closeEditItem() { document.getElementById('editItemModal').style.display = 'none'; }
-        
-        function saveEditItem() {
-            if(!app.currentEditId) return;
-            const configData = JSON.parse(localStorage.getItem('demo_config'));
-            const menuIdx = configData.menu.findIndex(m => (900 + configData.menu.indexOf(m)) === app.currentEditId);
-            if (menuIdx > -1) {
-                configData.menu[menuIdx].name = document.getElementById('editName').value.trim();
-                configData.menu[menuIdx].desc = document.getElementById('editDesc').value.trim();
-                configData.menu[menuIdx].price = parseFloat(document.getElementById('editPrice').value) || 0;
-                const sp = parseFloat(document.getElementById('editSalePrice').value);
-                configData.menu[menuIdx].salePrice = (sp && sp > 0) ? sp : null;
-                configData.menu[menuIdx].prep = parseInt(document.getElementById('editPrep').value) || 3;
-                localStorage.setItem('demo_config', JSON.stringify(configData));
-                renderOwnerMenuEditor(); 
-            }
-            document.getElementById('editItemModal').style.display = 'none';
-            if(app.wtActive && app.wtStep === 10) wtNextStep();
+
+        function orderAction(id, act) {
+            var ord = app.orders.find(function (o) { return o.id === id; });
+            var paid = ord && ord.payment === 'paid';
+            if (act === 'cancel' && !confirm(paid ? 'Cancel this order and refund the customer\'s card in full?' : 'Cancel this order?')) return;
+            api('PATCH', '/api/owner/orders/' + id, { action: act }).then(function (r) {
+                if (!r.ok) { alert(r.data.error || 'Could not update that order.'); loadOrders(); return; }
+                loadOrders();
+            });
         }
 
-        function toggleSoldOut(element) { const checkbox = element.querySelector('.toggle-checkbox'); checkbox.checked = !checkbox.checked; if(app.wtActive && app.wtStep === 11) wtNextStep(); }
+        function renderBadge() {
+            var b = $('newOrdersBadge');
+            b.textContent = app.newCount;
+            b.style.display = (app.newCount > 0 && app.tab !== 'Orders') ? 'inline' : 'none';
+            document.title = (app.newCount > 0 ? '(' + app.newCount + ') ' : '') + (app.me ? app.me.vendor.businessName : 'Manage');
+        }
+        function renderSound() { $('btnSound').textContent = app.sound ? '🔔 Sound on' : '🔕 Sound off'; }
 
-        // SETTINGS & LOCATIONS
+        /* ---------- inventory ---------- */
+        function loadMenu() {
+            return api('GET', '/api/owner/menu').then(function (r) {
+                if (r.ok) { app.menu = r.data.menu || []; renderMenuList(); }
+            });
+        }
+        // Same grouping as the customer page: categories in the order they first appear.
+        function menuGroups() {
+            var order = [], map = {};
+            app.menu.forEach(function (it) { var k = (it.category || '').trim(); if (!map[k]) { map[k] = []; order.push(k); } map[k].push(it); });
+            return order.map(function (k) { return { name: k, items: map[k] }; });
+        }
+        function renderMenuList() {
+            var c = $('ownerMenuList');
+            if (!app.menu.length) { c.innerHTML = '<div class="text-center text-zinc-500 py-6 text-xs bg-zinc-900 border border-zinc-800 rounded-xl">No menu items yet.</div>'; return; }
+            var gs = menuGroups(), named = gs.some(function (g) { return g.name; });
+            c.innerHTML = gs.map(function (g) {
+                return (named ? '<h4 class="text-[10px] font-bold uppercase tracking-wider text-zinc-500 pt-2">' + esc(g.name || 'No category') + '</h4>' : '') +
+                    g.items.map(function (item, i) { return menuRow(item, i === 0, i === g.items.length - 1); }).join('');
+            }).join('');
+        }
+        function menuRow(item, isFirst, isLast) {
+            var arrows = isOwner()
+                ? '<div class="flex flex-col gap-1 shrink-0">' +
+                  '<button data-action="move-item" data-id="' + item.id + '" data-dir="-1" aria-label="Move up" class="w-6 h-6 rounded bg-zinc-800 text-zinc-300 text-[10px]' + (isFirst ? ' opacity-30' : '') + '"' + (isFirst ? ' disabled' : '') + '>▲</button>' +
+                  '<button data-action="move-item" data-id="' + item.id + '" data-dir="1" aria-label="Move down" class="w-6 h-6 rounded bg-zinc-800 text-zinc-300 text-[10px]' + (isLast ? ' opacity-30' : '') + '"' + (isLast ? ' disabled' : '') + '>▼</button></div>'
+                : '';
+            return (function (item) {
+                var price = (item.salePrice && item.salePrice > 0)
+                    ? '<span class="line-through text-zinc-600 mr-1">' + money(item.price) + '</span> <span class="text-red-500 font-bold">' + money(item.salePrice) + '</span>'
+                    : money(item.price);
+                return '<div class="bg-zinc-900 border border-zinc-800 p-3 rounded-xl flex justify-between items-center text-xs gap-3">' + arrows +
+                    (item.photo ? '<img src="' + esc(item.photo) + '" alt="" loading="lazy" class="w-10 h-10 rounded-lg object-cover shrink-0">' : '') +
+                    '<div class="min-w-0 flex-1"><div class="font-bold text-zinc-100 truncate">' + esc(item.name) + '</div><div class="text-[11px] mt-0.5 text-zinc-300">' + price + ' • Prep: ' + esc(item.prep) + ' mins</div></div>' +
+                    '<div class="flex items-center gap-3 shrink-0">' +
+                    (isOwner() ? '<button data-action="edit-item" data-id="' + item.id + '" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1.5 rounded-lg text-[10px] font-semibold transition">Edit</button>' : '') +
+                    '<div class="flex flex-col items-center gap-1"><button data-action="toggle-sold" data-id="' + item.id + '" aria-label="Toggle sold out" class="switch ' + (item.soldOut ? 'on' : '') + '"></button><span class="text-[9px] uppercase tracking-wider ' + (item.soldOut ? 'text-rose-400' : 'text-zinc-500') + '">' + (item.soldOut ? 'Sold out' : 'Available') + '</span></div>' +
+                    '</div></div>';
+            })(item);
+        }
+
+        function moveItem(id, dir) {
+            var item = app.menu.find(function (m) { return m.id === id; }); if (!item) return;
+            var cat = (item.category || '').trim();
+            var idxs = []; app.menu.forEach(function (m, i) { if ((m.category || '').trim() === cat) idxs.push(i); });
+            var pos = idxs.indexOf(app.menu.indexOf(item)), other = idxs[pos + dir];
+            if (other === undefined) return;
+            var next = app.menu.slice(), a = app.menu.indexOf(item);
+            next[a] = next[other]; next[other] = item;
+            app.menu = next; renderMenuList();
+            api('PUT', '/api/owner/menu-order', { ids: next.map(function (m) { return m.id; }) }).then(function (r) {
+                if (r.ok) app.menu = r.data.menu; else alert(r.data.error || 'Could not reorder.');
+                loadMenu();
+            });
+        }
+
+        function toggleSold(id) {
+            var item = app.menu.find(function (m) { return m.id === id; });
+            if (!item) return;
+            var next = !item.soldOut;
+            item.soldOut = next; renderMenuList(); // instant feedback, corrected below if the server disagrees
+            api('PATCH', '/api/owner/menu/' + id + '/soldout', { soldOut: next }).then(function (r) {
+                if (!r.ok) { item.soldOut = !next; renderMenuList(); alert(r.data.error || 'Could not update.'); }
+            });
+        }
+
+        function openEdit(id) {
+            var item = id ? app.menu.find(function (m) { return m.id === id; }) : null;
+            app.editId = item ? item.id : null;
+            $('editTitle').textContent = item ? 'Live Editor' : 'Add Menu Item';
+            $('editName').value = item ? item.name : '';
+            $('editDesc').value = item ? item.desc : '';
+            $('editPrice').value = item ? item.price.toFixed(2) : '';
+            $('editSalePrice').value = item && item.salePrice ? item.salePrice.toFixed(2) : '';
+            $('editPrep').value = item ? item.prep : 3;
+            $('editMeats').value = item ? item.meats : '';
+            $('editUpcharge').value = item ? (item.premiumSurcharge || 0).toFixed(2) : '';
+            $('editOptions').value = item && item.options ? item.options.join(', ') : '';
+            $('editCategory').value = item ? (item.category || '') : '';
+            var cats = []; app.menu.forEach(function (m) { if (m.category && cats.indexOf(m.category) < 0) cats.push(m.category); });
+            $('categoryList').innerHTML = cats.map(function (c) { return '<option value="' + esc(c) + '"></option>'; }).join('');
+            app.editPhoto = item ? (item.photo || '') : '';
+            renderEditPhoto();
+            $('btn-delete-item').style.display = item ? 'block' : 'none';
+            say('editError', '');
+            $('editItemModal').style.display = 'flex';
+        }
+        function closeEdit() { $('editItemModal').style.display = 'none'; }
+
+        function saveEdit() {
+            var body = {
+                name: $('editName').value.trim(),
+                desc: $('editDesc').value.trim(),
+                price: parseFloat($('editPrice').value) || 0,
+                salePrice: parseFloat($('editSalePrice').value) || null,
+                prep: parseInt($('editPrep').value, 10) || 3,
+                meats: $('editMeats').value.trim(),
+                premiumSurcharge: parseFloat($('editUpcharge').value) || 0,
+                options: $('editOptions').value,
+                category: $('editCategory').value.trim(),
+                photo: app.editPhoto || ''
+            };
+            if (!body.name) { say('editError', 'Item name is required.'); return; }
+            if (app.uploading) { say('editError', 'Wait for the photo to finish uploading.'); return; }
+            if (body.salePrice && body.salePrice >= body.price) { say('editError', 'Sale price should be lower than the regular price.'); return; }
+            var req = app.editId ? api('PUT', '/api/owner/menu/' + app.editId, body) : api('POST', '/api/owner/menu', body);
+            req.then(function (r) {
+                if (!r.ok) { say('editError', r.data.error || 'Could not save.'); return; }
+                app.menu = r.data.menu; closeEdit(); renderMenuList(); setFlag('menu');
+            });
+        }
+        function deleteItem() {
+            if (!app.editId || !confirm('Delete this item from your menu?')) return;
+            api('DELETE', '/api/owner/menu/' + app.editId).then(function (r) {
+                if (r.ok) { app.menu = r.data.menu; closeEdit(); renderMenuList(); } else say('editError', r.data.error || 'Could not delete.');
+            });
+        }
+
+        /* ---------- settings ---------- */
+        function loadState() {
+            return api('GET', '/api/owner/state').then(function (r) { if (r.ok) { app.state = r.data; } });
+        }
         function renderSettings() {
-            const status = localStorage.getItem('foodtruck_store_status') || 'open';
-            document.getElementById('btnStatusOpen').className = status === 'open' ? "flex-1 py-2 rounded-lg text-xs font-bold transition bg-emerald-600 text-white shadow" : "flex-1 py-2 rounded-lg text-xs font-bold transition bg-zinc-950 text-zinc-500 border border-zinc-800";
-            document.getElementById('btnStatusClosed').className = status === 'closed' ? "flex-1 py-2 rounded-lg text-xs font-bold transition bg-rose-600 text-white shadow" : "flex-1 py-2 rounded-lg text-xs font-bold transition bg-zinc-950 text-zinc-500 border border-zinc-800";
-            
-            const rush = parseInt(localStorage.getItem('foodtruck_rush_mode')) || 0;
-            const btnR0 = document.getElementById('btnRush0'), btnR15 = document.getElementById('btnRush15'), btnR30 = document.getElementById('btnRush30');
-            btnR0.className = rush === 0 ? "py-2 rounded-lg text-[10px] font-bold transition bg-zinc-100 text-zinc-950 theme-bg shadow" : "py-2 rounded-lg text-[10px] font-bold transition bg-zinc-950 text-zinc-400 border border-zinc-800";
-            btnR15.className = rush === 15 ? "py-2 rounded-lg text-[10px] font-bold transition bg-amber-500 text-white shadow" : "py-2 rounded-lg text-[10px] font-bold transition bg-zinc-950 text-amber-500 border border-amber-500/30";
-            btnR30.className = rush === 30 ? "py-2 rounded-lg text-[10px] font-bold transition bg-red-600 text-white shadow" : "py-2 rounded-lg text-[10px] font-bold transition bg-zinc-950 text-red-500 border border-red-500/30";
-
-            const activeLoc = localStorage.getItem('foodtruck_active_location') || "Downtown Main Street (Live View)";
-            const locs = app.locations;
-            const activeLocHTML = locs.map((loc, i) => {
-                const isActive = (loc === activeLoc);
-                return `
-                <div class="flex justify-between items-center bg-zinc-950 p-2.5 rounded-lg border border-zinc-800">
-                    <div class="flex items-center gap-2 cursor-pointer hover:text-zinc-300 truncate flex-1" onclick="setActiveLoc('${loc}')">
-                        <div class="w-3 h-3 rounded-full border ${isActive ? 'bg-emerald-500 border-emerald-500' : 'border-zinc-600 bg-transparent'}"></div>
-                        <span class="text-xs text-zinc-200 ${isActive ? 'font-bold' : ''}">${loc}</span>
-                    </div>
-                    <button onclick="deleteLocation(${i})" class="text-[10px] text-rose-500 hover:underline bg-rose-500/10 px-2 py-1 rounded ml-2">Delete</button>
-                </div>
-            `}).join('');
-            document.getElementById('activeLocationsList').innerHTML = activeLocHTML || '<div class="text-xs text-zinc-600 italic">No locations added.</div>';
-
-            const delLocs = app.deletedLocations;
-            const delLocHTML = delLocs.map((loc, i) => `
-                <div class="flex justify-between items-center bg-zinc-900/50 p-2.5 rounded-lg border border-zinc-800/50">
-                    <span class="text-xs text-zinc-500 truncate line-through">${loc}</span>
-                    <button onclick="restoreLocation(${i})" class="text-[10px] text-emerald-500 hover:underline border border-emerald-500/30 px-2 py-1 rounded">Restore</button>
-                </div>
-            `).join('');
-            document.getElementById('deletedLocationsList').innerHTML = delLocHTML || '<div class="text-xs text-zinc-600 italic">Trash is empty.</div>';
+            var closed = app.state.status === 'closed';
+            $('btnStatusOpen').className = 'flex-1 py-2 rounded-lg text-xs font-bold transition ' + (!closed ? 'bg-emerald-600 text-white shadow' : 'bg-zinc-950 text-zinc-500 border border-zinc-800');
+            $('btnStatusClosed').className = 'flex-1 py-2 rounded-lg text-xs font-bold transition ' + (closed ? 'bg-rose-600 text-white shadow' : 'bg-zinc-950 text-zinc-500 border border-zinc-800');
+            var r = Number(app.state.rush) || 0;
+            $('btnRush0').className = 'py-2 rounded-lg text-[10px] font-bold transition ' + (r === 0 ? 'bg-zinc-100 text-zinc-950 shadow' : 'bg-zinc-950 text-zinc-400 border border-zinc-800');
+            $('btnRush15').className = 'py-2 rounded-lg text-[10px] font-bold transition ' + (r === 15 ? 'bg-amber-500 text-white shadow' : 'bg-zinc-950 text-amber-500 border border-amber-500/30');
+            $('btnRush30').className = 'py-2 rounded-lg text-[10px] font-bold transition ' + (r === 30 ? 'bg-red-600 text-white shadow' : 'bg-zinc-950 text-red-500 border border-red-500/30');
+            $('pauseSwitch').className = 'switch amber' + (app.state.paused ? ' on' : '');
+            if (isOwner()) { renderLocations(); renderPlan(); }
+            renderSetup();
         }
 
-
-async function broadcastSync(type, payload) {
-  try {
-    await fetch('/api/sync-event', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type, payload })
-    });
-  } catch (err) {
-    console.warn('Realtime push failed:', err);
-  }
-}
-
-function setStoreStatus(status) { 
-  localStorage.setItem('foodtruck_store_status', status); 
-  renderSettings(); 
-  broadcastSync('STORE_STATUS', { status });
-}
-
-function setRushMode(mins) { 
-  localStorage.setItem('foodtruck_rush_mode', mins); 
-  renderSettings(); 
-  broadcastSync('RUSH_MODE', { minutes: mins });
-}
-
-        
-        function addLocation() {
-            const input = document.getElementById('newLocationInput'); const val = input.value.trim();
-            if(val) { let locs = app.locations; locs.push(val); app.locations = locs; input.value = ''; renderSettings(); }
-        }
-        function deleteLocation(idx) {
-            let locs = app.locations; let delLocs = app.deletedLocations;
-            const deleted = locs.splice(idx, 1)[0]; delLocs.push(deleted);
-            app.locations = locs; app.deletedLocations = delLocs;
-            if(localStorage.getItem('foodtruck_active_location') === deleted) localStorage.removeItem('foodtruck_active_location');
-            renderSettings();
-        }
-        function restoreLocation(idx) {
-            let locs = app.locations; let delLocs = app.deletedLocations;
-            locs.push(delLocs.splice(idx, 1)[0]);
-            app.locations = locs; app.deletedLocations = delLocs; renderSettings();
-        }
-        function setActiveLoc(name) {
-            localStorage.setItem('foodtruck_active_location', name);
-            renderSettings();
-            alert(`Customer menu location actively updated to:\n${name}`);
+        function putState(body) {
+            return api('PUT', '/api/owner/state', body).then(function (r) {
+                if (r.ok) { app.state = r.data; renderSettings(); } else alert(r.data.error || 'Could not update.');
+            });
         }
 
-        function updatePin() {
-            const p1 = document.getElementById('newPinInput').value.trim();
-            const p2 = document.getElementById('confirmPinInput').value.trim();
-            if(p1.length < 4 || p1.length > 6) { alert("PIN must be 4 to 6 alphanumeric characters."); return; }
-            if(p1 !== p2) { alert("PINs do not match. Please re-enter."); return; }
-            localStorage.setItem('foodtruck_pin', p1);
-            alert("Security PIN successfully updated.");
-            document.getElementById('newPinInput').value = ''; document.getElementById('confirmPinInput').value = '';
+        function renderLocations() {
+            var active = app.state.location;
+            $('activeLocationsList').innerHTML = app.locations.active.map(function (l) {
+                var on = l.name === active;
+                return '<div class="flex justify-between items-center bg-zinc-950 p-2.5 rounded-lg border border-zinc-800">' +
+                    '<div class="flex items-center gap-2 cursor-pointer hover:text-zinc-300 truncate flex-1" data-action="set-location" data-id="' + l.id + '">' +
+                    '<div class="w-3 h-3 rounded-full border ' + (on ? 'bg-emerald-500 border-emerald-500' : 'border-zinc-600 bg-transparent') + '"></div>' +
+                    '<span class="text-xs text-zinc-200 ' + (on ? 'font-bold' : '') + '">' + esc(l.name) + '</span></div>' +
+                    '<button data-action="delete-location" data-id="' + l.id + '" class="text-[10px] text-rose-500 hover:underline bg-rose-500/10 px-2 py-1 rounded ml-2">Delete</button></div>';
+            }).join('') || '<div class="text-xs text-zinc-600 italic">No locations added.</div>';
+            $('deletedLocationsList').innerHTML = app.locations.deleted.map(function (l) {
+                return '<div class="flex justify-between items-center bg-zinc-900/50 p-2.5 rounded-lg border border-zinc-800/50"><span class="text-xs text-zinc-500 truncate line-through">' + esc(l.name) + '</span>' +
+                    '<button data-action="restore-location" data-id="' + l.id + '" class="text-[10px] text-emerald-500 hover:underline border border-emerald-500/30 px-2 py-1 rounded">Restore</button></div>';
+            }).join('') || '<div class="text-xs text-zinc-600 italic">Trash is empty.</div>';
+        }
+        function loadLocations() {
+            return api('GET', '/api/owner/locations').then(function (r) { if (r.ok) app.locations = r.data; });
         }
 
-        // ANALYTICS & POST-DEMO
-        function renderAnalytics() {
-            const history = app.history; const totalRev = history.reduce((sum, h) => sum + h.total, 0); const volume = history.length; const aov = volume > 0 ? (totalRev / volume) : 0;
-            let topItem = "N/A"; if(history.length > 0 && app.menu.length > 0) topItem = app.menu[0].name;
-            document.getElementById('statDaily').innerText = `$${totalRev.toFixed(2)}`; document.getElementById('statVolume').innerText = volume; document.getElementById('statAov').innerText = `$${aov.toFixed(2)}`; document.getElementById('statTopItem').innerText = topItem;
+        function renderPlan() {
+            var body = $('planBody'); if (!body || !app.me) return;
+            var v = app.me.vendor, pro = v.plan === 'pro';
+            var warn = v.planStatus === 'past_due' ? '<div class="mb-3 text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg p-2">Your last payment failed. Please update your card in Manage Billing to keep Pro.</div>' : '';
+            if (pro) {
+                body.innerHTML = warn + '<div class="text-xs text-zinc-300 mb-3"><span class="font-bold text-emerald-400">Pro plan</span> is active. Thank you!</div>' +
+                    '<ul class="text-[11px] text-zinc-400 space-y-1 mb-3 list-disc pl-4"><li>No “Powered by” footer</li><li>Use your own domain (like order.yourtruck.com) — email us to set it up</li><li>Text alerts for you and your customers</li><li>Online pre-order payments (card, Apple Pay, Google Pay)</li></ul>' +
+                    '<button data-action="portal" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 py-2.5 rounded-lg text-xs font-bold">Manage Billing</button>';
+            } else {
+                body.innerHTML = warn + '<div class="text-xs text-zinc-300 mb-2">You are on the <span class="font-bold">Free</span> plan. Customers pay at the window.</div>' +
+                    '<div class="bg-zinc-950 border border-zinc-800 rounded-lg p-3 mb-3"><div class="text-xs font-bold text-zinc-100 mb-1">Pro — ' + esc(app.proPrice) + '</div>' +
+                    '<ul class="text-[11px] text-zinc-400 space-y-1 list-disc pl-4"><li>Remove the “Powered by” footer</li><li>Use your own domain (like order.yourtruck.com)</li><li>Text alerts for you and your customers</li><li>Online pre-order payments (card, Apple Pay, Google Pay)</li></ul></div>' +
+                    '<button data-action="upgrade" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-lg text-xs font-bold">Upgrade to Pro</button>';
+            }
+        }
+        function goStripe(url, btn) {
+            say('planError', '');
+            api('POST', url).then(function (r) {
+                if (r.ok && r.data.url) { location.href = r.data.url; return; }
+                say('planError', r.data.error || 'Could not open billing.');
+                if (btn) btn.disabled = false;
+            });
         }
 
-        function showPostDemoView() {
-            document.getElementById('ownerDashboardView').style.display = 'none'; document.getElementById('header-controls').style.display = 'none';
-            document.getElementById('postDemoView').style.display = 'flex';
+        /* ---------- analytics ---------- */
+        function loadAnalytics() {
+            var since = new Date(); since.setHours(0, 0, 0, 0);
+            api('GET', '/api/owner/analytics?since=' + since.getTime()).then(function (r) {
+                if (!r.ok) return;
+                $('statDaily').textContent = money(r.data.revenue);
+                $('statVolume').textContent = r.data.orders;
+                $('statAov').textContent = money(r.data.avgOrder);
+                $('statTopItem').textContent = r.data.topItem || 'N/A';
+            });
         }
 
-        function exitDemo() { localStorage.clear(); window.location.href = 'index.html'; }
-        function continueDemo() { window.location.href = 'customer.html'; }
-        function clearHistoryLogs() { if (confirm("Clear all order history and analytics logs?")) { app.history = []; app.canceledOrders = []; app.orders = []; renderOwnerPortal(); renderAnalytics(); } }
+        /* ---------- live updates ---------- */
+        function stopLive() { if (app.es) { app.es.close(); app.es = null; } $('liveDot').className = 'w-2 h-2 rounded-full bg-zinc-600'; }
+        function startLive() {
+            stopLive();
+            if (!window.EventSource) return;
+            var es = app.es = new EventSource('/api/live-stream');
+            var wasDown = false;
+            es.onopen = function () {
+                $('liveDot').className = 'w-2 h-2 rounded-full bg-emerald-500';
+                if (wasDown) { wasDown = false; loadOrders(); loadMenu(); loadState().then(renderSettings); }
+            };
+            es.onerror = function () { wasDown = true; $('liveDot').className = 'w-2 h-2 rounded-full bg-amber-500'; };
+            es.onmessage = function (e) {
+                var msg; try { msg = JSON.parse(e.data); } catch (err) { return; }
+                var p = msg.payload || {};
+                switch (msg.type) {
+                    case 'ORDER_NEW':
+                        beep(); setFlag('test');
+                        if (app.tab !== 'Orders') { app.newCount++; renderBadge(); }
+                        if (app.filter === 'Active' && !app.orders.some(function (o) { return o.id === p.id; })) { app.orders.push(p); if (app.tab === 'Orders') renderOrders(); }
+                        break;
+                    case 'ORDER_UPDATE': loadOrders(); break;
+                    case 'STATE': app.state = { status: p.status, rush: p.rush, location: p.location || '', paused: !!p.paused }; renderSettings(); break;
+                    case 'PAUSED': app.state.paused = !!p.paused; renderSettings(); break;
+                    case 'HOURS_UPDATE': if (app.pub) { app.pub.hours = p.hours; app.pub.timezone = p.timezone; } renderSetup(); break;
+                    case 'STORE_STATUS': app.state.status = p.status; renderSettings(); break;
+                    case 'RUSH_MODE': app.state.rush = Number(p.minutes) || 0; renderSettings(); break;
+                    case 'LOCATION_UPDATE': app.state.location = p.location || ''; renderSettings(); break;
+                    case 'SOLD_OUT':
+                        app.menu.forEach(function (m) { if (m.id === p.itemId) m.soldOut = !!p.soldOut; });
+                        renderMenuList(); break;
+                    case 'MENU_UPDATE': app.menu = p.menu || []; renderMenuList(); break;
+                }
+            };
+        }
+
+        // Phones pause background tabs and lock screens drop the live connection.
+        // When the portal comes back to the front: re-lock the screen awake, reconnect, and catch up on anything missed.
+        document.addEventListener('visibilitychange', function () {
+            if (document.hidden || !app.me) return;
+            keepAwake();
+            if (!app.es || app.es.readyState === 2) startLive();
+            loadOrders(); loadMenu(); loadState().then(renderSettings);
+            renderSoundPrompt();
+        });
+
+        /* ---------- menu photos: shrink in the browser, then upload ---------- */
+        function renderEditPhoto() {
+            var has = !!app.editPhoto;
+            $('editPhotoImg').style.display = has ? 'block' : 'none';
+            if (has) $('editPhotoImg').src = app.editPhoto; else $('editPhotoImg').removeAttribute('src');
+            $('editPhotoNone').style.display = has ? 'none' : 'inline';
+            $('editPhotoRemove').style.display = has ? 'block' : 'none';
+            $('editPhotoLabel').textContent = app.uploading ? 'Uploading…' : (has ? 'Change photo' : 'Choose photo');
+        }
+        function shrinkImage(file, maxPx) {
+            return new Promise(function (resolve, reject) {
+                var url = URL.createObjectURL(file), img = new Image();
+                img.onload = function () {
+                    var scale = Math.min(1, maxPx / Math.max(img.naturalWidth, img.naturalHeight));
+                    var c = document.createElement('canvas');
+                    c.width = Math.round(img.naturalWidth * scale); c.height = Math.round(img.naturalHeight * scale);
+                    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+                    URL.revokeObjectURL(url);
+                    c.toBlob(function (b) { b ? resolve(b) : reject(new Error('encode')); }, 'image/jpeg', 0.82);
+                };
+                img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('read')); };
+                img.src = url;
+            });
+        }
+        function uploadPhoto(file) {
+            if (!file) return;
+            app.uploading = true; renderEditPhoto(); say('editError', '');
+            shrinkImage(file, 800).then(function (blob) {
+                return fetch('/api/owner/upload', { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob, cache: 'no-store' })
+                    .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, d: d }; }); });
+            }).then(function (r) {
+                if (r.ok && r.d.url) app.editPhoto = r.d.url;
+                else say('editError', (r.d && r.d.error) || 'Could not upload that photo.');
+            }).catch(function () {
+                say('editError', 'Could not read that photo. Try a JPG or PNG.');
+            }).then(function () { app.uploading = false; renderEditPhoto(); $('editPhotoFile').value = ''; });
+        }
+        $('editPhotoFile').addEventListener('change', function (e) { uploadPhoto(e.target.files && e.target.files[0]); });
+
+        /* ---------- posted hours ---------- */
+        var DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        function guessTz() { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Denver'; } catch (e) { return 'America/Denver'; } }
+        function buildHoursEditor() {
+            var h = (app.pub && app.pub.hours) || DAYS.map(function (d, i) { return { closed: i === 0, open: '11:00', close: '15:00' }; });
+            $('hoursRows').innerHTML = h.map(function (d, i) {
+                return '<div class="flex items-center gap-2 text-xs" data-day="' + i + '">' +
+                    '<span class="w-20 text-zinc-300">' + DAYS[i].slice(0, 3) + '</span>' +
+                    '<label class="flex items-center gap-1 text-[10px] text-zinc-400 w-16"><input type="checkbox" class="h-closed accent-rose-500"' + (d.closed ? ' checked' : '') + '> Closed</label>' +
+                    '<input type="time" class="h-open flex-1 min-w-0 bg-zinc-950 border border-zinc-800 rounded-lg p-1.5 text-xs text-zinc-200" value="' + esc(d.open) + '"' + (d.closed ? ' disabled' : '') + '>' +
+                    '<span class="text-zinc-600">–</span>' +
+                    '<input type="time" class="h-close flex-1 min-w-0 bg-zinc-950 border border-zinc-800 rounded-lg p-1.5 text-xs text-zinc-200" value="' + esc(d.close) + '"' + (d.closed ? ' disabled' : '') + '></div>';
+            }).join('');
+            // US time zones only, with plain names. A truck saved with another zone keeps it at the top of the list.
+            var ZONES = [
+                ['America/New_York', 'Eastern'], ['America/Chicago', 'Central'], ['America/Denver', 'Mountain'],
+                ['America/Phoenix', 'Arizona (no daylight saving)'], ['America/Los_Angeles', 'Pacific'],
+                ['America/Anchorage', 'Alaska'], ['Pacific/Honolulu', 'Hawaii']
+            ];
+            var current = (app.pub && app.pub.timezone) || guessTz();
+            if (!ZONES.some(function (z) { return z[0] === current; })) {
+                // Browser zones like America/Detroit or America/Boise: fall back to the matching US zone by offset, else Mountain.
+                var match = null;
+                try {
+                    var off = function (tz) { return new Date().toLocaleString('en-US', { timeZone: tz, timeZoneName: 'short' }).split(' ').pop(); };
+                    var mine = off(current);
+                    ZONES.forEach(function (z) { if (!match && off(z[0]) === mine) match = z[0]; });
+                } catch (e) {}
+                current = match || 'America/Denver';
+            }
+            $('hoursTz').innerHTML = ZONES.map(function (z) { return '<option value="' + z[0] + '"' + (z[0] === current ? ' selected' : '') + '>' + esc(z[1]) + '</option>'; }).join('');
+        }
+        $('hoursRows').addEventListener('change', function (e) {
+            if (!e.target.classList.contains('h-closed')) return;
+            var row = e.target.closest('[data-day]');
+            row.querySelectorAll('input[type=time]').forEach(function (i) { i.disabled = e.target.checked; });
+        });
+        function saveHours() {
+            var hours = [];
+            document.querySelectorAll('#hoursRows [data-day]').forEach(function (row) {
+                hours.push({ closed: row.querySelector('.h-closed').checked, open: row.querySelector('.h-open').value || '11:00', close: row.querySelector('.h-close').value || '15:00' });
+            });
+            api('PUT', '/api/owner/hours', { hours: hours, timezone: $('hoursTz').value }).then(function (r) {
+                say('hoursMsg', r.ok ? 'Hours saved. They now show on your page.' : (r.data.error || 'Could not save.'), r.ok);
+                if (r.ok && app.pub) { app.pub.hours = r.data.hours; app.pub.timezone = r.data.timezone; renderSetup(); }
+            });
+        }
+
+        /* ---------- QR sign ---------- */
+        function pageUrl() { return location.origin + '/'; }
+        function openQr() {
+            var v = app.me.vendor;
+            $('qrName').textContent = v.businessName;
+            TruckLogo.set($('qrEmoji'), v.emoji, '#ffffff');
+            $('qrUrl').textContent = pageUrl().replace(/^https?:\/\//, '').replace(/\/$/, '');
+            try { $('qrCode').innerHTML = QR.svg(pageUrl(), { size: 260 }); } catch (e) { $('qrCode').textContent = pageUrl(); }
+            $('qrModal').style.display = 'flex';
+            setFlag('share');
+        }
+        function downloadQr() {
+            var svg = $('qrCode').querySelector('svg'); if (!svg) return;
+            var img = new Image(), data = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg.outerHTML);
+            img.onload = function () {
+                var c = document.createElement('canvas'); c.width = c.height = 1024;
+                var ctx = c.getContext('2d'); ctx.imageSmoothingEnabled = false; ctx.drawImage(img, 0, 0, 1024, 1024);
+                var a = document.createElement('a'); a.download = (app.me.vendor.slug || 'truck') + '-qr.png'; a.href = c.toDataURL('image/png');
+                document.body.appendChild(a); a.click(); a.remove();
+            };
+            img.src = data;
+        }
+
+        /* ---------- CSV export ---------- */
+        function ymd(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+        function initExportDates() {
+            var to = new Date(), from = new Date(); from.setDate(from.getDate() - 30);
+            if (!$('exportFrom').value) $('exportFrom').value = ymd(from);
+            if (!$('exportTo').value) $('exportTo').value = ymd(to);
+        }
+        function exportCsv() {
+            var f = $('exportFrom').value, t2 = $('exportTo').value;
+            if (!f || !t2) { say('exportMsg', 'Pick both dates.'); return; }
+            var from = new Date(f + 'T00:00:00').getTime(), to = new Date(t2 + 'T23:59:59.999').getTime();
+            if (from > to) { say('exportMsg', 'The start date is after the end date.'); return; }
+            say('exportMsg', 'Preparing…', true);
+            fetch('/api/owner/orders/export.csv?from=' + from + '&to=' + to + '&tz=' + encodeURIComponent(guessTz()), { cache: 'no-store' })
+                .then(function (r) {
+                    if (!r.ok) return r.json().catch(function () { return {}; }).then(function (d) { throw new Error(d.error || 'Could not export.'); });
+                    return r.blob();
+                }).then(function (blob) {
+                    var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+                    a.download = (app.me.vendor.slug || 'truck') + '-orders-' + f + '-to-' + t2 + '.csv';
+                    document.body.appendChild(a); a.click(); a.remove();
+                    setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
+                    say('exportMsg', 'Downloaded.', true);
+                }).catch(function (e) { say('exportMsg', e.message || 'Could not export.'); });
+        }
+
+        /* ---------- first-week checklist (owner only, remembered on this device) ---------- */
+        function flagKey() { return 'ft_setup_' + (app.me ? app.me.vendor.slug : 'x'); }
+        function flags() { try { return JSON.parse(localStorage.getItem(flagKey()) || '{}') || {}; } catch (e) { return {}; } }
+        function setFlag(k) {
+            if (!app.me) return;
+            var f = flags(); if (f[k]) return;
+            f[k] = 1; try { localStorage.setItem(flagKey(), JSON.stringify(f)); } catch (e) {}
+            renderSetup();
+        }
+        function renderSetup() {
+            var card = $('setupCard'); if (!card || !app.me) return;
+            var f = flags();
+            if (!isOwner() || f.dismissed) { card.style.display = 'none'; return; }
+            var steps = [
+                { done: app.locations.active.length > 0 && !!app.state.location, label: 'Add where you park and pick today’s spot', go: 'Settings' },
+                { done: !!f.menu, label: 'Review your menu — prices, photos, sold-out', go: 'Menu' },
+                { done: !!(app.pub && app.pub.hours), label: 'Post your hours', go: 'Settings' },
+                { done: !!f.share, label: 'Print your QR sign or share your link', go: 'qr' },
+                { done: !!f.test, label: 'Place a test order from your phone', go: 'page' }
+            ];
+            var n = steps.filter(function (s) { return s.done; }).length;
+            if (n === steps.length) { card.style.display = 'none'; return; }
+            card.style.display = 'block';
+            $('setupCount').textContent = n + '/' + steps.length;
+            $('setupBar').style.width = (n / steps.length * 100) + '%';
+            $('setupList').innerHTML = steps.map(function (s) {
+                return '<button data-action="setup-go" data-go="' + s.go + '" class="w-full flex items-center gap-2 text-left text-xs p-2 rounded-lg ' + (s.done ? 'text-zinc-500 line-through' : 'text-zinc-200 bg-zinc-950 border border-zinc-800') + '">' +
+                    '<span class="w-4 h-4 rounded-full border flex items-center justify-center text-[9px] shrink-0 ' + (s.done ? 'bg-emerald-500 border-emerald-500 text-zinc-950' : 'border-zinc-600') + '">' + (s.done ? '✓' : '') + '</span>' +
+                    '<span class="flex-1">' + esc(s.label) + '</span>' + (s.done ? '' : '<span class="text-zinc-500">›</span>') + '</button>';
+            }).join('');
+        }
+
+        /* ---------- online payments (Stripe Connect) ---------- */
+        function loadPayments() {
+            return api('GET', '/api/payments/status').then(function (r) { if (r.ok) { app.pay = r.data; renderPayments(); } });
+        }
+        function renderPayments() {
+            var b = $('paymentsBody'), p = app.pay; if (!b || !p) return;
+            if (!p.pro) {
+                b.innerHTML = '<p class="mb-3">Let customers pay by card, Apple Pay or Google Pay when they order. Money goes straight to your own Stripe account — we take no cut. Stripe\'s standard card fee applies.</p>' +
+                    '<button data-action="upgrade" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-lg text-xs font-bold">Upgrade to Pro to turn on</button>';
+                return;
+            }
+            if (!p.configured) { b.innerHTML = '<p>Online payments aren\'t switched on for this site yet. Please check back soon.</p>'; return; }
+            if (!p.chargesEnabled) {
+                b.innerHTML = '<p class="mb-3">' + (p.connected
+                    ? 'Stripe still needs a few details before you can take card payments (identity, bank account for payouts).'
+                    : 'Connect a Stripe account to take card payments. It takes about 5 minutes: your business details, ID and a bank account for payouts. Money goes straight to you — we take no cut.') + '</p>' +
+                    '<button data-action="connect-stripe" class="w-full bg-[#635bff] hover:opacity-90 text-white py-2.5 rounded-lg text-xs font-bold">' + (p.connected ? 'Finish Stripe setup' : 'Connect with Stripe') + '</button>' +
+                    (p.connected ? '<button data-action="refresh-payments" class="w-full text-zinc-400 text-[11px] mt-2 underline">I finished — check again</button>' : '');
+                return;
+            }
+            var opt = function (v, label) { return '<option value="' + v + '"' + (p.payMode === v ? ' selected' : '') + '>' + label + '</option>'; };
+            b.innerHTML = '<div class="flex items-center gap-2 text-emerald-400 font-semibold mb-3"><span class="w-2 h-2 rounded-full bg-emerald-500"></span> Stripe connected — ready for card payments</div>' +
+                '<label class="block text-[10px] text-zinc-400 mb-1" for="payModeSel">How customers pay</label>' +
+                '<select id="payModeSel" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200">' +
+                opt('both', 'Customer chooses: pay now or at the window') + opt('online', 'Pay now only (card required)') + opt('window', 'At the window only (cards off)') + '</select>' +
+                '<p class="text-[10px] text-zinc-500 mt-2">Paid orders show “💳 PAID ONLINE” on the ticket. Canceling a paid order refunds the card automatically.</p>' +
+                '<a href="https://dashboard.stripe.com/" target="_blank" rel="noopener" class="block text-center mt-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 py-2 rounded-lg text-xs font-semibold">Open my Stripe Dashboard ↗ (payouts, refunds)</a>';
+            $('payModeSel').addEventListener('change', function (e) {
+                api('PUT', '/api/payments/mode', { payMode: e.target.value }).then(function (r) {
+                    say('paymentsMsg', r.ok ? 'Saved. Your page updates right away.' : (r.data.error || 'Could not save.'), r.ok);
+                    if (r.ok) app.pay.payMode = e.target.value;
+                });
+            });
+        }
+        function connectStripe(btn) {
+            if (btn) { btn.disabled = true; btn.textContent = 'Opening Stripe…'; }
+            api('POST', '/api/payments/connect').then(function (r) {
+                if (r.ok && r.data.url) { location.href = r.data.url; return; }
+                say('paymentsMsg', r.data.error || 'Could not open Stripe.');
+                if (btn) btn.disabled = false;
+                renderPayments();
+            });
+        }
+
+        /* ---------- text alerts (Twilio) ---------- */
+        function loadSms() {
+            return api('GET', '/api/sms/status').then(function (r) { if (r.ok) { app.smsSt = r.data; renderSms(); } });
+        }
+        function renderSms() {
+            var b = $('smsBody'), st = app.smsSt; if (!b || !st) return;
+            if (!st.pro) {
+                b.innerHTML = '<p class="mb-3">Get a text when a new order comes in, and text customers automatically when their order is ready.</p>' +
+                    '<button data-action="upgrade" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-lg text-xs font-bold">Upgrade to Pro to turn on</button>';
+                return;
+            }
+            if (!st.configured) { b.innerHTML = '<p>Text messages aren\'t switched on for this site yet. Please check back soon.</p>'; return; }
+            var phoneBlock;
+            if (st.verified) {
+                phoneBlock = '<div class="flex items-center justify-between bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 mb-3"><span class="text-zinc-200">📱 ' + esc(st.phone) + ' <span class="text-emerald-400">✓</span></span>' +
+                    '<button data-action="sms-remove-phone" class="text-[10px] text-rose-400">Remove</button></div>';
+            } else if (st.pending) {
+                phoneBlock = '<p class="text-[11px] mb-2">We texted a 6-digit code to ' + esc(st.pending) + '.</p><div class="flex gap-2 mb-3">' +
+                    '<input id="smsCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="123456" class="flex-1 min-w-0 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200 tracking-widest font-mono text-center">' +
+                    '<button data-action="sms-verify" class="bg-zinc-100 text-zinc-950 px-4 rounded-lg text-xs font-bold">Verify</button></div>' +
+                    '<button data-action="sms-change-phone" class="text-[10px] text-zinc-500 underline mb-3">Use a different number</button>';
+            } else {
+                phoneBlock = '<label class="block text-[10px] text-zinc-400 mb-1" for="smsPhone">Your mobile number (for new-order texts)</label><div class="flex gap-2 mb-3">' +
+                    '<input id="smsPhone" type="tel" inputmode="tel" maxlength="20" placeholder="(555) 123-4567" class="flex-1 min-w-0 bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200">' +
+                    '<button data-action="sms-send-code" class="bg-zinc-100 text-zinc-950 px-3 rounded-lg text-xs font-bold">Send code</button></div>';
+            }
+            var m = st.ownerMode;
+            var opt = function (v, label) { return '<option value="' + v + '"' + (m === v ? ' selected' : '') + '>' + label + '</option>'; };
+            b.innerHTML = phoneBlock +
+                '<label class="block text-[10px] text-zinc-400 mb-1" for="smsOwnerMode">Text me about new orders</label>' +
+                '<select id="smsOwnerMode" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200 mb-3"' + (st.verified ? '' : ' disabled') + '>' +
+                opt('idle', 'Only when no kitchen screen is open') + opt('always', 'For every order') + opt('off', 'Never') + '</select>' +
+                '<div class="flex items-center justify-between gap-3 bg-zinc-950 border border-zinc-800 rounded-lg p-3">' +
+                '<div class="min-w-0"><div class="text-xs font-bold text-zinc-200">Text customers when it\'s ready</div><div class="text-[10px] text-zinc-500">Customers can add their number at checkout. Sent when you tap Mark Ready.</div></div>' +
+                '<button data-action="sms-toggle-customer" aria-label="Text customers when ready" class="switch ' + (st.customerReady ? 'on' : '') + '" style="' + (st.customerReady ? 'background:#10b981' : '') + '"></button></div>' +
+                '<p class="text-[10px] text-zinc-500 mt-3">' + st.used + ' of ' + st.limit + ' texts used this month.</p>';
+            var sel = $('smsOwnerMode');
+            if (sel) sel.addEventListener('change', function (e) {
+                api('PUT', '/api/sms/settings', { ownerMode: e.target.value }).then(function (r) { say('smsMsg', r.ok ? 'Saved.' : (r.data.error || 'Could not save.'), r.ok); if (r.ok) app.smsSt.ownerMode = e.target.value; });
+            });
+        }
+
+        /* ---------- logo picker (Business Profile) ---------- */
+        function renderLogoPicker() {
+            var cur = $('profEmoji').value || '';
+            $('logoPicker').innerHTML = TruckLogo.presets.map(function (e) {
+                var on = e === cur;
+                return '<button type="button" data-action="pick-logo" data-logo="' + esc(e) + '" aria-label="' + (e ? esc(e) : 'Food truck logo') + '" class="aspect-square rounded-lg flex items-center justify-center text-xl border ' +
+                    (on ? 'border-emerald-500 bg-emerald-500/10' : 'border-zinc-800 bg-zinc-950') + ' text-zinc-100"' + (e ? '>' + esc(e) : ' data-truck="1">') + '</button>';
+            }).join('');
+            $('logoPicker').querySelectorAll('[data-truck]').forEach(function (b) { TruckLogo.set(b, '', '#09090b'); });
+            $('profEmojiCustom').value = TruckLogo.presets.indexOf(cur) < 0 ? cur : '';
+        }
+        $('profEmojiCustom').addEventListener('input', function (e) {
+            var v = e.target.value.trim();
+            $('profEmoji').value = v;
+            $('logoPicker').querySelectorAll('[data-action="pick-logo"]').forEach(function (b) {
+                b.className = b.className.replace(/border-emerald-500 bg-emerald-500\/10|border-zinc-800 bg-zinc-950/, b.getAttribute('data-logo') === v ? 'border-emerald-500 bg-emerald-500/10' : 'border-zinc-800 bg-zinc-950');
+            });
+        });
+
+        /* ---------- install as an app ---------- */
+        var standalone = function () { return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; };
+        window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); app.installEvt = e; renderInstall(); });
+        window.addEventListener('appinstalled', function () { app.installEvt = null; renderInstall(); });
+        function renderInstall() {
+            var ios = /iphone|ipad|ipod/i.test(navigator.userAgent) && !standalone();
+            $('installBtn').style.display = (app.installEvt && !standalone()) ? 'inline-block' : 'none';
+            $('iosInstallHint').style.display = (ios && !window.__FT_DEMO) ? 'block' : 'none';
+        }
+        if ('serviceWorker' in navigator && !window.__FT_DEMO) navigator.serviceWorker.register('/sw.js').catch(function () {});
+
+        /* ---------- events ---------- */
+        $('emailForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+            var btn = $('btn-unlock'); btn.disabled = true; btn.textContent = 'Logging in…'; say('loginError', '');
+            api('POST', '/api/auth/login', { email: $('loginEmail').value.trim(), password: $('loginPassword').value }).then(function (r) {
+                btn.disabled = false; btn.textContent = 'Log In';
+                if (!r.ok) { say('loginError', r.data.error || 'Could not log in.'); return; }
+                $('loginPassword').value = '';
+                loadMe().then(function (ok) { if (ok) enterDashboard(); });
+            });
+        });
+        $('pinForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+            var pinOnly = app.pub && app.pub.pinOnly;
+            say('pinError', '');
+            api('POST', pinOnly ? '/api/auth/login' : '/api/auth/staff', { pin: $('loginPin').value.trim() }).then(function (r) {
+                if (!r.ok) { say('pinError', r.data.error || 'Incorrect PIN.'); return; }
+                $('loginPin').value = '';
+                loadMe().then(function (ok) { if (ok) enterDashboard(); });
+            });
+        });
+
+        document.addEventListener('click', function (e) {
+            var el = e.target.closest('[data-action]'); if (!el) return;
+            var a = el.getAttribute('data-action');
+            var id = parseInt(el.getAttribute('data-id'), 10);
+            switch (a) {
+                case 'show-pin': $('emailForm').style.display = 'none'; $('pinForm').style.display = 'block'; break;
+                case 'show-email': $('pinForm').style.display = 'none'; $('emailForm').style.display = 'block'; break;
+                case 'forgot':
+                    var em = $('loginEmail').value.trim();
+                    if (!em) { say('loginError', 'Enter your email above first, then tap “Forgot password?”.'); break; }
+                    api('POST', '/api/auth/forgot', { email: em }).then(function () { say('loginError', 'If that email has an account, we sent a reset link.', true); });
+                    break;
+                case 'logout': api('POST', '/api/auth/logout').then(function () { showLogin(); }); break;
+                case 'tab': switchTab(el.getAttribute('data-tab')); break;
+                case 'guide-go': guideGo(el.getAttribute('data-tab'), el.getAttribute('data-target')); break;
+                case 'enable-sound':
+                    app.sound = true; try { localStorage.setItem('ft_sound', 'on'); } catch (er) {}
+                    ensureAudio(); renderSound(); beep(); setTimeout(renderSoundPrompt, 100);
+                    break;
+                case 'toggle-sound':
+                    app.sound = !app.sound; try { localStorage.setItem('ft_sound', app.sound ? 'on' : 'off'); } catch (er) {}
+                    renderSound(); if (app.sound) beep(); renderSoundPrompt(); break;
+                case 'refresh-orders': loadOrders(); break;
+                case 'filter': app.filter = el.getAttribute('data-filter'); loadOrders(); break;
+                case 'order': orderAction(id, el.getAttribute('data-act')); break;
+                case 'add-item': openEdit(null); break;
+                case 'edit-item': openEdit(id); break;
+                case 'close-edit': closeEdit(); break;
+                case 'save-edit': saveEdit(); break;
+                case 'delete-item': deleteItem(); break;
+                case 'toggle-sold': toggleSold(id); break;
+                case 'set-status': putState({ status: el.getAttribute('data-status') }); break;
+                case 'toggle-pause': putState({ paused: !app.state.paused }); break;
+                case 'pick-logo': $('profEmoji').value = el.getAttribute('data-logo') || ''; renderLogoPicker(); break;
+                case 'connect-stripe': connectStripe(el); break;
+                case 'refresh-payments': loadPayments(); break;
+                case 'sms-send-code':
+                    el.disabled = true;
+                    api('POST', '/api/sms/owner-phone', { phone: $('smsPhone').value }).then(function (r) {
+                        el.disabled = false;
+                        if (!r.ok) { say('smsMsg', r.data.error || 'Could not send the code.'); return; }
+                        say('smsMsg', ''); loadSms();
+                    });
+                    break;
+                case 'sms-verify':
+                    api('POST', '/api/sms/owner-phone/verify', { code: $('smsCode').value }).then(function (r) {
+                        say('smsMsg', r.ok ? 'Number verified. You\'ll get new-order texts.' : (r.data.error || 'Could not verify.'), r.ok);
+                        if (r.ok) loadSms();
+                    });
+                    break;
+                case 'sms-change-phone': app.smsSt.pending = ''; renderSms(); break;
+                case 'sms-remove-phone':
+                    if (confirm('Stop sending new-order texts to this number?')) api('DELETE', '/api/sms/owner-phone').then(function () { loadSms(); });
+                    break;
+                case 'sms-toggle-customer':
+                    var nextOn = !app.smsSt.customerReady;
+                    api('PUT', '/api/sms/settings', { customerReady: nextOn }).then(function (r) { if (r.ok) { app.smsSt.customerReady = nextOn; renderSms(); } else say('smsMsg', r.data.error || 'Could not save.'); });
+                    break;
+                case 'move-item': moveItem(id, parseInt(el.getAttribute('data-dir'), 10)); break;
+                case 'remove-photo': app.editPhoto = ''; renderEditPhoto(); break;
+                case 'save-hours': saveHours(); break;
+                case 'open-qr': openQr(); break;
+                case 'print-qr': window.print(); break;
+                case 'download-qr': downloadQr(); break;
+                case 'close-qr': $('qrModal').style.display = 'none'; break;
+                case 'export-csv': exportCsv(); break;
+                case 'install': if (app.installEvt) { app.installEvt.prompt(); app.installEvt.userChoice.then(function () { app.installEvt = null; renderInstall(); }); } break;
+                case 'dismiss-setup': var fl = flags(); fl.dismissed = 1; try { localStorage.setItem(flagKey(), JSON.stringify(fl)); } catch (er) {} renderSetup(); break;
+                case 'setup-go':
+                    var go = el.getAttribute('data-go');
+                    if (go === 'qr') { switchTab('Settings'); openQr(); }
+                    else if (go === 'page') window.open('/', '_blank');
+                    else switchTab(go);
+                    break;
+                case 'set-rush': putState({ rush: parseInt(el.getAttribute('data-rush'), 10) }); break;
+                case 'copy-link':
+                    var inp = $('shareLink');
+                    (navigator.clipboard ? navigator.clipboard.writeText(inp.value) : Promise.reject()).catch(function () { inp.select(); document.execCommand('copy'); });
+                    el.textContent = 'Copied ✓'; setTimeout(function () { el.textContent = 'Copy'; }, 1500);
+                    setFlag('share');
+                    break;
+                case 'upgrade': el.disabled = true; goStripe('/api/billing/checkout', el); break;
+                case 'portal': el.disabled = true; goStripe('/api/billing/portal', el); break;
+                case 'add-location':
+                    var name = $('newLocationInput').value.trim(); if (!name) break;
+                    api('POST', '/api/owner/locations', { name: name }).then(function (r) { if (r.ok) { $('newLocationInput').value = ''; loadLocations().then(renderSettings); } else alert(r.data.error || 'Could not add.'); });
+                    break;
+                case 'set-location':
+                    var loc = app.locations.active.find(function (l) { return l.id === id; });
+                    if (loc) putState({ location: loc.name });
+                    break;
+                case 'delete-location': api('DELETE', '/api/owner/locations/' + id).then(function () { return Promise.all([loadLocations(), loadState()]); }).then(renderSettings); break;
+                case 'restore-location': api('POST', '/api/owner/locations/' + id + '/restore').then(function () { return loadLocations(); }).then(renderSettings); break;
+                case 'save-profile':
+                    api('PUT', '/api/owner/profile', { businessName: $('profName').value.trim(), emoji: $('profEmoji').value.trim(), ownerIG: $('profIG').value.trim(), ownerName: $('profOwner').value.trim() }).then(function (r) {
+                        say('profMsg', r.ok ? 'Saved.' : (r.data.error || 'Could not save.'), r.ok);
+                        if (r.ok) loadMe().then(function () { $('dash-name').textContent = app.me.vendor.businessName; TruckLogo.set($('dash-emoji'), app.me.vendor.emoji, '#18181b'); TruckLogo.set($('login-emoji'), app.me.vendor.emoji, '#09090b'); $('dash-owner').textContent = app.me.vendor.ownerName || 'Partner'; });
+                    });
+                    break;
+                case 'save-pin':
+                    api('PUT', '/api/owner/staff-pin', { pin: $('newStaffPin').value.trim() }).then(function (r) {
+                        say('secMsg', r.ok ? 'Staff PIN updated. Staff were signed out.' : (r.data.error || 'Could not update.'), r.ok);
+                        if (r.ok) $('newStaffPin').value = '';
+                    });
+                    break;
+                case 'save-password':
+                    api('PUT', '/api/owner/password', { currentPassword: $('pwCurrent').value, newPassword: $('pwNew').value, email: $('pwEmail').value.trim() }).then(function (r) {
+                        say('secMsg', r.ok ? 'Password updated.' : (r.data.error || 'Could not update.'), r.ok);
+                        if (r.ok) { $('pwCurrent').value = ''; $('pwNew').value = ''; loadMe().then(function () { $('pwEmail').style.display = 'none'; $('pwCurrent').style.display = 'block'; $('currentEmail').textContent = app.me.vendor.email || ''; }); }
+                    });
+                    break;
+                case 'save-email':
+                    api('PUT', '/api/owner/email', { newEmail: $('emailNew').value.trim(), currentPassword: $('emailPw').value }).then(function (r) {
+                        say('emailMsg', r.ok ? 'Email updated. Use it next time you log in.' : (r.data.error || 'Could not update.'), r.ok);
+                        if (r.ok) { $('emailNew').value = ''; $('emailPw').value = ''; $('currentEmail').textContent = r.data.email; if (app.me) app.me.vendor.email = r.data.email; }
+                    });
+                    break;
+                case 'delete-account':
+                    if ($('delConfirm').value.trim() !== 'DELETE') { say('delMsg', 'Type DELETE in the box to confirm.'); break; }
+                    if (!confirm('Last check: permanently delete your account and all of its data?')) break;
+                    el.disabled = true;
+                    api('POST', '/api/owner/account/delete', { password: $('delPassword').value, confirm: 'DELETE' }).then(function (r) {
+                        el.disabled = false;
+                        if (!r.ok) { say('delMsg', r.data.error || 'Could not delete the account.'); return; }
+                        stopLive(); releaseAwake(); app.me = null;
+                        document.body.innerHTML = '<div class="p-8 text-center text-zinc-300 text-sm">Your account has been deleted. Sending you to the home page…</div>';
+                        setTimeout(function () { location.href = r.data.redirect || '/'; }, 2000);
+                    });
+                    break;
+                case 'clear-history':
+                    if (confirm('Clear all fulfilled and canceled order history?')) api('DELETE', '/api/owner/orders').then(function () { loadAnalytics(); loadOrders(); });
+                    break;
+            }
+        });
+
+        boot();
+    })();
     </script>
 </body>
 </html>

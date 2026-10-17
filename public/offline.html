@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>No connection</title>
+    <link rel="stylesheet" href="/app.css">
+</head>
+<body class="bg-zinc-950 text-zinc-100 font-sans min-h-screen flex items-center justify-center p-6 text-center">
+    <div class="max-w-sm">
+        <div class="text-4xl mb-3">📶</div>
+        <h1 class="text-xl font-bold mb-2">No connection</h1>
+        <p class="text-zinc-400 text-sm mb-1">Check your signal. This page will reload by itself when you're back online.</p>
+        <p class="text-zinc-500 text-xs mb-5">Sin conexión. La página se recargará sola cuando vuelva la señal.</p>
+        <button onclick="location.reload()" class="bg-zinc-100 text-zinc-950 font-semibold py-3 px-6 rounded-xl">Try again</button>
+    </div>
+    <script>
+        window.addEventListener('online', function () { location.reload(); });
+        setInterval(function () { if (navigator.onLine) location.reload(); }, 10000);
+    </script>
+</body>
+</html>

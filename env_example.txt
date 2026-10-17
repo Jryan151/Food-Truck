@@ -1,0 +1,42 @@
+# Add these lines to /var/www/foodtruck/.env  (keep your existing ones; never share this file)
+
+PORT=3000
+ROOT_DOMAIN=onlinekitchen.fyi
+PUBLIC_SCHEME=https
+
+# Long random string. Lets YOU list/suspend vendors via /api/admin/... (leave blank to disable)
+ADMIN_TOKEN=
+
+# false = new signups go live immediately. true = subdomain (and SSL) only after they click an emailed link.
+# Turn on only after the email settings below work.
+REQUIRE_EMAIL_VERIFY=false
+
+# Email (Resend: resend.com) — REQUIRED before real vendors: without it, password resets are NOT sent.
+# In Resend, verify your domain and add the SPF/DKIM DNS records it gives you, or mail lands in spam.
+RESEND_API_KEY=
+MAIL_FROM=Online Kitchen <hello@onlinekitchen.fyi>
+
+# Error monitoring (optional but recommended): sentry.io → new Node.js project → copy the DSN.
+# Also run: npm i @sentry/node
+SENTRY_DSN=
+
+# Stripe (use TEST keys first)
+STRIPE_SECRET_KEY=
+STRIPE_PRICE_ID=
+STRIPE_WEBHOOK_SECRET=
+PRO_PRICE_DISPLAY=$34.99/mo
+
+# Online pre-order payments for Pro trucks (Stripe Connect). Uses the same STRIPE_SECRET_KEY as above.
+# Stripe Dashboard → Connect → get started (choose "Platform"), then
+# Developers → Webhooks → Add destination → "Connected accounts" → https://onlinekitchen.fyi/api/stripe/connect-webhook
+# Events: checkout.session.completed, checkout.session.async_payment_succeeded, checkout.session.expired
+STRIPE_CONNECT_WEBHOOK_SECRET=
+
+# Text alerts for Pro trucks (Twilio). Register for US A2P 10DLC texting in Twilio first — carriers block unregistered texts.
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+# Use a Messaging Service (recommended: handles STOP replies) or a single number:
+TWILIO_MESSAGING_SERVICE_SID=
+TWILIO_FROM=
+# Safety cap on texts per truck per month (protects your Twilio bill)
+SMS_MONTHLY_LIMIT=1000

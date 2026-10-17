@@ -1,192 +1,234 @@
+'use strict';
 require('dotenv').config();
 
+/* ---------- error monitoring (optional): set SENTRY_DSN in .env and `npm i @sentry/node` ---------- */
+let Sentry = null;
+if (process.env.SENTRY_DSN) {
+  try {
+    Sentry = require('@sentry/node');
+    Sentry.init({ dsn: process.env.SENTRY_DSN, environment: process.env.NODE_ENV || 'production' });
+    console.log('Error monitoring: Sentry on');
+  } catch (e) {
+    console.warn('SENTRY_DSN is set but @sentry/node is not installed. Run: npm i @sentry/node');
+  }
+}
+const report = (err) => { if (Sentry) try { Sentry.captureException(err); } catch (e) {} };
+
 const express = require('express');
-const sqlite3 = require('sqlite3').verbose();
-const cors = require('cors');
+const fs = require('fs');
 const path = require('path');
+const core = require('./core');
+const auth = require('./auth');
+const api = require('./api');
+const billing = require('./billing');
+const payments = require('./payments');
+const sms = require('./sms');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const PUB = path.join(__dirname, 'public');
 
-app.use(cors());
-app.use(express.json());
+app.set('trust proxy', 1); // Caddy sits in front
+app.disable('x-powered-by');
 
-// Initialize SQLite Database locally
-
-// Load onboarding routes now that db is ready
-
-
-// 1. Explicit HTML Traffic Cop for the root URL
-app.get('/', (req, res) => {
-    const rawHost = req.headers.host || "";
-    const host = rawHost.split(':')[0].trim();
-    const rootDomain = (process.env.ROOT_DOMAIN || "jasonryean.pro").trim();
-
-    if (host === rootDomain || host === 'www.' + rootDomain || host === 'localhost' || host === 'jasonryean.pro' || host === 'www.jasonryean.pro') {
-        return res.sendFile('/var/www/foodtruck/public/index.html');
-    }
-
-    res.sendFile('/var/www/foodtruck/public/customer.html');
-});
-
-// 2. Dynamic Subdomain & Custom Domain API Lookup
-app.get('/api/vendor-data', (req, res) => {
-    const rawHost = req.headers.host || "";
-    const host = rawHost.split(':')[0].trim();
-    const rootDomain = (process.env.ROOT_DOMAIN || "jasonryean.pro").trim();
-
-    if (host === rootDomain || host === 'www.' + rootDomain || host === 'localhost' || host === 'jasonryean.pro' || host === 'www.jasonryean.pro') {
-        return res.json({ isDemo: true, message: "Welcome to root demo" });
-    }
-
-    let query = "SELECT * FROM vendors WHERE slug = ?";
-    let param = host.split('.')[0];
-
-    db.get(query, [param], (err, row) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!row) return res.status(404).json({ error: 'Vendor not found' });
-
-        res.json({
-            isDemo: false,
-            businessName: row.business_name,
-            slug: row.slug,
-            customDomain: row.custom_domain,
-            menu: JSON.parse(row.menu_data || '[]')
-        });
-    });
-});
-
-
-// Serve static frontend files from 'public' directory
-app.use(express.static(path.join(__dirname, 'public')));
-
-// Initialize SQLite Database locally
-const dbFile = path.join(__dirname, 'database.sqlite');
-const db = new sqlite3.Database(dbFile, (err) => {
-    if (err) {
-        console.error('Error opening database', err.message);
-    } else {
-        console.log('Connected to local SQLite database.');
-        // Create vendors table with safety measures
-        db.run(`CREATE TABLE IF NOT EXISTS vendors (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            slug TEXT UNIQUE NOT NULL,
-            business_name TEXT NOT NULL,
-            menu_data TEXT NOT NULL,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )`);
-    }
-});
-
-// Reserved slugs blacklist to prevent squatting
-const RESERVED_SLUGS = ['admin', 'api', 'www', 'support', 'root', 'auth', 'help', 'jasonryean'];
-
-// 1. Vendor Registration Endpoint
-
-// 2. Dynamic Subdomain & Custom Domain Lookup
-app.get('/api/vendor-data', (req, res) => {
-    const host = req.headers.host || "";
-    
-    // Catch root domain traffic
-    if (host === process.env.ROOT_DOMAIN || host === 'www.' + process.env.ROOT_DOMAIN || host.startsWith('localhost')) {
-        return res.json({ isDemo: true, message: 'Welcome to root demo' });
-    }
-
-    let query = "";
-    let param = "";
-
-    // Route based on whether it is a subdomain or a custom domain
-    if (host.endsWith('.' + process.env.ROOT_DOMAIN)) {
-
-        query = "SELECT * FROM vendors WHERE slug = ?";
-        param = host.split('.')[0];
-    } else {
-        query = "SELECT * FROM vendors WHERE custom_domain = ?";
-        param = host;
-    }
-
-    db.get(query, [param], (err, row) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!row) return res.status(404).json({ error: 'Vendor portal not found.' });
-
-        res.json({
-            isDemo: false,
-            businessName: row.business_name,
-            slug: row.slug,
-            customDomain: row.custom_domain,
-            menu: JSON.parse(row.menu_data || '[]')
-        });
-    });
-});
-
-// 3. Caddy On-Demand TLS Guardrail
-app.get('/api/check-domain', (req, res) => {
-    const domain = req.query.domain;
-    if (!domain) return res.sendStatus(400);
-
-    // Always allow the master root domain
-    if (domain === 'jasonryean.pro' || domain === 'www.jasonryean.pro') {
-        return res.sendStatus(200);
-    }
-
-    // Check database for subdomains OR custom domains
-    if (domain.endsWith('.jasonryean.pro')) {
-        const slug = domain.split('.')[0];
-        db.get("SELECT id FROM vendors WHERE slug = ?", [slug], (err, row) => {
-            if (row) return res.sendStatus(200);
-            return res.sendStatus(404); // Blocks SSL generation
-        });
-    } else {
-        db.get("SELECT id FROM vendors WHERE custom_domain = ?", [domain], (err, row) => {
-            if (row) return res.sendStatus(200);
-            return res.sendStatus(404); // Blocks SSL generation
-        });
-    }
-});
-
-// Modular Onboarding Router Mount
-const onboardingRouter = require('./routes/onboarding')(db);
-app.use('/api', onboardingRouter);
-
-// --- REALTIME SYNC (SSE) ---
-const truckClients = new Map();
-
-app.get('/api/live-stream', (req, res) => {
-  const host = req.headers.host || '';
-  const slug = host.split('.')[0];
-
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
-  res.flushHeaders();
-
-  if (!truckClients.has(slug)) truckClients.set(slug, new Set());
-  truckClients.get(slug).add(res);
-  res.write(': connected\n\n');
-
-  req.on('close', () => {
-    const clients = truckClients.get(slug);
-    if (clients) {
-      clients.delete(res);
-      if (clients.size === 0) truckClients.delete(slug);
-    }
+app.use((req, res, next) => {
+  res.set({
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'SAMEORIGIN',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
   });
+  // HTTPS only from now on for this browser (1 year). Only sent over HTTPS, so local testing is unaffected.
+  if (req.secure) res.set('Strict-Transport-Security', 'max-age=31536000');
+  next();
 });
 
-app.post('/api/sync-event', (req, res) => {
-  const { slug, type, payload } = req.body;
-  const targetSlug = slug || (req.headers.host || '').split('.')[0];
-  const clients = truckClients.get(targetSlug);
+// Stripe webhook needs the raw body, so it goes BEFORE express.json().
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), billing.webhook);
+app.post('/api/stripe/connect-webhook', express.raw({ type: 'application/json' }), payments.webhook);
 
-  if (clients && clients.size > 0) {
-    const message = `data: ${JSON.stringify({ type, payload })}\n\n`;
-    clients.forEach(client => client.write(message));
+app.use(express.json({ limit: '100kb' }));
+
+// Work out which vendor (or the root site) every request is for.
+app.use(auth.tenant);
+
+// Block cross-site writes: browsers send Origin on POST/PUT/PATCH/DELETE.
+app.use('/api', (req, res, next) => {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  const origin = req.headers.origin;
+  if (origin) {
+    let host = '';
+    try { host = new URL(origin).host.toLowerCase(); } catch (e) {}
+    if (host !== String(req.headers.host || '').toLowerCase()) return res.status(403).json({ error: 'Cross-site request blocked.' });
   }
-  res.json({ ok: true, activeListeners: clients ? clients.size : 0 });
+  next();
 });
-    
 
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+app.use('/api/auth', auth.router);
+app.use('/api/billing', billing.router);
+app.use('/api/payments', payments.router);
+app.use('/api/sms', sms.router);
+app.use('/api', api.router);
+app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
+
+/* ---------- pages ---------- */
+const sendPage = (res, file) => res.sendFile(path.join(PUB, file));
+const unavailable = (res) =>
+  res.status(503).send('<h1>This page is not available right now.</h1>');
+
+const escAttr = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+/** Link previews (Instagram, iMessage, Facebook...) read these tags, so they're filled in per truck on the server. */
+function shareTags(req, v, kind) {
+  const origin = `${req.secure ? 'https' : 'http'}://${req.tenant.host}`;
+  const name = v.business_name;
+  const title = kind === 'owner' ? `${name} — Kitchen` : `${name} — Order online`;
+  const desc = kind === 'owner' ? `Kitchen dashboard for ${name}.` : `Order ahead from ${name} and pick up at the window.`;
+  return [
+    `<title>${escAttr(title)}</title>`,
+    `<meta name="description" content="${escAttr(desc)}">`,
+    `<meta property="og:type" content="website">`,
+    `<meta property="og:title" content="${escAttr(title)}">`,
+    `<meta property="og:description" content="${escAttr(desc)}">`,
+    `<meta property="og:url" content="${escAttr(origin + '/')}">`,
+    `<meta property="og:image" content="${escAttr(origin + '/og-image.png')}">`,
+    `<meta name="twitter:card" content="summary_large_image">`,
+  ].join('\n    ');
+}
+
+function vendorPage(file, kind) {
+  return async (req, res, next) => {
+    const v = req.tenant.vendor;
+    if (!v) return res.status(404).send('<h1>Page not found</h1>');
+    if (v.status !== 'active') return unavailable(res);
+    try {
+      const html = await fs.promises.readFile(path.join(PUB, file), 'utf8');
+      res.set('Cache-Control', 'no-cache');
+      res.type('html').send(html.replace(/<title>[^<]*<\/title>/i, shareTags(req, v, kind)));
+    } catch (e) { next(e); }
+  };
+}
+function rootPage(file) {
+  return (req, res) => (req.tenant.isRoot ? sendPage(res, file) : res.status(404).send('<h1>Page not found</h1>'));
+}
+
+app.get('/', (req, res, next) => {
+  if (req.tenant.isRoot) return sendPage(res, 'index.html');
+  return vendorPage('customer.html', 'customer')(req, res, next);
 });
+app.get(['/customer', '/customer.html'], vendorPage('customer.html', 'customer'));
+app.get(['/owner', '/owner.html'], vendorPage('owner.html', 'owner'));
+app.get(['/signup', '/signup.html'], rootPage('signup.html'));
+app.get(['/login', '/login.html'], (req, res) =>
+  req.tenant.isRoot ? sendPage(res, 'login.html') : res.redirect('/owner.html'));
+app.get(['/reset', '/reset.html'], rootPage('reset.html'));
+// Legal pages work on the main site and on every vendor page (the customer footer links to them).
+app.get(['/terms', '/terms.html'], (req, res) => sendPage(res, 'terms.html'));
+app.get(['/privacy', '/privacy.html'], (req, res) => sendPage(res, 'privacy.html'));
+
+/* ---------- demo (main site only, no account, nothing touches the database) ----------
+   The demo serves the REAL customer and owner pages with demo-shim.js loaded first. The shim
+   answers every /api call in the browser from a preset truck saved in localStorage, so the demo
+   always matches the real product. */
+const DEMO_TAG = '<script src="/demo-shim.js"></script>';
+function demoPage(file) {
+  return async (req, res, next) => {
+    if (!req.tenant.isRoot) return res.status(404).send('<h1>Page not found</h1>');
+    try {
+      const html = await fs.promises.readFile(path.join(PUB, file), 'utf8');
+      res.set('Cache-Control', 'no-store');
+      res.type('html').send(html.replace(/<head>/i, '<head>\n    ' + DEMO_TAG));
+    } catch (e) { next(e); }
+  };
+}
+app.get(['/demo', '/demo/'], (req, res) =>
+  req.tenant.isRoot ? res.redirect('/demo/customer') : res.status(404).send('<h1>Page not found</h1>'));
+app.get('/demo/customer', demoPage('customer.html'));
+app.get('/demo/owner', demoPage('owner.html'));
+
+/* ---------- installable app (PWA) ----------
+   Two manifests per truck: the owner portal installs as "<Truck> Kitchen" and opens the dashboard;
+   the customer page installs as the truck's ordering app. */
+function manifest(kind) {
+  return (req, res) => {
+    const v = req.tenant.vendor;
+    const name = v ? v.business_name : 'Online Kitchen';
+    const owner = kind === 'owner';
+    res.type('application/manifest+json').set('Cache-Control', 'no-cache').send(JSON.stringify({
+      name: owner ? `${name} Kitchen` : name,
+      short_name: (owner ? 'Kitchen' : name).slice(0, 12),
+      id: owner ? '/owner.html' : '/',
+      start_url: owner ? '/owner.html' : '/',
+      scope: '/',
+      display: 'standalone',
+      background_color: '#09090b',
+      theme_color: '#09090b',
+      icons: [
+        { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+        { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+        { src: '/icons/icon-maskable-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+        { src: '/icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+      ],
+    }));
+  };
+}
+app.get('/manifest.webmanifest', manifest('customer'));
+app.get('/manifest-owner.webmanifest', manifest('owner'));
+app.get('/offline.html', (req, res) => sendPage(res, 'offline.html'));
+app.get('/sw.js', (req, res) => {
+  // The service worker must not be cached for long, or fixes take days to reach phones.
+  res.set({ 'Cache-Control': 'no-cache', 'Service-Worker-Allowed': '/' });
+  sendPage(res, 'sw.js');
+});
+app.get('/favicon.ico', (req, res) => sendPage(res, 'favicon.png'));
+
+/* ---------- menu photos ---------- */
+const IMG_EXT = new Set(['.jpg', '.png', '.webp']);
+app.use('/uploads', (req, res, next) => {
+  if (!IMG_EXT.has(path.extname(req.path).toLowerCase())) return res.status(404).send('Not found');
+  next();
+}, express.static(core.UPLOAD_DIR, { index: false, dotfiles: 'ignore', maxAge: '30d', immutable: true }));
+
+/* ---------- static assets (css/js/images only — notes, backups and .txt files are never served) ---------- */
+const ASSET_EXT = new Set(['.css', '.js', '.png', '.jpg', '.jpeg', '.svg', '.ico', '.webp', '.woff', '.woff2']);
+app.use((req, res, next) => {
+  const ext = path.extname(req.path).toLowerCase();
+  if (ext && !ASSET_EXT.has(ext)) return res.status(404).send('Not found');
+  next();
+});
+app.use(express.static(PUB, { index: false, dotfiles: 'ignore', maxAge: '1h' }));
+
+app.use((req, res) => res.status(404).send('<h1>Page not found</h1>'));
+
+// Any error in an async route lands here (Express 5 forwards rejected promises).
+app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
+  console.error('Unhandled error:', err);
+  report(err);
+  if (res.headersSent) return;
+  if (req.path.startsWith('/api/')) return res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  res.status(500).send('Something went wrong.');
+});
+
+process.on('unhandledRejection', (e) => { console.error('Unhandled rejection:', e); report(e); });
+
+/* ---------- startup checks: say loudly what isn't set up yet ---------- */
+function startupWarnings() {
+  if (!auth.mailConfigured()) {
+    console.warn('⚠️  EMAIL IS NOT SET UP (RESEND_API_KEY / MAIL_FROM). Password resets and activation emails will NOT be sent.');
+  }
+  if (!fs.existsSync(path.join(PUB, 'app.css'))) {
+    console.warn('⚠️  public/app.css is missing — pages will be unstyled. Run: npm run build:css');
+  }
+  if (!process.env.ADMIN_TOKEN) console.warn('ℹ️  ADMIN_TOKEN is not set, so the admin API is off.');
+  if (!process.env.STRIPE_SECRET_KEY) console.warn('ℹ️  STRIPE_SECRET_KEY is not set: Pro billing and online payments are off.');
+  else if (!process.env.STRIPE_CONNECT_WEBHOOK_SECRET) console.warn('ℹ️  STRIPE_CONNECT_WEBHOOK_SECRET is not set: paid orders still work (the customer page confirms them), but add the Connect webhook as a backup.');
+  if (!sms.configured()) console.warn('ℹ️  Twilio is not set up: Pro text alerts are off.');
+}
+
+core.ensureSchema()
+  .then(() => core.autoCloseOrders().catch(() => {}))
+  .then(() => app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT} (root domain: ${core.ROOT_DOMAIN})`);
+    startupWarnings();
+  }))
+  .catch((e) => { console.error('Startup failed:', e); report(e); process.exit(1); });

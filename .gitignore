@@ -1,0 +1,12 @@
+node_modules/
+.env
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+uploads/
+uploads.before-reset-*/
+public_old/
+new/
+*.txt
+!env_example.txt
+*.save
