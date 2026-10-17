@@ -11,6 +11,7 @@ const express = require('express');
 const core = require('./core');
 const auth = require('./auth');
 const Q = require('./public/catering-quote.js');
+const crm = require('./crm');
 const { run, get, all } = core;
 const { requireVendor, requireRole, rateLimit, sendMail, escHtml, EMAIL_RE } = auth;
 
@@ -201,7 +202,43 @@ router.post('/request', requireVendor, limitRequest, async (req, res) => {
     }).catch(() => {});
   }
   core.broadcast(v.id, 'CATERING_NEW', { date, guests: quote.guests }, true);
+  get('SELECT * FROM catering_bookings WHERE public_token = ?', [token]).then((row) => row && crm.catering.requested(row)).catch(() => {});
   res.status(201).json({ token, link: `/catering/b/${token}`, holdExpiresAt: now + HOLD_MS });
+});
+
+// "Email me this quote": the exact price, worked out here, sent to them now. It starts a record so
+// one friendly follow-up can go out in a few days if they don't book. Nothing is held.
+router.post('/quote-email', requireVendor, limitRequest, async (req, res) => {
+  const v = req.tenant.vendor;
+  const s = await loadSettings(v.id);
+  if (!s.enabled) return res.status(404).json({ error: 'This truck isn’t taking catering requests right now.' });
+  const b = req.body || {};
+  const email = String(b.email || '').trim().toLowerCase().slice(0, 120);
+  if (!EMAIL_RE.test(email)) return res.status(400).json({ error: 'Please enter a valid email.', field: 'quoteEmail' });
+  const quote = Q.computeQuote(s, { packageId: b.packageId, guests: b.guests, zip: b.zip, vegetarian: b.vegetarian });
+  if (!quote.ok) return res.status(400).json({ error: quote.problems[0].message });
+  const pkg = s.packages.find((p) => p.id === quote.packageId);
+  const date = Q.validDate(String(b.date || '')) ? String(b.date) : null;
+  const link = pageUrl(req, '/catering');
+  const ok = await sendMail({
+    to: email, replyTo: v.email || undefined,
+    subject: `Your catering quote from ${v.business_name}: ${Q.money(quote.totalCents)}`,
+    text: `Here's your quote from ${v.business_name}${date ? ' for ' + fmtDate(date) : ''}: ${quote.guests} guests, ${pkg.name}.
+
+${quote.lines.map((l) => l.label + ': ' + Q.money(l.cents)).join('\n')}
+Total: ${Q.money(quote.totalCents)}
+
+Book it in about a minute: ${link}
+Reply to this email to reach ${v.business_name} directly.`,
+    html: `<p>Here's your quote from <b>${escHtml(v.business_name)}</b>${date ? ' for <b>' + escHtml(fmtDate(date)) + '</b>' : ''}: ${quote.guests} guests, ${escHtml(pkg.name)}.</p>
+      <table style="border-collapse:collapse;font-size:14px">${quoteRowsHtml(quote)}</table>
+      <p><a href="${link}">Book it in about a minute</a></p><p style="color:#666">Reply to this email to reach ${escHtml(v.business_name)} directly.</p>`,
+  });
+  if (!ok) return res.status(502).json({ error: 'We couldn’t send that just now. Please try again in a minute.' });
+  const cid = await crm.record(v.id, { email, name: String(b.name || '').trim(), kind: 'lead' },
+    { type: 'quote', summary: `Priced ${pkg.name} for ${quote.guests}${date ? ' on ' + fmtDate(date) : ''}: ${Q.money(quote.totalCents)}`, data: { date, guests: quote.guests, totalCents: quote.totalCents, packageName: pkg.name } });
+  if (cid) await run('INSERT INTO crm_quote_requests (vendor_id, client_id, event_date, guests, total_cents, package_name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)', [v.id, cid, date, quote.guests, quote.totalCents, pkg.name, Date.now()]);
+  res.json({ ok: true });
 });
 
 // Anything outside the rules (a far-away ZIP, 500 guests, a dish not on the menu) comes in as one
@@ -231,6 +268,7 @@ router.post('/custom', requireVendor, limitRequest, async (req, res) => {
     html: `<p><b>${escHtml(name)}</b> (${escHtml(email)}) sent a custom catering request.</p><p>${facts.map((f) => `${escHtml(f[0])}: <b>${escHtml(f[1])}</b>`).join('<br>')}</p><p style="white-space:pre-wrap">${escHtml(message)}</p><p style="color:#666">Reply to this email to answer them.</p>`,
   });
   if (!ok) return res.status(502).json({ error: 'We couldn’t send that just now. Please try again in a minute.' });
+  crm.catering.asked(v.id, { email, name, phone: b.hostPhone }, message);
   sendMail({
     to: email, replyTo: v.email,
     subject: `${v.business_name} got your catering question`,
@@ -257,6 +295,7 @@ router.post('/booking/:token/cancel', requireVendor, async (req, res) => {
   );
   if (!r.changes) return res.status(409).json({ error: 'This booking can’t be canceled here. Reply to your confirmation email to reach the truck.' });
   const b = await get('SELECT * FROM catering_bookings WHERE public_token = ?', [String(req.params.token)]);
+  crm.catering.canceled(b);
   if (v.email) sendMail({ to: v.email, replyTo: b.host_email, subject: `Catering request withdrawn: ${fmtDate(b.event_date)}`, text: `${b.host_name} withdrew their request for ${fmtDate(b.event_date)}. The date is free again.`, html: `<p>${escHtml(b.host_name)} withdrew their request for ${escHtml(fmtDate(b.event_date))}. The date is free again.</p>` }).catch(() => {});
   res.json({ ok: true });
 });
@@ -290,8 +329,11 @@ router.get('/owner/bookings', ownerOnly, async (req, res) => {
      ORDER BY event_date ASC, start_time ASC LIMIT 300`,
     [v.id, Q.addDays(today, -30), Date.now() - 30 * 24 * 60 * 60 * 1000]
   );
+  // What the owner knows about each client ("use the side gate", "the CEO is vegan") rides along to the event sheet.
+  const notes = await all('SELECT email, crew_notes FROM crm_clients WHERE vendor_id = ? AND merged_into IS NULL AND crew_notes IS NOT NULL', [v.id]);
+  const byEmail = new Map(notes.map((n) => [n.email, n.crew_notes]));
   res.set('Cache-Control', 'no-store');
-  res.json({ today, bookings: rows.map((b) => bookingShape(b, true)) });
+  res.json({ today, bookings: rows.map((b) => Object.assign(bookingShape(b, true), { clientNotes: byEmail.get(b.host_email) || '' })) });
 });
 
 async function decide(req, res, accept) {
@@ -313,6 +355,7 @@ async function decide(req, res, accept) {
   }
   if (!r.changes) return res.status(409).json({ error: accept ? 'That day is now full, or this request was already handled.' : 'This request was already handled.' });
   const b = await get('SELECT * FROM catering_bookings WHERE id = ?', [id]);
+  (accept ? crm.catering.booked : crm.catering.declined)(b);
   const d = JSON.parse(b.details);
   const link = pageUrl(req, `/catering/b/${b.public_token}`);
   const reason = String((req.body || {}).message || '').trim().slice(0, 400);
@@ -346,6 +389,7 @@ async function expireHolds() {
   for (const b of due) {
     const r = await run("UPDATE catering_bookings SET status = 'expired', updated_at = ? WHERE id = ? AND status = 'requested'", [now, b.id]);
     if (!r.changes) continue;
+    crm.catering.expired(b);
     sendMail({
       to: b.host_email, replyTo: b.owner_email || undefined,
       subject: `Your hold with ${b.business_name} for ${fmtDate(b.event_date)} has ended`,

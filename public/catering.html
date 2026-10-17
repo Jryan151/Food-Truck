@@ -112,6 +112,13 @@
             <button type="submit" class="ok-btn split" id="submit"><span id="submitLabel">Request this date</span><span id="submitAmt"></span></button>
             <div class="muted ok-center" id="holdNote">No payment now. The date is held for 24 hours while the truck confirms.</div>
         </section>
+        <!-- Not ready to book? Take the exact quote with you. -->
+        <div class="ok-card pad" style="display:flex;flex-direction:column;gap:10px" id="qeBox">
+            <span style="font-weight:700">Not ready to book?</span>
+            <span class="ok-note">Get this exact quote by email to share or decide later. No date is held.</span>
+            <div style="display:flex;gap:8px"><input class="ok-box" type="email" id="qeEmail" placeholder="you@company.com" autocomplete="email" style="flex:1;min-width:0"><button type="button" class="ok-btn small" id="qeSend">Email it</button></div>
+            <div class="ok-note" id="qeMsg" role="status"></div>
+        </div>
     </form>
 </main>
 
@@ -257,6 +264,16 @@
             var by = parseInt(t.dataset.by, 10);
             g = Math.max(1, by > 0 ? Math.floor(g / 5) * 5 + 5 : Math.ceil(g / 5) * 5 - 5);
             $('guests').value = g; render(); return;
+        }
+        if (t.id === 'qeSend') {
+            var em = $('qeEmail').value.trim() || $('hostEmail').value.trim();
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) { $('qeMsg').textContent = 'Enter your email.'; return; }
+            t.disabled = true; $('qeMsg').textContent = '';
+            fetch('/api/catering/quote-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: em, name: $('hostName').value.trim(), packageId: st.packageId, guests: guests(), zip: $('zip').value.trim(), vegetarian: st.veg, date: $('date').value }) })
+                .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, d: d }; }); })
+                .then(function (r) { t.disabled = false; $('qeMsg').textContent = r.ok ? '✓ Sent. Check your inbox.' : (r.d.error || 'Could not send.'); })
+                .catch(function () { t.disabled = false; $('qeMsg').textContent = 'No connection. Try again.'; });
+            return;
         }
         if (t.dataset.step === 'veg') { st.veg = Math.max(0, Math.min(guests(), st.veg + parseInt(t.dataset.by, 10))); render(); return; }
     });

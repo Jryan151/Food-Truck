@@ -47,3 +47,6 @@ SMS_MONTHLY_LIMIT=1000
 # Optional: key for looking up crew PINs. If unset, one is generated and stored in the database.
 # Set it once and keep it; changing it means crew PINs must be set again.
 PIN_PEPPER=
+
+# Optional: key for signing links in client emails (unsubscribe, feedback). Generated and stored if unset.
+LINK_SECRET=

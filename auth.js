@@ -60,7 +60,7 @@ function rateLimit({ windowMs, max, key }) {
 
 const mailConfigured = () => !!(process.env.RESEND_API_KEY && process.env.MAIL_FROM);
 
-async function sendMail({ to, subject, html, text, replyTo, headers }) {
+async function sendMail({ to, subject, html, text, replyTo, headers, idempotencyKey }) {
   if (!mailConfigured()) {
     console.warn(`[MAIL NOT CONFIGURED — this email was NOT sent] to=${to} subject="${subject}"\n${text}\n`);
     return false;
@@ -68,7 +68,8 @@ async function sendMail({ to, subject, html, text, replyTo, headers }) {
   try {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      // The idempotency key makes a retry after a crash safe: the mail service sends it once.
+      headers: Object.assign({ Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' }, idempotencyKey ? { 'Idempotency-Key': String(idempotencyKey).slice(0, 256) } : {}),
       // replyTo lets a customer's reply go straight to the truck owner.
       body: JSON.stringify(Object.assign({ from: process.env.MAIL_FROM, to: [to], subject, html, text }, replyTo ? { reply_to: replyTo } : {}, headers ? { headers } : {})),
     });

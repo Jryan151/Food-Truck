@@ -43,7 +43,7 @@
             <div class="ok-mono" id="mono" aria-hidden="true">&nbsp;</div>
             <div style="display:flex;flex-direction:column"><span class="ok-truck-name" id="truckName">Catering</span><span class="ok-sub">← Back to your kitchen portal</span></div>
         </a>
-        <a class="ok-btn small quiet" href="/catering" target="_blank" rel="noopener" id="previewLink" style="white-space:nowrap;flex:none">Host view</a>
+        <span style="display:flex;gap:6px;flex:none"><a class="ok-btn small quiet" href="/clients" style="white-space:nowrap">Clients</a><a class="ok-btn small quiet" href="/catering" target="_blank" rel="noopener" id="previewLink" style="white-space:nowrap">Host view</a></span>
     </div>
 
     <div id="loading" class="ok-lede">Loading…</div>
@@ -212,7 +212,8 @@
             '<div class="ok-card"><div class="ok-row"><span class="ok-label">Address</span><span style="font-weight:700">' + esc(b.address) + ' ' + esc(b.zip) + '</span></div>' +
             '<div class="ok-row"><span class="ok-label">On-site contact</span><span style="font-weight:700">' + esc(b.hostName) + '</span>' + (b.hostPhone ? '<a href="tel:' + esc(b.hostPhone) + '" style="color:var(--z100)">' + esc(b.hostPhone) + '</a>' : '<span class="ok-note">' + esc(b.hostEmail) + '</span>') + '</div>' +
             (b.siteAnswers.length ? '<div class="ok-row"><span class="ok-label">Site</span><span class="bk-meta">' + b.siteAnswers.map(function (a) { return esc(a.question) + ' <b>' + (a.answer === 'yes' ? 'Yes' : 'No') + '</b>'; }).join('<br>') + '</span></div>' : '') +
-            (b.notes ? '<div class="ok-row"><span class="ok-label">Host notes</span><span style="white-space:pre-wrap">' + esc(b.notes) + '</span></div>' : '') + '</div>' +
+            (b.notes ? '<div class="ok-row"><span class="ok-label">Host notes</span><span style="white-space:pre-wrap">' + esc(b.notes) + '</span></div>' : '') +
+            (b.clientNotes ? '<div class="ok-row"><span class="ok-label">From your client notes</span><span style="white-space:pre-wrap;font-weight:700">' + esc(b.clientNotes) + '</span></div>' : '') + '</div>' +
             '<div class="ok-card pad" style="display:flex;flex-direction:column;gap:10px"><span class="ok-step">Counts</span><div class="counts">' + counts + '</div>' +
             (b.choices.length ? '<span class="ok-note">Split evenly across ' + esc(b.choices.join(' and ')) + '. Adjust to the host’s final count.</span>' : '') + '</div>' +
             '<button type="button" class="ok-btn quiet no-print" onclick="window.print()">Print</button>';

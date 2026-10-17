@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Clients</title>
+    <meta name="robots" content="noindex">
+    <meta name="theme-color" content="#0a0a0b">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+    <script src="/theme.js"></script>
+    <link rel="stylesheet" href="/theme.css">
+    <link rel="stylesheet" href="/ok.css">
+    <style>
+        [hidden] { display: none !important; }
+        .rc { display: flex; flex-direction: column; gap: 10px; padding: 16px; }
+        .rc-head { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+        .rc-name { font-weight: 800; font-size: 17px; letter-spacing: -0.01em; color: var(--z100); }
+        .rc-why { font-size: 14px; color: var(--z200); line-height: 1.45; }
+        .rc-brief { font-size: 12px; color: var(--z500); line-height: 1.5; }
+        .rc-draft { display: flex; flex-direction: column; gap: 6px; }
+        .rc-draft input, .rc-draft textarea { width: 100%; background: var(--z950); border: 1px solid var(--z800); border-radius: 10px; color: var(--z100); font: inherit; font-size: 14px; padding: 10px 12px; }
+        .rc-draft textarea { min-height: 150px; resize: vertical; line-height: 1.5; }
+        .rc-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .tag { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--z400); border: 1px solid var(--z700); border-radius: 6px; padding: 2px 6px; }
+        .pipe { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+        .pipe div { background: var(--z900); border: 1px solid var(--z800); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; }
+        .pipe b { font-size: 22px; font-variant-numeric: tabular-nums; color: var(--z100); }
+        .pipe span { font-size: 11px; color: var(--z500); font-weight: 600; }
+        .cl { display: flex; justify-content: space-between; gap: 10px; padding: 12px 14px; align-items: center; text-align: left; width: 100%; background: none; border: 0; color: inherit; font: inherit; cursor: pointer; }
+        .cl + .cl { border-top: 1px solid var(--z800); }
+        .cl-main { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+        .cl-main b { font-size: 15px; color: var(--z100); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cl-main span { font-size: 12px; color: var(--z500); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cl-val { text-align: right; font-weight: 800; color: var(--z100); font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .cl-val small { display: block; font-size: 11px; color: var(--z500); font-weight: 600; }
+        .tl { display: flex; flex-direction: column; }
+        .tl div { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 10px; padding: 9px 0; border-top: 1px solid var(--z900); font-size: 13px; }
+        .tl div:first-child { border-top: 0; }
+        .tl time { color: var(--z500); font-variant-numeric: tabular-nums; }
+        .field { display: flex; flex-direction: column; gap: 6px; }
+        .field label { font-size: 12px; font-weight: 600; color: var(--z500); }
+        .field textarea, .field input, .field select { width: 100%; background: var(--z950); border: 1px solid var(--z800); border-radius: 10px; color: var(--z100); font: inherit; font-size: 14px; padding: 10px 12px; }
+        .facts { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: 6px; align-items: center; }
+        .x { background: none; border: 0; color: var(--z500); font-size: 20px; cursor: pointer; padding: 4px 8px; }
+        .ob { font-size: 12px; color: var(--z400); display: flex; justify-content: space-between; gap: 8px; padding: 8px 0; border-top: 1px solid var(--z900); }
+        .ok-toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink); color: var(--on-ink); padding: 12px 16px; border-radius: 12px; font-weight: 700; font-size: 14px; z-index: 50; display: flex; gap: 12px; align-items: center; max-width: 92vw; }
+        .ok-toast button { background: none; border: 0; color: inherit; text-decoration: underline; font: inherit; cursor: pointer; }
+    </style>
+</head>
+<body>
+<main class="ok-wrap">
+    <div class="ok-top">
+        <a class="ok-truck" href="/owner.html" style="text-decoration:none">
+            <div class="ok-mono" id="mono" aria-hidden="true">&nbsp;</div>
+            <div style="display:flex;flex-direction:column"><span class="ok-truck-name" id="truckName">Clients</span><span class="ok-sub">← Back to your kitchen portal</span></div>
+        </a>
+        <a class="ok-btn small quiet" href="/catering/manage" style="white-space:nowrap;flex:none">Catering</a>
+    </div>
+
+    <div id="loading" class="ok-lede">Loading…</div>
+    <div id="needLogin" hidden><h1 class="ok-h1">Log in first</h1><p class="ok-lede">Clients are for the owner. <a href="/owner.html" style="color:var(--z100)">Log in from your kitchen portal</a>, then come back.</p></div>
+    <div id="locked" hidden><h1 class="ok-h1">Clients are part of Business</h1><p class="ok-lede" id="lockedMsg"></p></div>
+
+    <div id="appView" hidden style="display:flex;flex-direction:column;gap:18px">
+        <div class="ok-tabs" role="group" aria-label="Clients sections">
+            <button type="button" data-tab="week" aria-pressed="true">This week</button>
+            <button type="button" data-tab="clients" aria-pressed="false">Clients</button>
+        </div>
+
+        <!-- ===== this week ===== -->
+        <section id="tabWeek" class="ok-section" style="gap:14px">
+            <div>
+                <h1 class="ok-h1" id="weekHead">Reach out this week</h1>
+                <p class="ok-lede" id="weekLede">Each one has a reason and a draft. Change anything, then send. Nothing here goes out unless you tap Send.</p>
+            </div>
+            <div id="weekList" class="ok-section" style="gap:12px"></div>
+            <div class="ok-card pad" style="display:flex;flex-direction:column;gap:4px">
+                <span class="ok-step">Sent by itself</span>
+                <span class="ok-note">Only thank-yous after events and one follow-up on a quote someone asked for. Nothing else is automatic.</span>
+                <div id="outboxList" style="margin-top:6px"></div>
+            </div>
+        </section>
+
+        <!-- ===== clients ===== -->
+        <section id="tabClients" class="ok-section" hidden style="gap:14px">
+            <div class="pipe" id="pipe"></div>
+            <div id="dupes" class="ok-section" style="gap:8px"></div>
+            <input class="ok-box" id="q" type="search" placeholder="Search name, company, email, phone" autocomplete="off" aria-label="Search clients">
+            <div class="ok-chips" id="kinds"></div>
+            <div class="ok-card" id="clientList"></div>
+            <div class="rc-actions">
+                <button type="button" class="ok-btn small" id="addBtn">Add a partner or lead</button>
+                <a class="ok-btn small quiet" href="/api/crm/owner/clients.csv">Export all (spreadsheet)</a>
+            </div>
+            <form id="addForm" class="ok-card pad" hidden style="display:flex;flex-direction:column;gap:10px">
+                <b>Add someone</b>
+                <span class="ok-note">Most people add themselves when they request or book. Add venues and organizers you work with here.</span>
+                <div class="ok-chips" id="addKind"></div>
+                <input class="ok-box" id="aName" placeholder="Name" autocomplete="off">
+                <input class="ok-box" id="aCompany" placeholder="Company or venue (optional)" autocomplete="off">
+                <input class="ok-box" id="aEmail" type="email" placeholder="Email" autocomplete="off">
+                <input class="ok-box" id="aPhone" type="tel" placeholder="Phone (optional)" autocomplete="off">
+                <select class="ok-box" id="aLoc" hidden aria-label="Their spot"></select>
+                <div class="rc-actions"><button type="submit" class="ok-btn small">Add</button><button type="button" class="ok-link" id="addCancel">Cancel</button></div>
+                <div class="ok-err" id="addErr" role="alert"></div>
+            </form>
+        </section>
+
+        <!-- ===== one client ===== -->
+        <section id="tabClient" class="ok-section" hidden style="gap:16px"></section>
+    </div>
+</main>
+<script>
+(function () {
+    'use strict';
+    var $ = function (id) { return document.getElementById(id); };
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function api(method, url, body) {
+        return fetch(url, { method: method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined })
+            .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, status: r.status, d: d }; }); })
+            .catch(function () { return { ok: false, status: 0, d: { error: 'No connection.' } }; });
+    }
+    function toast(msg, undo) {
+        var t = document.createElement('div'); t.className = 'ok-toast';
+        t.innerHTML = '<span>' + esc(msg) + '</span>' + (undo ? '<button type="button">Undo</button>' : '');
+        if (undo) t.querySelector('button').onclick = function () { t.remove(); undo(); };
+        document.body.appendChild(t); setTimeout(function () { t.remove(); }, undo ? 8000 : 2600);
+    }
+    function ymd(d) { try { return new Date(d + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }); } catch (e) { return d; } }
+    function money(c) { return '$' + Math.round((c || 0) / 100).toLocaleString('en-US'); }
+    function when(ms) { var d = new Date(ms); return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + (Date.now() - ms > 300 * 864e5 ? ' ’' + String(d.getFullYear()).slice(2) : ''); }
+    function whenTime(ms) { return new Date(ms).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' }); }
+    var KIND = { client: 'Clients', lead: 'Leads', partner: 'Partners', regular: 'Regulars' };
+    var st = { tab: 'week', kind: '', q: '', addKind: 'partner', clients: [], locations: [] };
+
+    function setTab(t) {
+        st.tab = t;
+        document.querySelectorAll('.ok-tabs [data-tab]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.tab === t || (t === 'client' && b.dataset.tab === 'clients'))); });
+        $('tabWeek').hidden = t !== 'week'; $('tabClients').hidden = t !== 'clients'; $('tabClient').hidden = t !== 'client';
+        if (t === 'week') loadWeek(); if (t === 'clients') loadClients();
+        window.scrollTo(0, 0);
+    }
+    document.querySelectorAll('.ok-tabs [data-tab]').forEach(function (b) { b.onclick = function () { setTab(b.dataset.tab); }; });
+
+    /* ---------- this week ---------- */
+    function loadWeek() {
+        api('GET', '/api/crm/owner/week').then(function (r) {
+            if (r.status === 402) return lock(r.d.error);
+            if (!r.ok) return;
+            var items = r.d.items || [];
+            $('weekHead').textContent = items.length ? (items.length === 1 ? 'One person to reach this week' : items.length + ' people to reach this week') : 'Nobody needs you this week';
+            $('weekLede').textContent = items.length ? 'Each one has a reason and a draft. Change anything, then send. Nothing here goes out unless you tap Send.' : 'When someone is worth a note (an anniversary, a quiet regular, a request that slipped), they show up here with a draft.';
+            if (!r.d.mailReady) $('weekLede').textContent += ' Email isn’t set up on the server yet, so sending is off.';
+            $('weekList').innerHTML = items.map(function (x, i) {
+                return '<div class="ok-card rc" data-i="' + i + '">' +
+                    '<div class="rc-head"><span class="rc-name">' + esc(x.name) + (x.company ? ' <span class="ok-note">· ' + esc(x.company) + '</span>' : '') + '</span>' + (x.personal ? '<span class="tag">Personal</span>' : '') + '</div>' +
+                    '<div class="rc-why">' + esc(x.reason) + '</div><div class="rc-brief">' + esc(x.brief) + '</div>' +
+                    (x.canEmail ? '<div class="rc-draft"><input data-f="subject" value="' + esc(x.draft.subject) + '" aria-label="Subject"><textarea data-f="body" aria-label="Message">' + esc(x.draft.body) + '</textarea></div>' : '') +
+                    '<div class="rc-actions">' + (x.canEmail ? '<button type="button" class="ok-btn small" data-send="' + i + '"' + (r.d.mailReady ? '' : ' disabled') + '>Send</button>' : '') +
+                    (x.phone ? '<a class="ok-btn small quiet" href="tel:' + esc(x.phone) + '">Call</a>' : '') +
+                    '<button type="button" class="ok-btn small quiet" data-open="' + x.clientId + '">Open</button>' +
+                    '<button type="button" class="ok-link" data-dismiss="' + i + '">Not now</button></div></div>';
+            }).join('');
+            st.week = items;
+            $('outboxList').innerHTML = (r.d.outbox || []).length ? r.d.outbox.map(function (m) {
+                var s = m.status === 'sent' ? 'Sent ' + whenTime(m.sent_at) : m.status === 'queued' ? 'Goes out ' + whenTime(m.send_after) : m.status === 'failed' ? 'Couldn’t send' : m.status === 'skipped' ? 'Skipped' : 'Sending';
+                return '<div class="ob"><span>' + esc(m.name || '') + ' · ' + esc(m.subject) + '</span><span>' + esc(s) + '</span></div>';
+            }).join('') : '<div class="ok-note">Nothing in the last week.</div>';
+        });
+    }
+    $('weekList').addEventListener('click', function (e) {
+        var b = e.target.closest('button'); if (!b) return;
+        if (b.dataset.open) return openClient(+b.dataset.open);
+        var i = +(b.dataset.send || b.dataset.dismiss), x = st.week[i], card = b.closest('.rc');
+        if (b.dataset.dismiss !== undefined) {
+            api('POST', '/api/crm/owner/dismiss', { key: x.key }).then(function () { card.remove(); toast('Hidden for two months.'); });
+            return;
+        }
+        b.disabled = true;
+        api('POST', '/api/crm/owner/send', { key: x.key, clientId: x.clientId, subject: card.querySelector('[data-f=subject]').value, body: card.querySelector('[data-f=body]').value }).then(function (r) {
+            if (!r.ok) { b.disabled = false; toast(r.d.error || 'Could not send.'); return; }
+            card.innerHTML = '<div class="rc-name">' + esc(x.name) + '</div><div class="rc-why">✓ ' + (r.d.status === 'sent' || r.d.sendAt <= Date.now() + 60000 ? 'Sent.' : 'Goes out ' + esc(whenTime(r.d.sendAt)) + ' (business hours).') + ' Replies come to your email.</div>';
+        });
+    });
+
+    /* ---------- clients ---------- */
+    function loadClients() {
+        api('GET', '/api/crm/owner/clients?kind=' + st.kind + '&q=' + encodeURIComponent(st.q)).then(function (r) {
+            if (r.status === 402) return lock(r.d.error);
+            if (!r.ok) return;
+            var p = r.d.pipeline;
+            $('pipe').innerHTML = [['Priced', p.priced], ['Booked', p.booked], ['Served', p.served], ['Rebooked', p.rebooked]].map(function (x) { return '<div><b>' + x[1] + '</b><span>' + x[0] + '</span></div>'; }).join('');
+            $('dupes').innerHTML = (r.d.duplicates || []).slice(0, 3).map(function (d) {
+                return '<div class="ok-card pad rc-actions" style="justify-content:space-between"><span class="ok-note"><b style="color:var(--z100)">' + esc(d.names[0]) + '</b> and <b style="color:var(--z100)">' + esc(d.names[1]) + '</b> have the ' + esc(d.why.replace('same ', 'same ')) + '. Same person?</span><button type="button" class="ok-btn small quiet" data-merge="' + d.merge + '" data-into="' + d.keep + '">Merge</button></div>';
+            }).join('');
+            $('kinds').innerHTML = [['', 'All']].concat(Object.keys(KIND).map(function (k) { return [k, KIND[k]]; })).map(function (k) { return '<button type="button" class="ok-chip" data-kind="' + k[0] + '" aria-pressed="' + (st.kind === k[0]) + '">' + k[1] + '</button>'; }).join('');
+            var list = r.d.clients;
+            $('clientList').innerHTML = list.length ? list.map(function (c) {
+                return '<button type="button" class="cl" data-open="' + c.id + '"><span class="cl-main"><b>' + esc(c.name || c.email) + (c.company ? ' <span style="color:var(--z500);font-weight:600">· ' + esc(c.company) + '</span>' : '') + '</b><span>' + esc(c.brief) + '</span>' +
+                    (c.upcoming ? '<span style="color:var(--z300)">Next event ' + esc(ymd(c.upcoming)) + '</span>' : '') + '</span>' +
+                    '<span class="cl-val">' + (c.valueCents ? money(c.valueCents) : '') + '<small>' + (c.events ? c.events + ' event' + (c.events === 1 ? '' : 's') : esc(c.kind)) + '</small></span></button>';
+            }).join('') : '<div class="ok-note" style="padding:14px">' + (st.q || st.kind ? 'Nobody matches.' : 'No clients yet. They appear here by themselves when someone requests catering, asks for a quote, or follows your truck.') + '</div>';
+        });
+    }
+    var qT = null;
+    $('q').addEventListener('input', function () { clearTimeout(qT); qT = setTimeout(function () { st.q = $('q').value.trim(); loadClients(); }, 200); });
+    $('kinds').addEventListener('click', function (e) { var b = e.target.closest('[data-kind]'); if (!b) return; st.kind = b.dataset.kind; loadClients(); });
+    $('clientList').addEventListener('click', function (e) { var b = e.target.closest('[data-open]'); if (b) openClient(+b.dataset.open); });
+    $('dupes').addEventListener('click', function (e) {
+        var b = e.target.closest('[data-merge]'); if (!b) return;
+        api('POST', '/api/crm/owner/clients/' + b.dataset.merge + '/merge', { into: +b.dataset.into }).then(function (r) {
+            if (!r.ok) return toast(r.d.error || 'Could not merge.');
+            loadClients();
+            toast('Merged into one record.', function () { api('POST', '/api/crm/owner/merges/' + r.d.mergeId + '/undo').then(function () { loadClients(); toast('Undone. Both records are back.'); }); });
+        });
+    });
+
+    /* add */
+    function renderAddKind() {
+        $('addKind').innerHTML = [['partner', 'Partner (venue, organizer)'], ['lead', 'Lead'], ['client', 'Client']].map(function (k) { return '<button type="button" class="ok-chip" data-k="' + k[0] + '" aria-pressed="' + (st.addKind === k[0]) + '">' + k[1] + '</button>'; }).join('');
+        $('aLoc').hidden = st.addKind !== 'partner';
+        $('aLoc').innerHTML = '<option value="">Which of your spots do they run? (optional)</option>' + st.locations.map(function (l) { return '<option>' + esc(l) + '</option>'; }).join('');
+    }
+    $('addBtn').onclick = function () { $('addForm').hidden = false; renderAddKind(); $('aName').focus(); };
+    $('addCancel').onclick = function () { $('addForm').hidden = true; };
+    $('addKind').addEventListener('click', function (e) { var b = e.target.closest('[data-k]'); if (b) { st.addKind = b.dataset.k; renderAddKind(); } });
+    $('addForm').onsubmit = function (e) {
+        e.preventDefault(); $('addErr').textContent = '';
+        api('POST', '/api/crm/owner/clients', { kind: st.addKind, name: $('aName').value, company: $('aCompany').value, email: $('aEmail').value, phone: $('aPhone').value, location: $('aLoc').value }).then(function (r) {
+            if (!r.ok) { $('addErr').textContent = r.d.error || 'Could not add.'; return; }
+            $('addForm').reset(); $('addForm').hidden = true; openClient(r.d.id);
+        });
+    };
+
+    /* ---------- one client ---------- */
+    function openClient(id) {
+        st.tab = 'client'; setTab('client');
+        $('tabClient').innerHTML = '<div class="ok-lede">Loading…</div>';
+        api('GET', '/api/crm/owner/clients/' + id).then(function (r) {
+            if (!r.ok) { $('tabClient').innerHTML = '<div class="ok-err">' + esc(r.d.error || 'Not found.') + '</div>'; return; }
+            var c = r.d.client, facts = Object.keys(c.facts || {}).map(function (k) { return [k, c.facts[k]]; });
+            if (!facts.length) facts = [['PO number', ''], ['Gate code', '']];
+            var html = '<button type="button" class="ok-link" id="backBtn" style="align-self:flex-start">← Clients</button>' +
+                '<div><div class="ok-step">' + esc(c.kind) + (c.unsubscribed ? ' · unsubscribed' : '') + (c.paused ? ' · automatic messages paused' : '') + '</div><h1 class="ok-h1" style="margin-top:4px">' + esc(c.name || c.email) + '</h1>' +
+                '<p class="ok-lede">' + esc(c.brief) + '</p></div>' +
+                '<div class="ok-card"><div class="ok-row"><span class="ok-label">Contact</span><span style="font-weight:700">' + (c.email ? '<a href="mailto:' + esc(c.email) + '" style="color:var(--z100)">' + esc(c.email) + '</a>' : '') + (c.phone ? (c.email ? ' · ' : '') + '<a href="tel:' + esc(c.phone) + '" style="color:var(--z100)">' + esc(c.phone) + '</a>' : '') + '</span></div>' +
+                '<div class="ok-row"><span class="ok-label">Worth</span><span style="font-weight:700">' + (c.valueCents ? money(c.valueCents) + ' over ' + c.events + ' event' + (c.events === 1 ? '' : 's') : 'No events yet') + (c.upcoming ? ' · next ' + esc(ymd(c.upcoming)) : '') + '</span></div>' +
+                '<div class="ok-row"><span class="ok-label">Email permission</span><span class="ok-note">' + (c.unsubscribed ? 'Unsubscribed. They won’t get emails from you here.' : c.consent.email ? 'Yes, ' + esc(c.consent.how) + (c.consent.at ? ' on ' + esc(when(c.consent.at)) : '') : 'Only about their own requests and bookings.') + '</span></div></div>' +
+                '<div class="field"><label for="crewNotes">Crew notes (shown on the event sheet)</label><textarea id="crewNotes" rows="2" maxlength="400" placeholder="Use the side gate. The CEO is vegan.">' + esc(c.crewNotes) + '</textarea></div>' +
+                '<div class="field"><label>Facts that carry into the next booking</label><div class="facts" id="facts">' + facts.map(factRow).join('') + '</div><button type="button" class="ok-link" id="addFact" style="align-self:flex-start">+ Add a fact</button></div>' +
+                '<div class="field"><label for="notes">Your notes</label><textarea id="notes" rows="3" maxlength="2000">' + esc(c.notes) + '</textarea></div>' +
+                '<div class="field"><label for="kind">Kind</label><select id="kind">' + Object.keys(KIND).map(function (k) { return '<option value="' + k + '"' + (c.kind === k ? ' selected' : '') + '>' + KIND[k].replace(/s$/, '') + '</option>'; }).join('') + '</select></div>' +
+                '<div class="field" id="locField"' + (c.kind === 'partner' ? '' : ' hidden') + '><label for="loc">Their spot (for check-ins when sales there slip)</label><select id="loc"><option value="">None</option>' + st.locations.map(function (l) { return '<option' + (c.location === l ? ' selected' : '') + '>' + esc(l) + '</option>'; }).join('') + '</select></div>' +
+                '<div class="rc-actions"><button type="button" class="ok-btn small" id="saveBtn">Save</button>' + (c.email && !c.unsubscribed ? '<button type="button" class="ok-btn small quiet" id="writeBtn">Write to them</button>' : '') + '</div>' +
+                '<form id="writeForm" class="ok-card pad rc-draft" hidden><input id="wSubject" placeholder="Subject"><textarea id="wBody" placeholder="Hi ' + esc(String(c.name || '').split(' ')[0]) + ',"></textarea><div class="rc-actions"><button type="submit" class="ok-btn small">Send</button><span class="ok-note">Goes out in business hours. Replies come to your email.</span></div></form>' +
+                '<div class="ok-section"><div class="ok-step">Timeline</div><div class="ok-card pad tl">' + (r.d.timeline.length ? r.d.timeline.map(function (e) { return '<div><time>' + esc(when(e.at)) + '</time><span>' + esc(e.summary) + '</span></div>'; }).join('') : '<span class="ok-note">Nothing yet.</span>') + '</div></div>';
+            $('tabClient').innerHTML = html;
+            $('backBtn').onclick = function () { setTab('clients'); };
+            $('addFact').onclick = function () { $('facts').insertAdjacentHTML('beforeend', factRow(['', ''])); };
+            $('facts').onclick = function (e) { var x = e.target.closest('.x'); if (x) { x.previousElementSibling.remove(); x.previousElementSibling.remove(); x.remove(); } };
+            $('kind').onchange = function () { $('locField').hidden = $('kind').value !== 'partner'; };
+            $('saveBtn').onclick = function () {
+                var f = {}, ins = $('facts').querySelectorAll('input');
+                for (var i = 0; i < ins.length; i += 2) { var k = ins[i].value.trim(), v = ins[i + 1].value.trim(); if (k && v) f[k] = v; }
+                api('PUT', '/api/crm/owner/clients/' + c.id, { crewNotes: $('crewNotes').value, notes: $('notes').value, facts: f, kind: $('kind').value, location: $('loc') ? $('loc').value : undefined }).then(function (r2) { toast(r2.ok ? 'Saved.' : (r2.d.error || 'Could not save.')); });
+            };
+            if ($('writeBtn')) $('writeBtn').onclick = function () { $('writeForm').hidden = false; $('wSubject').focus(); };
+            if ($('writeForm')) $('writeForm').onsubmit = function (e) {
+                e.preventDefault();
+                api('POST', '/api/crm/owner/send', { clientId: c.id, subject: $('wSubject').value, body: $('wBody').value }).then(function (r2) {
+                    if (!r2.ok) return toast(r2.d.error || 'Could not send.');
+                    $('writeForm').hidden = true; toast('On its way (business hours).');
+                });
+            };
+        });
+    }
+    function factRow(f) { return '<input value="' + esc(f[0]) + '" placeholder="e.g. PO number" aria-label="Fact"><input value="' + esc(f[1]) + '" placeholder="Value" aria-label="Value"><button type="button" class="x" aria-label="Remove">×</button>'; }
+
+    function lock(msg) { $('appView').hidden = true; $('locked').hidden = false; $('lockedMsg').textContent = (msg || '') + ' It’s free during the beta.'; }
+
+    /* ---------- boot ---------- */
+    api('GET', '/api/auth/me').then(function (r) {
+        $('loading').hidden = true;
+        if (!r.ok || r.d.role !== 'owner') { $('needLogin').hidden = false; return; }
+        var n = r.d.vendor.businessName;
+        $('truckName').textContent = n; $('mono').textContent = n.trim().split(/\s+/).map(function (w) { return w[0]; }).join('').slice(0, 2).toUpperCase();
+        document.title = n + ' · Clients';
+        $('appView').hidden = false;
+        api('GET', '/api/owner/locations').then(function (l) { if (l.ok) st.locations = (l.d.active || []).map(function (x) { return x.name; }); });
+        setTab(location.hash === '#clients' ? 'clients' : 'week');
+    });
+})();
+</script>
+</body>
+</html>

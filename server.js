@@ -26,6 +26,7 @@ const sms = require('./sms');
 const catering = require('./catering');
 const schedule = require('./schedule');
 const rewards = require('./rewards');
+const crm = require('./crm');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -74,6 +75,7 @@ app.use('/api/sms', sms.router);
 app.use('/api/catering', catering.router);
 app.use('/api/schedule', schedule.router);
 app.use('/api/rewards', rewards.router);
+app.use('/api/crm', crm.router);
 app.use('/api', api.router);
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 
@@ -128,6 +130,9 @@ app.get(['/owner', '/owner.html'], vendorPage('owner.html', 'owner'));
 app.get(['/catering', '/catering/'], vendorPage('catering.html', 'catering'));
 app.get('/catering/b/:token', vendorPage('catering-booking.html', 'catering'));
 app.get('/catering/manage', vendorPage('catering-manage.html', 'owner'));
+// Clients (CRM) for the owner, and the two pages a client can land on from an email.
+app.get(['/clients', '/clients/'], vendorPage('crm.html', 'owner'));
+app.get(['/crm/u', '/crm/f'], vendorPage('crm-public.html', 'owner'));
 // Where the truck will be: list, add-to-calendar, calendar feed, follow by email.
 app.get(['/schedule', '/schedule/'], vendorPage('schedule.html', 'schedule'));
 app.get(['/now', '/now/'], vendorPage('now.html', 'now'));

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Thanks</title>
+    <meta name="robots" content="noindex">
+    <meta name="theme-color" content="#0a0a0b">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+    <script src="/theme.js"></script>
+    <link rel="stylesheet" href="/theme.css">
+    <link rel="stylesheet" href="/ok.css">
+    <style>[hidden] { display: none !important; }</style>
+</head>
+<body>
+<main class="ok-wrap">
+    <div>
+        <div class="ok-step" id="kicker"></div>
+        <h1 class="ok-h1" id="head" style="margin-top:4px">One moment…</h1>
+        <p class="ok-lede" id="lede"></p>
+    </div>
+    <!-- unsubscribe: a button, so a link scanner opening the page can't unsubscribe anyone -->
+    <button type="button" class="ok-btn" id="unsubBtn" hidden>Unsubscribe</button>
+    <!-- feedback: anything to add? -->
+    <form id="more" class="ok-section" hidden>
+        <textarea class="ok-box" id="comment" rows="4" maxlength="1000" placeholder="Anything to add? (optional)"></textarea>
+        <button type="submit" class="ok-btn">Send</button>
+    </form>
+    <a class="ok-btn quiet" id="again" hidden>Book again</a>
+    <div class="ok-err" id="err" role="alert"></div>
+</main>
+<script>
+(function () {
+    'use strict';
+    var $ = function (id) { return document.getElementById(id); };
+    var q = new URLSearchParams(location.search), kind = location.pathname.indexOf('/crm/u') === 0 ? 'u' : 'f';
+    var body = { i: q.get('i'), s: q.get('s'), r: q.get('r') };
+    function post(extra) {
+        return fetch('/api/crm/public/' + kind, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({}, body, extra || {})) })
+            .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, d: d }; }); });
+    }
+    if (kind === 'u') {
+        $('kicker').textContent = 'Emails';
+        $('head').textContent = 'Stop these emails?';
+        $('lede').textContent = 'You’ll still get messages about a booking you make yourself.';
+        $('unsubBtn').hidden = false;
+        $('unsubBtn').onclick = function () {
+            $('unsubBtn').disabled = true;
+            post().then(function (r) {
+                if (!r.ok) { $('err').textContent = r.d.error || 'Something went wrong.'; $('unsubBtn').disabled = false; return; }
+                $('unsubBtn').hidden = true;
+                $('head').textContent = 'You’re unsubscribed';
+                $('lede').textContent = 'You won’t get emails like this from ' + (r.d.business || 'us') + ' again.';
+            });
+        };
+        history.replaceState(null, '', location.pathname);
+        return;
+    }
+    // Feedback: the tap in the email is the answer; record it now, then offer a comment.
+    var up = body.r !== 'down';
+    $('kicker').textContent = up ? '👍' : '👎';
+    post().then(function (r) {
+        if (!r.ok) { $('head').textContent = 'This link has expired'; $('err').textContent = r.d.error || ''; return; }
+        $('head').textContent = up ? 'Thank you!' : 'Thank you for telling us';
+        $('lede').textContent = up ? 'That means a lot to a small kitchen.' : (r.d.business || 'The owner') + ' will read this personally.';
+        $('more').hidden = false;
+        if (up && r.d.again) { $('again').hidden = false; $('again').href = r.d.again; }
+    });
+    $('more').onsubmit = function (e) {
+        e.preventDefault();
+        post({ comment: $('comment').value }).then(function () { $('more').hidden = true; $('lede').textContent = 'Got it. Thank you.'; });
+    };
+})();
+</script>
+</body>
+</html>

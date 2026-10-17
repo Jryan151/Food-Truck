@@ -286,6 +286,24 @@ async function pinPepper() {
   pepper = (await get("SELECT value FROM app_settings WHERE key = 'pin_pepper'")).value;
   return pepper;
 }
+/** A stable, unguessable signature for links in emails (unsubscribe, feedback). Its own secret. */
+let appSecret = null;
+async function sign(text) {
+  if (!appSecret) {
+    if (process.env.LINK_SECRET) appSecret = process.env.LINK_SECRET;
+    else {
+      await run("INSERT OR IGNORE INTO app_settings (key, value) VALUES ('link_secret', ?)", [crypto.randomBytes(32).toString('hex')]);
+      appSecret = (await get("SELECT value FROM app_settings WHERE key = 'link_secret'")).value;
+    }
+  }
+  return crypto.createHmac('sha256', appSecret).update(String(text)).digest('base64url').slice(0, 32);
+}
+async function signOk(text, sig) {
+  const want = Buffer.from(await sign(text));
+  const got = Buffer.from(String(sig || ''));
+  return want.length === got.length && crypto.timingSafeEqual(want, got);
+}
+
 async function pinLookup(vendorId, pin) {
   return crypto.createHmac('sha256', await pinPepper()).update(`${vendorId}:${String(pin).toUpperCase()}`).digest('hex');
 }
@@ -555,6 +573,76 @@ async function ensureSchema() {
   await addColumn('sessions', 'staff_id', 'INTEGER');
   // Small server-wide values that must survive restarts (e.g. the PIN pepper when PIN_PEPPER isn't set).
   await exec('CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+
+  /* ---------- CRM: clients, one timeline each, and a message queue that never double-sends ---------- */
+  await exec(`CREATE TABLE IF NOT EXISTS crm_clients (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vendor_id INTEGER NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'client',   -- client | lead | partner | regular
+    name TEXT NOT NULL DEFAULT '',
+    company TEXT,
+    email TEXT,                            -- lowercased
+    phone TEXT,                            -- digits only
+    location TEXT,                         -- partners: the spot they run (for check-ins)
+    notes TEXT,                            -- owner's notes
+    crew_notes TEXT,                       -- shown on the event sheet ("use the side gate")
+    facts TEXT,                            -- JSON: PO number, gate code, dietary counts…
+    email_ok INTEGER NOT NULL DEFAULT 0,   -- consent for relationship emails (not needed for transactional)
+    consent_at INTEGER, consent_how TEXT,
+    unsubscribed_at INTEGER,
+    paused_until INTEGER,                  -- after negative feedback: no automatic messages
+    merged_into INTEGER,                   -- merged away (kept for undo)
+    last_contact_at INTEGER, last_marketing_at INTEGER,
+    created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+  )`);
+  await exec('CREATE INDEX IF NOT EXISTS idx_crm_clients_vendor ON crm_clients (vendor_id, merged_into)');
+  await exec('CREATE INDEX IF NOT EXISTS idx_crm_clients_email ON crm_clients (vendor_id, email)');
+  await exec(`CREATE TABLE IF NOT EXISTS crm_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vendor_id INTEGER NOT NULL,
+    client_id INTEGER NOT NULL,
+    at INTEGER NOT NULL,
+    type TEXT NOT NULL,                    -- quote | requested | booked | declined | canceled | expired | served | asked | email | note | feedback | follow | merged
+    ref TEXT,                              -- e.g. booking:12 (one event per ref + type)
+    summary TEXT NOT NULL,
+    data TEXT
+  )`);
+  await exec('CREATE INDEX IF NOT EXISTS idx_crm_events_client ON crm_events (client_id, at)');
+  await exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_crm_events_ref ON crm_events (vendor_id, type, ref) WHERE ref IS NOT NULL');
+  await exec(`CREATE TABLE IF NOT EXISTS crm_outbox (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vendor_id INTEGER NOT NULL,
+    client_id INTEGER NOT NULL,
+    kind TEXT NOT NULL,                    -- thanks | quote-followup (automatic) · reach (owner-approved)
+    dedupe_key TEXT NOT NULL,              -- the same message can never be queued twice
+    subject TEXT NOT NULL,
+    body TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'queued', -- queued | sending | sent | failed | skipped
+    send_after INTEGER NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT,
+    created_at INTEGER NOT NULL, sent_at INTEGER
+  )`);
+  await exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_crm_outbox_key ON crm_outbox (vendor_id, dedupe_key)');
+  await exec('CREATE INDEX IF NOT EXISTS idx_crm_outbox_due ON crm_outbox (status, send_after)');
+  await exec(`CREATE TABLE IF NOT EXISTS crm_merges (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vendor_id INTEGER NOT NULL,
+    from_id INTEGER NOT NULL, into_id INTEGER NOT NULL,
+    moved TEXT NOT NULL,                   -- JSON: event and outbox ids moved (for undo)
+    before TEXT NOT NULL,                  -- JSON: the target's fields before the merge
+    at INTEGER NOT NULL, undone_at INTEGER
+  )`);
+  await exec(`CREATE TABLE IF NOT EXISTS crm_dismissed (
+    vendor_id INTEGER NOT NULL, item_key TEXT NOT NULL, until INTEGER NOT NULL,
+    PRIMARY KEY (vendor_id, item_key)
+  )`);
+  await exec(`CREATE TABLE IF NOT EXISTS crm_quote_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vendor_id INTEGER NOT NULL, client_id INTEGER NOT NULL,
+    event_date TEXT, guests INTEGER, total_cents INTEGER, package_name TEXT, details TEXT,
+    created_at INTEGER NOT NULL
+  )`);
   await exec(`CREATE TABLE IF NOT EXISTS tokens (
     token_hash TEXT PRIMARY KEY,
     vendor_id INTEGER NOT NULL,
@@ -744,6 +832,8 @@ module.exports = {
   DEFAULT_MENU, normalizeItem, normalizeMenu, normalizeOptions, parseMenu, saveMenu, num, PHOTO_RE,
   normalizeHours, parseHours, validTimezone,
   getState,
+  sign,
+  signOk,
   staffOnline,
   PACE_WINDOW_MS,
   dropStreams,

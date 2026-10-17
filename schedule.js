@@ -213,6 +213,8 @@ router.post('/follow/:token/confirm', requireVendor, async (req, res) => {
   const f = await followerByToken(req.tenant.vendor.id, req.params.token);
   if (!f) return res.status(404).json({ error: 'That link has expired. Follow again from the schedule page.' });
   await run('UPDATE followers SET confirmed_at = COALESCE(confirmed_at, ?), locations = COALESCE(pending_locations, locations), pending_locations = NULL WHERE id = ?', [Date.now(), f.id]);
+  // A confirmed follower is a regular who asked to hear from the truck (double opt-in = consent).
+  require('./crm').record(req.tenant.vendor.id, { email: f.email, kind: 'regular', consent: 'followed (double opt-in)' }, { type: 'follow', ref: 'follower:' + f.id, summary: 'Started following the truck' }).catch(() => {});
   res.json(await followerShape(await get('SELECT * FROM followers WHERE id = ?', [f.id]), req.tenant.vendor.id));
 });
 router.post('/follow/:token', requireVendor, async (req, res) => {

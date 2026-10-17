@@ -340,3 +340,19 @@ New tables (`catering_settings`, `catering_bookings`) are created automatically.
   from `PIN_PEPPER` if set, otherwise one is generated on first start and kept in the database.
   If you set `PIN_PEPPER` later, existing crew PINs stop matching and need to be set again.
 - The old shared staff PIN still works until the owner turns it off.
+
+## Clients (CRM)
+
+- `/clients` is the owner's client list. It fills itself from catering (quotes emailed, requests,
+  bookings, served events, custom questions) and from confirmed followers. Nobody types records in.
+- Only two messages ever go out automatically, both transactional: a thank-you the morning after an
+  event (with one-tap 👍/👎), and one follow-up on a quote someone asked to have emailed. Everything else
+  is a draft on "Reach out this week" that the owner reads and sends.
+- A 👎 pauses automatic messages to that client for 90 days and emails the owner.
+- At most one relationship email a month per client, sent in business hours (truck's time zone).
+- Every email has one-click unsubscribe; it's honored everywhere at once.
+- Messages are queued and retried if email is down. Each send carries an idempotency key, so a restart
+  mid-send can't deliver it twice.
+- Links in emails are signed with a key from `LINK_SECRET` if set, otherwise one generated on first start
+  and kept in the database. Changing it later makes older unsubscribe and feedback links stop working.
+- Export: Clients → "Export all" downloads every client as a spreadsheet.
