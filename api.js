@@ -16,6 +16,7 @@ const sms = require('./sms');
 const catering = require('./catering');
 const Insights = require('./public/insights-core');
 const schedule = require('./schedule');
+const Deals = require('./public/deals-core');
 const { run, get, all } = core;
 const { requireVendor, requireRole, getSession, rateLimit } = auth;
 
@@ -53,6 +54,14 @@ router.get('/health', async (req, res) => {
   }
 });
 
+// Pro features stay on for everyone during the free beta.
+const proOpen = (v, key) => !!core.features(v)[key] || process.env.FREE_BETA === 'true' || !(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PRICE_ID);
+function vendorDeals(v) {
+  if (!proOpen(v, 'deals')) return [];
+  try { return Deals.normalize(JSON.parse(v.deals_json || '[]')); } catch (e) { return []; }
+}
+const localParts = (v) => Insights.parts(Date.now(), Insights.validTz(v.timezone));
+
 async function nextStop(v) {
   try {
     const list = await schedule.upcoming(v.id, Insights.validTz(v.timezone), 30);
@@ -85,7 +94,8 @@ router.get('/vendor-data', async (req, res) => {
     payMode: payments.effectivePayMode(v),         // window | both | online
     smsReady: sms.enabledFor(v) && !!v.sms_customer_ready, // show the "text me when it's ready" box
     cateringEnabled: await catering.isEnabled(v.id),   // show the Catering link
-    nextStop: await nextStop(v),                       // "Next: Fri 4 PM at Brewery Row" when closed
+    nextStop: await nextStop(v),
+    deals: vendorDeals(v).filter((d) => d.on),          // happy hour: the page shows it, the server prices it                       // "Next: Fri 4 PM at Brewery Row" when closed
   });
 });
 
@@ -161,6 +171,7 @@ router.post('/orders', limitOrders, requireVendor, async (req, res) => {
   const items = [];
   let total = 0;
   let prepMinutes = 0;
+  const dealsNow = Deals.active(vendorDeals(v), localParts(v));
   for (const l of lines) {
     const item = byId.get(parseInt(l && l.id, 10));
     const qty = parseInt(l && l.qty, 10);
@@ -169,25 +180,33 @@ router.post('/orders', limitOrders, requireVendor, async (req, res) => {
     if (!Number.isInteger(qty) || qty < 1 || qty > 50) return res.status(400).json({ error: 'Invalid quantity.' });
 
     let label = item.name;
-    let unit = item.salePrice && item.salePrice > 0 ? item.salePrice : item.price;
+    let extra = 0;
     if (item.meats) {
       const choices = item.meats.split(',').map((m) => m.trim()).filter(Boolean);
       const idx = l.meat ? choices.indexOf(String(l.meat)) : 0;
       if (idx < 0) return res.status(400).json({ error: 'Invalid option selected.' });
-      if (idx > 0) unit += item.premiumSurcharge;
+      if (idx > 0) extra = item.premiumSurcharge;
       if (choices[idx]) label += ` (${choices[idx]})`;
     }
+    // Lowest of regular, sale, or a deal running right now (never stacked).
+    const priced = Deals.price(item, Math.round((item.price + extra) * 100), item.salePrice && item.salePrice > 0 ? Math.round((item.salePrice + extra) * 100) : null, dealsNow);
+    let unit = priced.cents / 100;
     if (item.options.length && l.option) {
       if (!item.options.includes(String(l.option))) return res.status(400).json({ error: 'Invalid option selected.' });
       label += ` (${l.option})`;
     }
     unit = Math.round(unit * 100) / 100;
-    items.push({ id: item.id, name: label, qty, price: unit });
+    items.push(Object.assign({ id: item.id, name: label, qty, price: unit }, priced.deal ? { deal: priced.deal } : {}));
     total += unit * qty;
     prepMinutes += item.prep * qty;
   }
   total = Math.round(total * 100) / 100;
   if (total > 5000) return res.status(400).json({ error: 'Order is too large. Please call us.' });
+  // No surprises: if the price went up since the customer looked (a happy hour just ended), say so first.
+  const seen = Number(b.seenTotal);
+  if (Number.isFinite(seen) && total > seen + 0.004) {
+    return res.status(409).json({ error: `Prices changed while you were ordering. Your total is now $${total.toFixed(2)}.`, priceChanged: true, total });
+  }
 
   const name = String(b.customerName || '').trim().slice(0, 40) || 'Guest';
   const notes = String(b.notes || '').trim().slice(0, 300);
@@ -663,8 +682,32 @@ router.get('/owner/analytics', ownerOnly, async (req, res) => {
 });
 
 // The service record for one order: every change, who made it, and when.
+/* ----- Deals / happy hour (Pro; open to everyone during the free beta) ----- */
+router.get('/owner/deals', ownerOnly, async (req, res) => {
+  const v = req.tenant.vendor;
+  res.json({ deals: vendorDeals(v), allowed: proOpen(v, 'deals'), max: Deals.MAX_DEALS, runningNow: Deals.active(vendorDeals(v), localParts(v)).map((d) => d.id) });
+});
+router.put('/owner/deals', ownerOnly, async (req, res) => {
+  const v = req.tenant.vendor;
+  if (!proOpen(v, 'deals')) return res.status(402).json({ error: 'Happy hour is part of Pro.', upgrade: true });
+  const list = (req.body || {}).deals;
+  if (!Array.isArray(list)) return res.status(400).json({ error: 'Nothing to save.' });
+  if (list.length > Deals.MAX_DEALS) return res.status(400).json({ error: `Up to ${Deals.MAX_DEALS} deals.` });
+  const deals = Deals.normalize(list);
+  for (const d of deals) {
+    if (d.on && !d.days.length) return res.status(400).json({ error: `Pick at least one day for “${d.name}”.` });
+    if (d.start === d.end) return res.status(400).json({ error: `“${d.name}” needs an end time different from its start.` });
+    if (d.on && d.scope !== 'all' && !(d.scope === 'categories' ? d.categories.length : d.items.length)) return res.status(400).json({ error: `Pick what “${d.name}” applies to.` });
+  }
+  await run('UPDATE vendors SET deals_json = ?, updated_at = ? WHERE id = ?', [JSON.stringify(deals), Date.now(), v.id]);
+  const fresh = await get('SELECT * FROM vendors WHERE id = ?', [v.id]);
+  core.broadcast(v.id, 'DEALS_UPDATE', { deals: vendorDeals(fresh).filter((d) => d.on) });
+  res.json({ deals: vendorDeals(fresh), runningNow: Deals.active(vendorDeals(fresh), localParts(fresh)).map((d) => d.id) });
+});
+
 /* ----- Insights (Pro; open to everyone during the free beta) ----- */
-const insightsOpen = (v) => core.features(v).insights || process.env.FREE_BETA === 'true' || !(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PRICE_ID);
+const betaOpen = () => process.env.FREE_BETA === 'true' || !(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PRICE_ID);
+const insightsOpen = (v) => core.features(v).insights || betaOpen();
 const SOLD = "status IN ('Fulfilled','Ready') AND COALESCE(payment_status, 'window') != 'pending'";
 
 async function salesRows(vendorId, from, to, location) {

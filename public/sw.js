@@ -1,6 +1,6 @@
 /* sw.js — makes the pages installable and shows a friendly screen when there's no signal.
    It never caches menus, orders or API calls: everything live always comes from the server. */
-const CACHE = 'ft-offline-v5';
+const CACHE = 'ft-offline-v6';
 const OFFLINE = '/offline.html';
 
 self.addEventListener('install', (e) => {

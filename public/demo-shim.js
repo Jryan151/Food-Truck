@@ -205,6 +205,7 @@
             isDemo: false, businessName: d.vendor.businessName, slug: SLUG, customDomain: null,
             ownerIG: d.vendor.ownerIG, emoji: d.vendor.emoji, menu: d.menu, state: stateOut(d),
             showBranding: true, pinOnly: false, hours: d.hours, timezone: d.timezone, payMode: 'window', smsReady: false,
+            deals: (d.deals || []).filter(function (x) { return x.on; }),
             nextStop: (function () { var u = demoStops(d)[0]; return u ? { day: u.day, start: u.start, end: u.end, location: u.location, startsAt: u.startsAt, endsAt: u.endsAt } : null; })()
         };
     }
@@ -256,19 +257,23 @@
             if (!item) return fail(400, 'An item in your cart is no longer on the menu.');
             if (item.soldOut) return fail(409, item.name + ' is sold out.');
             if (!(qty >= 1 && qty <= 50)) return fail(400, 'Invalid quantity.');
-            var label = item.name, unit = item.salePrice > 0 ? item.salePrice : item.price;
+            var label = item.name, extra = 0;
             if (item.meats) {
                 var choices = item.meats.split(',').map(function (m) { return m.trim(); }).filter(Boolean);
                 var idx = l.meat ? choices.indexOf(String(l.meat)) : 0;
                 if (idx < 0) return fail(400, 'Invalid option selected.');
-                if (idx > 0) unit += item.premiumSurcharge || 0;
+                if (idx > 0) extra = item.premiumSurcharge || 0;
                 if (choices[idx]) label += ' (' + choices[idx] + ')';
             }
+            var reg = Math.round((item.price + extra) * 100), sale = item.salePrice > 0 ? Math.round((item.salePrice + extra) * 100) : null;
+            var pr = window.DealsCore && window.InsightsCore ? DealsCore.price(item, reg, sale, DealsCore.active(d.deals || [], InsightsCore.parts(Date.now(), d.timezone))) : { cents: sale !== null ? sale : reg };
+            var unit = pr.cents / 100;
             if (item.options && item.options.length && l.option) label += ' (' + l.option + ')';
             unit = round(unit);
             items.push({ id: item.id, name: label, qty: qty, price: unit });
             total += unit * qty; prep += item.prep * qty;
         }
+        if (Number.isFinite(Number(b.seenTotal)) && round(total) > Number(b.seenTotal) + 0.004) return fail(409, 'Prices changed while you were ordering. Your total is now $' + round(total).toFixed(2) + '.', { priceChanged: true, total: round(total) });
         var now = Date.now(), id = d.nextOrderId++, ticket = d.nextTicket++;
         var o = {
             id: id, ticket: ticket, token: 'demo-' + id + '-' + Math.random().toString(36).slice(2, 8), name: String(b.customerName || '').trim().slice(0, 40) || 'Guest',
@@ -341,6 +346,26 @@
             emit('ORDER_UPDATE', o, true);
             emit('ORDER_STATUS', { tag: o.tag, status: o.status }); emitWait(d);
             return ok({ order: o });
+        }
+
+        /* deals */
+        if (p === '/api/owner/deals' && method === 'GET') {
+            var DC = window.DealsCore, IC1 = window.InsightsCore, dl = DC ? DC.normalize(d.deals || []) : [];
+            return ok({ deals: dl, allowed: true, max: 6, runningNow: DC && IC1 ? DC.active(dl, IC1.parts(Date.now(), d.timezone)).map(function (x) { return x.id; }) : [] });
+        }
+        if (p === '/api/owner/deals' && method === 'PUT') {
+            var DC2 = window.DealsCore, IC2 = window.InsightsCore;
+            if (!DC2) return fail(503, 'Loading…');
+            var nd = DC2.normalize(b.deals || []);
+            for (var di = 0; di < nd.length; di++) {
+                var x = nd[di];
+                if (x.on && !x.days.length) return fail(400, 'Pick at least one day for “' + x.name + '”.');
+                if (x.start === x.end) return fail(400, '“' + x.name + '” needs an end time different from its start.');
+                if (x.on && x.scope !== 'all' && !(x.scope === 'categories' ? x.categories.length : x.items.length)) return fail(400, 'Pick what “' + x.name + '” applies to.');
+            }
+            d.deals = nd; save(d);
+            emit('DEALS_UPDATE', { deals: nd.filter(function (x) { return x.on; }) });
+            return ok({ deals: nd, runningNow: IC2 ? DC2.active(nd, IC2.parts(Date.now(), d.timezone)).map(function (x) { return x.id; }) : [] });
         }
 
         /* schedule */

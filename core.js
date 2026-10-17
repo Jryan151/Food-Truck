@@ -48,8 +48,8 @@ const orderTag = (token) => sha256('order:' + token).slice(0, 24);
 const MAX_ITEMS = 200;
 
 const PLANS = {
-  free: { label: 'Free', customDomain: false, sms: false, removeBranding: false, onlinePayments: false, insights: false },
-  pro: { label: 'Pro', customDomain: true, sms: true, removeBranding: true, onlinePayments: true, insights: true },
+  free: { label: 'Free', customDomain: false, sms: false, removeBranding: false, onlinePayments: false, insights: false, deals: false },
+  pro: { label: 'Pro', customDomain: true, sms: true, removeBranding: true, onlinePayments: true, insights: true, deals: true },
 };
 const GRACE_MS = 7 * 24 * 60 * 60 * 1000; // paid features stay on 7 days after a failed payment
 
@@ -381,6 +381,7 @@ async function ensureSchema() {
     ['crew_note_at', 'INTEGER'],
     // Followers: when the owner last emailed them (keeps it from becoming spam).
     ['follow_open_at', 'INTEGER'],
+    ['deals_json', 'TEXT'],                       // happy hour and other timed deals (see public/deals-core.js)
     ['follow_week_at', 'INTEGER'],
   ];
   for (const [c, d] of vendorCols) await addColumn('vendors', c, d);

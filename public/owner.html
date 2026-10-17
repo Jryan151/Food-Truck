@@ -17,6 +17,7 @@
     <link rel="stylesheet" href="/app.css">
     <link rel="stylesheet" href="/theme.css">
     <script src="/insights-core.js"></script>
+    <script src="/deals-core.js"></script>
     <script src="/qr.js"></script>
     <script src="/logo.js"></script>
     <style>
@@ -151,6 +152,20 @@
                     <button data-action="add-item" data-owner class="bg-zinc-100 text-zinc-950 px-3 py-1.5 rounded-lg text-[11px] font-bold">+ Add Item</button>
                 </div>
                 <div id="ownerMenuList" class="space-y-3 relative"></div>
+
+                <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" data-owner id="dealsBox">
+                    <div class="flex items-center justify-between gap-2 border-b border-zinc-800 pb-2 mb-3">
+                        <h3 class="font-bold text-sm text-zinc-100">Happy hour &amp; deals</h3>
+                        <span class="text-[9px] font-bold uppercase tracking-wider text-zinc-500 border border-zinc-700 rounded px-1.5 py-0.5">Pro · free during beta</span>
+                    </div>
+                    <p class="text-[11px] text-zinc-500 mb-3">Prices change by themselves at the times you set. Customers see the deal and when it ends; deals never stack with a sale price (they get whichever is lower).</p>
+                    <div id="dealsList" class="space-y-3"></div>
+                    <div class="flex gap-2 mt-3">
+                        <button data-action="deal-add" class="flex-1 py-2.5 rounded-lg text-xs font-bold border border-zinc-700 text-zinc-200">+ Add a deal</button>
+                        <button data-action="deal-save" class="flex-1 py-2.5 rounded-lg text-xs font-bold bg-zinc-100 text-zinc-950">Save deals</button>
+                    </div>
+                    <div id="dealsMsg" class="text-[11px] mt-2" role="status"></div>
+                </div>
             </div>
 
             <!-- Settings -->
@@ -731,7 +746,7 @@
                     : 'bg-zinc-900 border border-zinc-800 text-zinc-300 font-semibold py-2 rounded-xl text-[10px] transition';
             });
             if (name === 'Orders') { app.newCount = 0; renderBadge(); loadOrders(); }
-            if (name === 'Menu') { loadMenu(); setFlag('menu'); }
+            if (name === 'Menu') { loadMenu(); setFlag('menu'); if (isOwner()) loadDeals(); }
             if (name === 'Settings') { renderSettings(); if (isOwner()) { loadLocations().then(function () { renderSettings(); loadSchedule(); }); loadFollowers(); loadPayments(); loadSms(); } }
             if (name === 'Analytics') loadAnalytics();
             if (name === 'Guide') renderGuide();
@@ -1188,6 +1203,66 @@
                 var d = new Date(body.day + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + 1); $('schDay').value = d.toISOString().slice(0, 10);
                 renderSchedule();
             });
+        }
+
+        /* ---------- happy hour & deals ---------- */
+        var DEAL_DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+        function loadDeals() {
+            return api('GET', '/api/owner/deals').then(function (r) { if (r.ok) { app.deals = r.data.deals; app.dealsRunning = r.data.runningNow || []; app.dealsMax = r.data.max; app.dealsAllowed = r.data.allowed; renderDeals(); } });
+        }
+        function dealChip(on, act, i, val, label) {
+            return '<button data-action="' + act + '" data-i="' + i + '" data-v="' + esc(String(val)) + '" aria-pressed="' + on + '" class="deal-chip">' + esc(label) + '</button>';
+        }
+        function renderDeals() {
+            var list = app.deals || [];
+            if (app.dealsAllowed === false) { $('dealsList').innerHTML = '<div class="text-xs text-zinc-400">Happy hour is part of Pro. <button data-action="tab" data-tab="Settings" class="underline">See plans</button></div>'; return; }
+            var cats = []; (app.menu || []).forEach(function (m) { if (m.category && cats.indexOf(m.category) < 0) cats.push(m.category); });
+            $('dealsList').innerHTML = list.length ? list.map(function (d, i) {
+                var live = (app.dealsRunning || []).indexOf(d.id) >= 0;
+                var scope = '<div class="theme-seg mt-2" role="group" aria-label="Applies to">' + ['all', 'categories', 'items'].map(function (k) {
+                    return '<button data-action="deal-scope" data-i="' + i + '" data-v="' + k + '" aria-pressed="' + (d.scope === k) + '">' + { all: 'Everything', categories: 'Categories', items: 'Items' }[k] + '</button>';
+                }).join('') + '</div>';
+                var pick = d.scope === 'categories' ? (cats.length ? cats.map(function (c) { return dealChip(d.categories.indexOf(c) >= 0, 'deal-cat', i, c, c); }).join('') : '<span class="text-[11px] text-zinc-500">Give menu items a category first.</span>')
+                    : d.scope === 'items' ? (app.menu || []).map(function (m) { return dealChip(d.items.indexOf(m.id) >= 0, 'deal-item', i, m.id, m.name); }).join('') : '';
+                return '<div class="bg-zinc-950 border ' + (live ? 'border-zinc-300' : 'border-zinc-800') + ' rounded-lg p-3">' +
+                    '<div class="flex items-center gap-2"><input data-deal="name" data-i="' + i + '" maxlength="40" value="' + esc(d.name) + '" aria-label="Deal name" class="flex-1 min-w-0 bg-transparent text-sm font-bold text-zinc-100 outline-none">' +
+                    (live ? '<span class="text-[9px] font-bold uppercase tracking-wider text-zinc-200 border border-zinc-300 rounded px-1.5 py-0.5">On now</span>' : '') +
+                    '<button data-action="deal-toggle" data-i="' + i + '" aria-label="Deal on or off" class="switch' + (d.on ? ' on' : '') + '"></button></div>' +
+                    '<div class="flex gap-1 mt-2">' + DEAL_DAYS.map(function (l, wd) { return dealChip(d.days.indexOf(wd) >= 0, 'deal-day', i, wd, l); }).join('') + '</div>' +
+                    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px" class="mt-2">' +
+                    '<label class="text-[10px] text-zinc-500">From<input type="time" data-deal="start" data-i="' + i + '" value="' + d.start + '" class="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200 mt-1"></label>' +
+                    '<label class="text-[10px] text-zinc-500">To<input type="time" data-deal="end" data-i="' + i + '" value="' + d.end + '" class="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200 mt-1"></label>' +
+                    '<label class="text-[10px] text-zinc-500">Discount<select data-deal="kind" data-i="' + i + '" class="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200 mt-1"><option value="percent"' + (d.kind === 'percent' ? ' selected' : '') + '>% off</option><option value="amount"' + (d.kind === 'amount' ? ' selected' : '') + '>$ off</option></select></label>' +
+                    '<label class="text-[10px] text-zinc-500">Amount<input type="number" inputmode="decimal" min="0" step="' + (d.kind === 'percent' ? '1' : '0.25') + '" data-deal="amount" data-i="' + i + '" value="' + d.amount + '" class="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200 mt-1"></label></div>' +
+                    scope + (pick ? '<div class="flex flex-wrap gap-1.5 mt-2">' + pick + '</div>' : '') +
+                    '<div class="flex justify-between items-center mt-2"><span class="text-[11px] text-zinc-400">' + esc(window.DealsCore ? DealsCore.describe(d, app.menu) : '') + '</span>' +
+                    '<button data-action="deal-del" data-i="' + i + '" class="text-[11px] text-zinc-500 underline">Remove</button></div></div>';
+            }).join('') : '<div class="text-xs text-zinc-600">No deals yet. A happy hour is one tap: “+ Add a deal”.</div>';
+        }
+        function dealEdit(i, f) { var d = app.deals[i]; if (!d) return; f(d); renderDeals(); $('dealsMsg').textContent = ''; }
+        function dealClick(a, el) {
+            var i = +el.getAttribute('data-i'), v = el.getAttribute('data-v');
+            if (a === 'deal-add') {
+                if ((app.deals || []).length >= (app.dealsMax || 6)) { $('dealsMsg').textContent = 'Up to ' + (app.dealsMax || 6) + ' deals.'; return; }
+                app.deals = (app.deals || []).concat([{ id: 'd' + Date.now().toString(36), name: 'Happy hour', on: true, days: [1, 2, 3, 4, 5], start: '15:00', end: '17:00', kind: 'percent', amount: 20, scope: 'all', categories: [], items: [] }]);
+                renderDeals(); return;
+            }
+            if (a === 'deal-save') {
+                api('PUT', '/api/owner/deals', { deals: app.deals || [] }).then(function (r) {
+                    var m = $('dealsMsg');
+                    if (!r.ok) { m.className = 'text-[11px] mt-2 text-rose-400'; m.textContent = r.data.error || 'Could not save.'; return; }
+                    app.deals = r.data.deals; app.dealsRunning = r.data.runningNow || [];
+                    m.className = 'text-[11px] mt-2 text-zinc-400'; m.textContent = '✓ Saved. Your page updated.';
+                    renderDeals();
+                });
+                return;
+            }
+            if (a === 'deal-del') { if (confirm('Remove this deal?')) { app.deals.splice(i, 1); renderDeals(); $('dealsMsg').textContent = 'Removed. Tap Save to update your page.'; } return; }
+            if (a === 'deal-toggle') return dealEdit(i, function (d) { d.on = !d.on; });
+            if (a === 'deal-day') return dealEdit(i, function (d) { var x = +v, k = d.days.indexOf(x); if (k >= 0) d.days.splice(k, 1); else d.days.push(x); d.days.sort(); });
+            if (a === 'deal-scope') return dealEdit(i, function (d) { d.scope = v; });
+            if (a === 'deal-cat') return dealEdit(i, function (d) { var k = d.categories.indexOf(v); if (k >= 0) d.categories.splice(k, 1); else d.categories.push(v); });
+            if (a === 'deal-item') return dealEdit(i, function (d) { var x = +v, k = d.items.indexOf(x); if (k >= 0) d.items.splice(k, 1); else d.items.push(x); });
         }
 
         var toastTimer = null;
@@ -1779,6 +1854,12 @@
         markTheme();
 
         document.addEventListener('change', function (e) {
+            var df = e.target && e.target.getAttribute && e.target.getAttribute('data-deal');
+            if (df && app.deals) {
+                var d = app.deals[+e.target.getAttribute('data-i')];
+                if (d) { d[df] = df === 'amount' ? Number(e.target.value) : e.target.value; if (df === 'kind' || df === 'amount') renderDeals(); $('dealsMsg').textContent = ''; }
+                return;
+            }
             if (e.target && e.target.id === 'insLocation') { insState().location = e.target.value; loadInsights(); }
             if (e.target && e.target.id === 'schLoc') { $('schLocNew').style.display = e.target.value === '__new' ? 'block' : 'none'; if (e.target.value === '__new') $('schLocNew').focus(); }
         });
@@ -1828,6 +1909,7 @@
                 case 'save-edit': saveEdit(); break;
                 case 'delete-item': deleteItem(); break;
                 case 'toggle-sold': toggleSold(id); break;
+                case 'deal-add': case 'deal-save': case 'deal-del': case 'deal-toggle': case 'deal-day': case 'deal-scope': case 'deal-cat': case 'deal-item': dealClick(a, el); break;
                 case 'ins-range': case 'ins-step': case 'ins-day': case 'ins-hour': case 'cmp-days': case 'cmp-pick': insClick(a, el); break;
                 case 'set-status':
                     // Opening from closed = start of service: one quick question about the wait.

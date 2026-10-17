@@ -15,6 +15,7 @@
     <link rel="stylesheet" href="/app.css">
     <link rel="stylesheet" href="/theme.css">
     <script src="/insights-core.js"></script>
+    <script src="/deals-core.js"></script>
     <script src="/logo.js"></script>
     <style>
         .hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
@@ -246,6 +247,7 @@
                 start_order: 'Start Order', currently_closed: 'Currently Closed', order_at_window: 'Order at the window',
                 catering_cta: 'Planning an event? Get a catering quote',
                 sched_next: 'Next: {when} · {where}', sched_link: 'Where we’ll be this week', sched_full: 'Full schedule', sched_today: 'Today',
+                deal_until: 'until {t}', deal_later: '{name} today, {from} – {to}', price_changed_ok: 'Check your cart, then tap Place order again.',
                 wait_now: '⏱ About {n} min wait right now', usual_title: 'Your usual', again_title: 'Order again', alert_chime: '🔔 We’ll chime here when it’s ready. Keep this page open.', usual_add: 'Add to cart', usual_out: '{item} is sold out today.',
                 change_left: 'You can change or cancel for {t}', change_btn: 'Change', cancel_btn: 'Cancel',
                 cancel_confirm: 'Cancel this order?', change_confirm: 'Cancel this order and put the items back in your cart so you can change them?',
@@ -285,6 +287,7 @@
                 start_order: 'Hacer pedido', currently_closed: 'Cerrado', order_at_window: 'Pide en la ventanilla',
                 catering_cta: '¿Un evento? Cotiza el catering',
                 sched_next: 'Próxima parada: {when} · {where}', sched_link: 'Dónde estaremos esta semana', sched_full: 'Ver horario', sched_today: 'Hoy',
+                deal_until: 'hasta las {t}', deal_later: '{name} hoy, {from} – {to}', price_changed_ok: 'Revisa tu carrito y vuelve a tocar Enviar pedido.',
                 wait_now: '⏱ Espera de unos {n} min ahora', usual_title: 'Lo de siempre', again_title: 'Pedir de nuevo', alert_chime: '🔔 Sonará aquí cuando esté listo. Deja esta página abierta.', usual_add: 'Agregar', usual_out: '{item} está agotado hoy.',
                 change_left: 'Puedes cambiar o cancelar durante {t}', change_btn: 'Cambiar', cancel_btn: 'Cancelar',
                 cancel_confirm: '¿Cancelar este pedido?', change_confirm: '¿Cancelar este pedido y regresar los productos al carrito para cambiarlos?',
@@ -401,6 +404,17 @@
                 el.innerHTML = '<span class="font-semibold">' + esc(t('sched_link')) + '</span> →';
             }
         }
+        // Deals start and end by the clock, so check twice a minute and re-price what's on screen when one does.
+        function checkDeals() {
+            var sig = dealsNow().map(function (d) { return d.id; }).join(',') + '|' + (app.deals || []).length;
+            if (sig === app.dealSig) return;
+            app.dealSig = sig;
+            renderStatus();
+            if (app.view === 'menu') renderMenu();
+            if ($('cartModal').style.display === 'flex') renderCartModal();
+            updateCartUI();
+        }
+        setInterval(function () { if (app.vendor) checkDeals(); }, 30000);
         function liveWait() { return app.state.wait && app.state.wait.minutes ? app.state.wait.minutes : 0; }
         function canOrder() { return !isClosed() && !app.state.paused; }
 
@@ -435,10 +449,19 @@
                 rush.innerHTML = '';
             }
 
+            // One line under the status: a deal running now, else one coming later today, else a sale.
             var hasSale = app.menu.some(function (m) { return m.salePrice && m.salePrice > 0 && !m.soldOut; });
-            $('saleBadgeContainer').innerHTML = (hasSale && canOrder())
-                ? '<div class="bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-2 text-xs mb-3 text-zinc-100 flex items-center justify-center font-bold">' + esc(t('sale')) + '</div>'
-                : '';
+            var running = dealsNow(), banner = '';
+            if (canOrder() && running.length) {
+                var dl = running[0];
+                banner = '<div class="deal-banner"><b>' + esc(dl.name) + '</b> · ' + esc(DealsCore.describe(dl, app.menu)) + ' · ' + esc(t('deal_until', { t: DealsCore.time12(dl.end) })) + '</div>';
+            } else if (canOrder() && app.deals && app.deals.length && window.InsightsCore) {
+                var p = InsightsCore.parts(Date.now(), app.timezone || 'UTC'), nowM = p.h * 60 + p.min;
+                var later = app.deals.filter(function (d) { return d.days.indexOf(p.wd) >= 0 && (+d.start.slice(0, 2) * 60 + +d.start.slice(3)) > nowM; })[0];
+                if (later) banner = '<div class="deal-later">' + esc(t('deal_later', { name: later.name, from: DealsCore.time12(later.start), to: DealsCore.time12(later.end) })) + '</div>';
+            }
+            if (!banner && hasSale && canOrder()) banner = '<div class="bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-2 text-xs mb-3 text-zinc-100 flex items-center justify-center font-bold">' + esc(t('sale')) + '</div>';
+            $('saleBadgeContainer').innerHTML = banner;
 
             renderUsual();
             renderNextStop();
@@ -491,10 +514,18 @@
         }
 
         /* ---------- menu ---------- */
-        function unitPrice(item, meatIdx) {
-            var base = (item.salePrice && item.salePrice > 0) ? item.salePrice : item.price;
-            return base + (meatIdx > 0 ? (item.premiumSurcharge || 0) : 0);
+        /* ---------- prices: regular, sale, or a deal running right now (same rules as the server) ---------- */
+        function dealsNow() {
+            if (!window.DealsCore || !window.InsightsCore || !app.deals || !app.deals.length) return [];
+            return DealsCore.active(app.deals, InsightsCore.parts(Date.now(), app.timezone || 'UTC'));
         }
+        function priceInfo(item, meatIdx) {
+            var extra = meatIdx > 0 ? (item.premiumSurcharge || 0) : 0;
+            var reg = Math.round((item.price + extra) * 100);
+            var sale = item.salePrice && item.salePrice > 0 ? Math.round((item.salePrice + extra) * 100) : null;
+            return window.DealsCore ? DealsCore.price(item, reg, sale, dealsNow()) : { cents: sale !== null ? sale : reg, deal: null, wasCents: reg };
+        }
+        function unitPrice(item, meatIdx) { return priceInfo(item, meatIdx).cents / 100; }
         function meatList(item) {
             return item.meats ? item.meats.split(',').map(function (m) { return m.trim(); }).filter(Boolean) : [];
         }
@@ -510,9 +541,10 @@
         function catId(i) { return 'cat-' + i; }
 
         function itemCard(item) {
-            var sale = item.salePrice && item.salePrice > 0;
-            var priceHTML = sale
-                ? '<span class="text-sm font-semibold line-through text-zinc-500 mr-1">' + money(item.price) + '</span><span class="text-sm font-bold text-zinc-100">' + money(item.salePrice) + '</span>'
+            var pi = priceInfo(item, 0);
+            var priceHTML = pi.cents < pi.wasCents
+                ? '<span class="text-sm font-semibold line-through text-zinc-500 mr-1">' + money(pi.wasCents / 100) + '</span><span class="text-sm font-bold text-zinc-100">' + money(pi.cents / 100) + '</span>' +
+                    (pi.deal ? '<span class="deal-tag">' + esc(pi.deal) + '</span>' : '')
                 : '<span class="text-sm font-semibold">' + money(item.price) + '</span>';
             var btn = item.soldOut
                 ? '<button disabled class="text-zinc-500 bg-zinc-800 px-3 py-1.5 rounded-lg text-xs font-bold h-8 min-w-[60px] shrink-0">' + esc(t('sold_out')) + '</button>'
@@ -612,7 +644,8 @@
                 var meats = meatList(item);
                 var idx = l.meat ? Math.max(0, meats.indexOf(l.meat)) : 0;
                 var label = item.name + (l.meat ? ' (' + l.meat + ')' : '') + (l.option ? ' (' + l.option + ')' : '');
-                lines.push({ line: l, item: item, label: label, unit: unitPrice(item, idx), soldOut: item.soldOut });
+                var pi = priceInfo(item, idx);
+                lines.push({ line: l, item: item, label: label, unit: pi.cents / 100, deal: pi.deal, soldOut: item.soldOut });
             });
             return lines;
         }
@@ -641,7 +674,7 @@
             $('cartItemsList').innerHTML = tt.lines.map(function (x) {
                 return '<div class="flex justify-between items-center bg-zinc-950 p-3 rounded-xl border border-zinc-800 text-sm gap-2">' +
                     '<div class="min-w-0"><div class="font-bold truncate">' + esc(x.label) + '</div>' +
-                    '<div class="text-xs font-semibold">' + money(x.unit * x.line.qty) + (x.soldOut ? ' <span class="text-rose-400">• ' + esc(t('sold_out')) + '</span>' : '') + '</div></div>' +
+                    '<div class="text-xs font-semibold">' + money(x.unit * x.line.qty) + (x.deal ? '<span class="deal-tag">' + esc(x.deal) + '</span>' : '') + (x.soldOut ? ' <span class="text-rose-400">• ' + esc(t('sold_out')) + '</span>' : '') + '</div></div>' +
                     '<div class="flex items-center gap-2 shrink-0">' +
                     '<button data-action="cart-qty" data-key="' + esc(x.line.key) + '" data-delta="-1" aria-label="Less" class="w-7 h-7 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm font-bold">-</button>' +
                     '<span class="text-xs font-mono w-5 text-center">' + x.line.qty + '</span>' +
@@ -723,6 +756,8 @@
                     notes: notes,
                     website: $('website').value,
                     clientKey: app.orderKey,
+                    // What they were shown. If a deal ended in the meantime, the server asks before charging more.
+                    seenTotal: Math.max(Math.round(tt.total * 100) / 100, app.acceptedTotal || 0),
                     allergy: $('customerAllergy').value.trim() || undefined,
                     payNow: payNow,
                     customerPhone: phone || undefined,
@@ -732,12 +767,21 @@
             }).then(function (r) {
                 return r.json().catch(function () { return {}; }).then(function (body) { return { ok: r.ok, status: r.status, body: body }; });
             }).then(function (res) {
+                if (!res.ok && res.body.priceChanged) {
+                    app.acceptedTotal = res.body.total; // the next tap confirms this total
+                    var msg = res.body.error + ' ' + t('price_changed_ok');
+                    setCartError(msg);
+                    // Pull the current prices so the cart shows exactly what will be charged.
+                    reloadVendor().then(function () { renderCartModal(); if (app.view === 'menu') renderMenu(); setCartError(msg); });
+                    return;
+                }
                 if (!res.ok) {
                     setCartError(res.body.error || t('order_failed'));
                     if (res.status === 403 || res.status === 409 || res.status === 400) reloadVendor();
                     return;
                 }
                 app.orderKey = null; // the next order gets a fresh key
+                app.acceptedTotal = 0;
                 var skew = res.body.now ? Date.now() - res.body.now : 0; // phone clock vs server clock
                 if (!app.tracked.some(function (o) { return o.token === res.body.token; }))
                     app.tracked.unshift({
@@ -1041,6 +1085,7 @@
             TruckLogo.set($('dynamic-emoji'), d.emoji, 'var(--z900)');
             $('cateringLink').style.display = d.cateringEnabled ? 'block' : 'none';
             app.nextStop = d.nextStop || null;
+            app.deals = d.deals || [];
             if (d.ownerIG) {
                 $('ig-container').style.display = 'block';
                 $('dynamic-ig-text').textContent = d.ownerIG;
@@ -1085,6 +1130,7 @@
                 var p = msg.payload || {};
                 switch (msg.type) {
                     case 'STATE': app.state = { status: p.status, rush: p.rush, location: p.location || '', paused: !!p.paused, wait: p.wait || null }; renderStatus(); renderLocation(); break;
+                    case 'DEALS_UPDATE': app.deals = p.deals || []; app.dealSig = null; checkDeals(); break;
                     case 'WAIT': app.state.wait = p; renderStatus(); if ($('cartModal').style.display === 'flex') renderCartModal(); break;
                     case 'STORE_STATUS': app.state.status = p.status; renderStatus(); break;
                     case 'PAUSED': app.state.paused = !!p.paused; renderStatus(); break;
