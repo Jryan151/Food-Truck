@@ -275,6 +275,32 @@
                     <div class="space-y-2" id="deletedLocationsList"></div>
                 </div>
 
+                <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" data-owner id="scheduleBox">
+                    <div class="flex items-center justify-between border-b border-zinc-800 pb-2 mb-3">
+                        <h3 class="font-bold text-sm text-zinc-100">Schedule</h3>
+                        <a href="/schedule" target="_blank" rel="noopener" class="text-[11px] text-zinc-400 underline">See your page ↗</a>
+                    </div>
+                    <p class="text-[11px] text-zinc-500 mb-3">Where you’ll be. Customers can add stops to their calendar or subscribe, and it updates by itself.</p>
+                    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+                        <div style="grid-column:span 3"><label class="block text-[10px] text-zinc-400 mb-1" for="schDay">Date</label><input type="date" id="schDay" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200"></div>
+                        <div><label class="block text-[10px] text-zinc-400 mb-1" for="schStart">Start</label><input type="time" id="schStart" value="11:00" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200"></div>
+                        <div><label class="block text-[10px] text-zinc-400 mb-1" for="schEnd">End</label><input type="time" id="schEnd" value="14:00" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200"></div>
+                        <div><label class="block text-[10px] text-zinc-400 mb-1" for="schRepeat">Repeat</label>
+                            <select id="schRepeat" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200">
+                                <option value="0">Once</option><option value="3">4 weeks</option><option value="7">8 weeks</option><option value="11">12 weeks</option>
+                            </select></div>
+                        <div style="grid-column:span 3"><label class="block text-[10px] text-zinc-400 mb-1" for="schLoc">Where</label>
+                            <select id="schLoc" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200"></select>
+                            <input type="text" id="schLocNew" maxlength="80" placeholder="Name of the spot" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200 mt-2" style="display:none"></div>
+                        <div style="grid-column:span 3"><input type="text" id="schAddr" maxlength="160" placeholder="Street address (optional, for maps)" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200"></div>
+                        <div style="grid-column:span 3"><input type="text" id="schNote" maxlength="200" placeholder="Note (optional): “by the fountain”, “cash only today”" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200"></div>
+                    </div>
+                    <button data-action="sch-add" class="mt-3 w-full bg-zinc-100 text-zinc-950 py-2.5 rounded-lg text-xs font-bold">Add stop</button>
+                    <div id="schMsg" class="text-[11px] mt-2" role="status"></div>
+                    <div id="schList" class="mt-4 space-y-2"></div>
+                    <div id="followBox" class="mt-4 bg-zinc-950 border border-zinc-800 rounded-lg p-3"></div>
+                </div>
+
                 <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" data-owner id="profileBox">
                     <h3 class="font-bold text-sm text-zinc-100 mb-3 border-b border-zinc-800 pb-2">Business Profile</h3>
                     <div class="space-y-2">
@@ -410,6 +436,7 @@
             <p class="text-xs text-zinc-400 mt-1">What wait should customers see to start? After three tickets, your real kitchen pace takes over. You can change it any time.</p>
             <div class="grid grid-cols-5 gap-2 mt-4" id="startChips"></div>
             <div id="startLoc" class="text-[11px] text-zinc-500 mt-3"></div>
+            <label id="startTellRow" class="flex items-center gap-3 mt-3 text-xs text-zinc-300" style="display:none"><input type="checkbox" id="startTell" style="width:20px;height:20px"> <span id="startTellText"></span></label>
             <div class="flex gap-2 mt-5">
                 <button data-action="start-cancel" class="flex-1 py-3 rounded-xl text-sm font-semibold bg-zinc-950 text-zinc-300 border border-zinc-800">Not yet</button>
                 <button data-action="start-go" class="flex-1 py-3 rounded-xl text-sm font-bold bg-zinc-100 text-zinc-950">Open</button>
@@ -705,7 +732,7 @@
             });
             if (name === 'Orders') { app.newCount = 0; renderBadge(); loadOrders(); }
             if (name === 'Menu') { loadMenu(); setFlag('menu'); }
-            if (name === 'Settings') { renderSettings(); if (isOwner()) { loadLocations().then(renderSettings); loadPayments(); loadSms(); } }
+            if (name === 'Settings') { renderSettings(); if (isOwner()) { loadLocations().then(function () { renderSettings(); loadSchedule(); }); loadFollowers(); loadPayments(); loadSms(); } }
             if (name === 'Analytics') loadAnalytics();
             if (name === 'Guide') renderGuide();
         }
@@ -1078,13 +1105,89 @@
             app.startPick = w.start || 10;
             renderStartChips();
             $('startLoc').textContent = app.state.location ? 'Location: ' + app.state.location + ' (change it in Locations below)' : '';
+            renderStartTell();
+            if (isOwner()) loadFollowers().then(renderStartTell);
             $('startModal').style.display = 'flex';
+        }
+        function renderStartTell() {
+            var f = app.followers;
+            var can = isOwner() && f && f.mailReady && f.count > 0 && (!f.openNextAt || f.openNextAt < Date.now());
+            $('startTellRow').style.display = can ? 'flex' : 'none';
+            if (!can) return;
+            var n = f.everywhere + (app.state.location && f.byLocation[app.state.location] ? f.byLocation[app.state.location] : 0);
+            $('startTellText').textContent = 'Email ' + n + ' follower' + (n === 1 ? '' : 's') + ' that you’re open' + (app.state.location ? ' at ' + app.state.location : '');
+            var keep = null; try { keep = localStorage.getItem('ok_start_tell'); } catch (e) {}
+            $('startTell').checked = keep === '1';
+            if (!n) $('startTellRow').style.display = 'none';
         }
         function renderStartChips() {
             $('startChips').innerHTML = [5, 10, 15, 20, 30].map(function (n) {
                 var on = n === app.startPick;
                 return '<button data-action="start-pick" data-n="' + n + '" aria-pressed="' + on + '" class="py-3 rounded-xl text-sm font-bold ' + (on ? 'bg-zinc-100 text-zinc-950' : 'bg-zinc-950 text-zinc-300 border border-zinc-800') + '">' + n + '<span class="block text-[9px] font-semibold opacity-70">min</span></button>';
             }).join('');
+        }
+
+        /* ---------- schedule ---------- */
+        function loadSchedule() {
+            return api('GET', '/api/schedule/owner/stops').then(function (r) {
+                if (!r.ok) return;
+                app.schedule = r.data.stops; app.schToday = r.data.today;
+                if (!$('schDay').value) $('schDay').value = r.data.today;
+                $('schDay').min = r.data.today;
+                renderSchedule();
+            });
+        }
+        function loadFollowers() {
+            return api('GET', '/api/schedule/owner/followers').then(function (r) { if (r.ok) { app.followers = r.data; renderFollowers(); } });
+        }
+        function renderSchedule() {
+            var sel = $('schLoc'), cur = sel.value;
+            var names = (app.locations && app.locations.active || []).map(function (l) { return l.name; });
+            sel.innerHTML = names.map(function (n) { return '<option>' + esc(n) + '</option>'; }).join('') + '<option value="__new">Somewhere else…</option>';
+            if (cur && (names.indexOf(cur) >= 0 || cur === '__new')) sel.value = cur;
+            else if (app.state.location && names.indexOf(app.state.location) >= 0) sel.value = app.state.location;
+            $('schLocNew').style.display = sel.value === '__new' ? 'block' : 'none';
+            var all = app.schedule || [], last = '';
+            var cutoff = (function () { var d = new Date((app.schToday || '1970-01-01') + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + 13); return d.toISOString().slice(0, 10); })();
+            var list = app.schAll ? all : all.filter(function (s) { return s.day <= cutoff; });
+            var hiddenCount = all.length - list.length;
+            $('schList').innerHTML = list.length ? list.map(function (s) {
+                var head = s.day !== last ? '<div class="text-[10px] font-bold text-zinc-500 uppercase tracking-wider pt-2">' + esc(s.day === app.schToday ? 'Today' : s.dayLabel) + '</div>' : '';
+                last = s.day;
+                var ask = app.schAsk === s.id;
+                return head + '<div class="bg-zinc-950 border border-zinc-800 rounded-lg p-2.5">' +
+                    '<div class="flex items-center justify-between gap-2"><div class="min-w-0"><div class="text-xs font-bold text-zinc-200 truncate">' + esc(s.location) + (s.series ? ' <span class="text-[9px] text-zinc-500 font-semibold">WEEKLY</span>' : '') + '</div>' +
+                    '<div class="text-[11px] text-zinc-500">' + esc(s.label) + (s.note ? ' · ' + esc(s.note) : '') + '</div></div>' +
+                    (ask ? '' : '<button data-action="sch-del" data-id="' + s.id + '" class="text-[10px] text-zinc-400 border border-zinc-800 px-2 py-1.5 rounded">Remove</button>') + '</div>' +
+                    (ask ? '<div class="flex gap-2 mt-2"><button data-action="sch-del-one" data-id="' + s.id + '" class="flex-1 text-[11px] font-bold py-2 rounded bg-zinc-100 text-zinc-950">Just this one</button>' +
+                        (s.series ? '<button data-action="sch-del-all" data-id="' + s.id + '" class="flex-1 text-[11px] font-bold py-2 rounded border border-zinc-700 text-zinc-200">This and later weeks</button>' : '') +
+                        '<button data-action="sch-keep" class="text-[11px] py-2 px-3 rounded text-zinc-400">Keep</button></div>' : '') + '</div>';
+            }).join('') + (hiddenCount ? '<button data-action="sch-all" class="w-full text-[11px] text-zinc-400 py-2 underline">Show ' + hiddenCount + ' more after the next two weeks</button>' : (app.schAll && all.length > list.length - 0 && all.some(function (s) { return s.day > cutoff; }) ? '<button data-action="sch-all" class="w-full text-[11px] text-zinc-400 py-2 underline">Show only the next two weeks</button>' : ''))
+                : '<div class="text-xs text-zinc-600">No stops yet. Add your week above; “Repeat” fills in a regular route.</div>';
+        }
+        function renderFollowers() {
+            var f = app.followers, box = $('followBox');
+            if (!f) { box.innerHTML = ''; return; }
+            if (!f.mailReady) { box.innerHTML = '<div class="text-[11px] text-zinc-500">Following by email turns on once email is set up on the server.</div>'; return; }
+            var locs = Object.keys(f.byLocation || {}).map(function (k) { return esc(k) + ' ' + f.byLocation[k]; }).join(' · ');
+            var weekWait = f.weekNextAt && f.weekNextAt > Date.now();
+            box.innerHTML = '<div class="flex items-center justify-between gap-2"><div><div class="text-xs font-bold text-zinc-200">' + f.count + ' follower' + (f.count === 1 ? '' : 's') + '</div>' +
+                '<div class="text-[10px] text-zinc-500">' + (f.count ? f.everywhere + ' follow every spot' + (locs ? ' · ' + locs : '') : 'They follow from your Schedule page.') + '</div></div>' +
+                (f.count ? '<button data-action="notify-week" class="text-[11px] font-bold px-3 py-2 rounded-lg ' + (weekWait ? 'text-zinc-600 border border-zinc-800' : 'bg-zinc-100 text-zinc-950') + '"' + (weekWait ? ' disabled title="You sent it in the last 3 days"' : '') + '>Email this week</button>' : '') + '</div>' +
+                '<div class="text-[10px] text-zinc-600 mt-2">Followers only hear from you when you tap: “Email this week” here, or “tell followers” when you open.</div>';
+        }
+        function addStop() {
+            var loc = $('schLoc').value === '__new' ? $('schLocNew').value.trim() : $('schLoc').value;
+            var body = { day: $('schDay').value, start: $('schStart').value, end: $('schEnd').value, location: loc, address: $('schAddr').value.trim(), note: $('schNote').value.trim(), repeatWeeks: +$('schRepeat').value };
+            api('POST', '/api/schedule/owner/stops', body).then(function (r) {
+                var m = $('schMsg');
+                if (!r.ok) { m.className = 'text-[11px] mt-2 text-rose-400'; m.textContent = r.data.error || 'Could not add.'; return; }
+                m.className = 'text-[11px] mt-2 text-zinc-400'; m.textContent = r.data.added > 1 ? '✓ Added ' + r.data.added + ' weeks.' : '✓ Added.';
+                app.schedule = r.data.stops; $('schNote').value = ''; $('schRepeat').value = '0';
+                // Next stop usually comes the day after: move the date along for quick entry of a week.
+                var d = new Date(body.day + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + 1); $('schDay').value = d.toISOString().slice(0, 10);
+                renderSchedule();
+            });
         }
 
         var toastTimer = null;
@@ -1677,6 +1780,7 @@
 
         document.addEventListener('change', function (e) {
             if (e.target && e.target.id === 'insLocation') { insState().location = e.target.value; loadInsights(); }
+            if (e.target && e.target.id === 'schLoc') { $('schLocNew').style.display = e.target.value === '__new' ? 'block' : 'none'; if (e.target.value === '__new') $('schLocNew').focus(); }
         });
 
         document.addEventListener('click', function (e) {
@@ -1732,7 +1836,25 @@
                     break;
                 case 'start-pick': app.startPick = parseInt(el.getAttribute('data-n'), 10); renderStartChips(); break;
                 case 'start-cancel': $('startModal').style.display = 'none'; break;
-                case 'start-go': $('startModal').style.display = 'none'; putState({ status: 'open', waitStart: app.startPick }); break;
+                case 'start-go':
+                    $('startModal').style.display = 'none';
+                    var tell = $('startTellRow').style.display !== 'none' && $('startTell').checked;
+                    try { localStorage.setItem('ok_start_tell', tell ? '1' : '0'); } catch (er) {}
+                    putState({ status: 'open', waitStart: app.startPick }).then(function () {
+                        if (tell) api('POST', '/api/schedule/owner/notify', { kind: 'open' }).then(function (r) { toast(r.ok ? 'Told ' + r.data.sent + ' follower' + (r.data.sent === 1 ? '' : 's') + ' you’re open.' : (r.data.error || 'Could not email followers.')); loadFollowers(); });
+                    });
+                    break;
+                case 'sch-add': addStop(); break;
+                case 'sch-del': app.schAsk = +el.getAttribute('data-id'); renderSchedule(); break;
+                case 'sch-keep': app.schAsk = null; renderSchedule(); break;
+                case 'sch-all': app.schAll = !app.schAll; renderSchedule(); break;
+                case 'sch-del-one': case 'sch-del-all':
+                    api('DELETE', '/api/schedule/owner/stops/' + el.getAttribute('data-id') + (a === 'sch-del-all' ? '?following=1' : '')).then(function (r) { app.schAsk = null; if (r.ok) { app.schedule = r.data.stops; renderSchedule(); } });
+                    break;
+                case 'notify-week':
+                    if (!confirm('Email your next 7 days to your followers?')) break;
+                    api('POST', '/api/schedule/owner/notify', { kind: 'week' }).then(function (r) { toast(r.ok ? 'Sent to ' + r.data.sent + ' follower' + (r.data.sent === 1 ? '' : 's') + '.' : (r.data.error || 'Could not send.')); loadFollowers(); });
+                    break;
                 case 'wait-step': stepWait(parseInt(el.getAttribute('data-by'), 10)); break;
                 case 'wait-lock': if (waitShown()) putState({ waitLock: waitShown() }); break;
                 case 'wait-auto': putState({ waitLock: null }); break;

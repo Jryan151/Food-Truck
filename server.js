@@ -24,6 +24,7 @@ const billing = require('./billing');
 const payments = require('./payments');
 const sms = require('./sms');
 const catering = require('./catering');
+const schedule = require('./schedule');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -70,6 +71,7 @@ app.use('/api/billing', billing.router);
 app.use('/api/payments', payments.router);
 app.use('/api/sms', sms.router);
 app.use('/api/catering', catering.router);
+app.use('/api/schedule', schedule.router);
 app.use('/api', api.router);
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 
@@ -84,8 +86,8 @@ const escAttr = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ 
 function shareTags(req, v, kind) {
   const origin = `${req.secure ? 'https' : 'http'}://${req.tenant.host}`;
   const name = v.business_name;
-  const title = kind === 'owner' ? `${name} — Kitchen` : kind === 'catering' ? `${name} — Catering` : `${name} — Order online`;
-  const desc = kind === 'owner' ? `Kitchen dashboard for ${name}.` : kind === 'catering' ? `Price your event with ${name} in about three minutes. No back-and-forth.` : `Order ahead from ${name} and pick up at the window.`;
+  const title = kind === 'owner' ? `${name} — Kitchen` : kind === 'catering' ? `${name} — Catering` : kind === 'schedule' ? `${name} — Where we’ll be` : `${name} — Order online`;
+  const desc = kind === 'owner' ? `Kitchen dashboard for ${name}.` : kind === 'catering' ? `Price your event with ${name} in about three minutes. No back-and-forth.` : kind === 'schedule' ? `Where ${name} will be this week. Add it to your calendar or follow along.` : `Order ahead from ${name} and pick up at the window.`;
   return [
     `<title>${escAttr(title)}</title>`,
     `<meta name="description" content="${escAttr(desc)}">`,
@@ -124,6 +126,9 @@ app.get(['/owner', '/owner.html'], vendorPage('owner.html', 'owner'));
 app.get(['/catering', '/catering/'], vendorPage('catering.html', 'catering'));
 app.get('/catering/b/:token', vendorPage('catering-booking.html', 'catering'));
 app.get('/catering/manage', vendorPage('catering-manage.html', 'owner'));
+// Where the truck will be: list, add-to-calendar, calendar feed, follow by email.
+app.get(['/schedule', '/schedule/'], vendorPage('schedule.html', 'schedule'));
+app.get('/schedule.ics', (req, res) => res.redirect(301, '/api/schedule/feed.ics'));
 app.get(['/signup', '/signup.html'], rootPage('signup.html'));
 app.get(['/login', '/login.html'], (req, res) =>
   req.tenant.isRoot ? sendPage(res, 'login.html') : res.redirect('/owner.html'));

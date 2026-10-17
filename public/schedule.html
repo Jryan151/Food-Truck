@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Where we'll be</title>
+    <meta name="theme-color" content="#0a0a0b">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+    <script src="/theme.js"></script>
+    <link rel="stylesheet" href="/theme.css">
+    <link rel="stylesheet" href="/ok.css">
+    <script src="/insights-core.js"></script>
+    <style>
+        .sch-day { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--z500); margin: 4px 0 -4px; }
+        .sch-stop { padding: 14px; display: flex; flex-direction: column; gap: 6px; }
+        .sch-time { font-size: 13px; font-weight: 700; color: var(--z300); font-variant-numeric: tabular-nums; }
+        .sch-place { font-size: 18px; font-weight: 800; color: var(--z100); letter-spacing: -0.01em; }
+        .sch-addr { font-size: 13px; color: var(--z400); text-decoration: underline; text-underline-offset: 2px; }
+        .sch-note { font-size: 13px; color: var(--z500); line-height: 1.45; }
+        .sch-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+        .sch-now { display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 16px; text-align: left; border-radius: 16px; }
+        .sch-now b { display: block; font-size: 16px; }
+        .sch-now span { font-size: 13px; opacity: .75; }
+        [hidden] { display: none !important; }
+    </style>
+</head>
+<body>
+<main class="ok-wrap">
+    <div class="ok-top">
+        <a class="ok-truck" href="/" style="text-decoration:none">
+            <div class="ok-mono" id="mono" aria-hidden="true">&nbsp;</div>
+            <div style="display:flex;flex-direction:column"><span class="ok-truck-name" id="truckName">&nbsp;</span><span class="ok-sub">Schedule</span></div>
+        </a>
+        <span class="ok-pill" id="statusPill" hidden></span>
+    </div>
+
+    <!-- Manage a follow (from an email link) -->
+    <section id="manage" class="ok-section" hidden>
+        <div>
+            <div class="ok-step" id="mKicker">Following</div>
+            <h1 class="ok-h1" id="mHead" style="margin-top:4px">You’re following</h1>
+            <p class="ok-lede" id="mLede"></p>
+        </div>
+        <div class="ok-card pad" style="display:flex;flex-direction:column;gap:12px">
+            <span class="ok-label">Tell me when you’re at</span>
+            <div class="ok-chips" id="mChips"></div>
+            <span class="ok-note">Pick none to hear about every spot.</span>
+            <button type="button" class="ok-btn small" id="mSave" style="align-self:flex-start">Save</button>
+            <div class="ok-note" id="mSaved" role="status"></div>
+        </div>
+        <button type="button" class="ok-btn quiet" id="mUnfollow">Unfollow and delete my email</button>
+        <div class="ok-err" id="mErr" role="alert"></div>
+    </section>
+
+    <section id="main" class="ok-section" style="gap:20px" hidden>
+        <div>
+            <h1 class="ok-h1">Where we’ll be</h1>
+            <p class="ok-lede" id="lede">Times are local to the truck.</p>
+        </div>
+
+        <a class="ok-quote sch-now" id="nowCard" href="/" hidden style="text-decoration:none">
+            <span><b id="nowTitle">Open now</b><span id="nowSub"></span></span>
+            <span style="font-weight:800;opacity:1;white-space:nowrap">Order ahead &rarr;</span>
+        </a>
+
+        <div id="list" style="display:flex;flex-direction:column;gap:12px"></div>
+        <div id="empty" class="ok-card pad" hidden>
+            <b>No stops posted yet.</b>
+            <p class="ok-note" style="margin:6px 0 0">Follow below and you’ll hear when the truck posts its week.</p>
+        </div>
+
+        <div class="ok-card pad" style="display:flex;flex-direction:column;gap:10px">
+            <b>Keep it in your calendar</b>
+            <span class="ok-note">Subscribe once. Your calendar updates by itself when the truck changes plans.</span>
+            <div class="sch-actions">
+                <a class="ok-btn small" id="subApple" href="#">Apple / Outlook</a>
+                <a class="ok-btn small quiet" id="subGoogle" href="#" target="_blank" rel="noopener">Google Calendar</a>
+            </div>
+        </div>
+
+        <form class="ok-card pad" id="followForm" style="display:flex;flex-direction:column;gap:12px" hidden novalidate>
+            <div>
+                <b>Follow by email</b>
+                <p class="ok-note" style="margin:4px 0 0">Only when the truck opens near you or posts its week. Unfollow any time.</p>
+            </div>
+            <div class="ok-chips" id="fChips"></div>
+            <input class="ok-box" type="email" id="fEmail" autocomplete="email" inputmode="email" placeholder="you@email.com" aria-label="Email">
+            <button type="submit" class="ok-btn" id="fGo">Follow</button>
+            <div class="ok-err" id="fErr" role="alert"></div>
+            <div class="ok-note ok-ok" id="fDone" role="status" hidden></div>
+        </form>
+
+        <a href="/" class="ok-link" style="align-self:flex-start">&larr; Order ahead</a>
+    </section>
+    <div id="loading" class="ok-lede">Loading…</div>
+</main>
+<script>
+(function () {
+    'use strict';
+    var $ = function (id) { return document.getElementById(id); };
+    var IC = window.InsightsCore;
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function getJSON(u) { return fetch(u, { cache: 'no-store' }).then(function (r) { return r.json().catch(function () { return {}; }).then(function (b) { return { ok: r.ok, status: r.status, b: b }; }); }); }
+    function postJSON(u, body) { return fetch(u, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) }).then(function (r) { return r.json().catch(function () { return {}; }).then(function (b) { return { ok: r.ok, status: r.status, b: b }; }); }); }
+    function initials(n) { return (n || ' ').trim().split(/\s+/).map(function (w) { return w[0]; }).join('').slice(0, 2).toUpperCase(); }
+    function gTime(ms) { return new Date(ms).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, ''); }
+
+    var vendor = null, data = null, pick = [];
+    var followToken = new URLSearchParams(location.search).get('follow');
+
+    function chips(el, names, chosen, onToggle) {
+        el.innerHTML = '<button type="button" class="ok-chip" data-all aria-pressed="' + (!chosen.length) + '">Every spot</button>' + names.map(function (n) {
+            return '<button type="button" class="ok-chip" data-loc="' + esc(n) + '" aria-pressed="' + (chosen.indexOf(n) >= 0) + '">' + esc(n) + '</button>';
+        }).join('');
+        el.onclick = function (e) {
+            var b = e.target.closest('button'); if (!b) return;
+            if (b.hasAttribute('data-all')) chosen.length = 0;
+            else { var n = b.getAttribute('data-loc'), i = chosen.indexOf(n); if (i >= 0) chosen.splice(i, 1); else chosen.push(n); }
+            chips(el, names, chosen, onToggle); if (onToggle) onToggle();
+        };
+    }
+
+    function renderList() {
+        var tz = data.timezone, today = IC ? IC.dateKey(IC.parts(Date.now(), tz)) : '';
+        var tomorrow = (function () { if (!today) return ''; var a = today.split('-'); var t = new Date(Date.UTC(+a[0], +a[1] - 1, +a[2] + 1)); return t.toISOString().slice(0, 10); })();
+        var stops = data.stops || [];
+        $('empty').hidden = stops.length > 0;
+        var html = '', lastDay = '';
+        stops.forEach(function (s) {
+            if (s.day !== lastDay) {
+                lastDay = s.day;
+                html += '<div class="sch-day">' + esc(s.day === today ? 'Today' : s.day === tomorrow ? 'Tomorrow · ' + s.dayLabel.split(',')[0] : s.dayLabel) + '</div>';
+            }
+            var now = Date.now(), live = s.startsAt <= now && now < s.endsAt;
+            var g = 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent(vendor.businessName + ' at ' + s.location) +
+                '&dates=' + gTime(s.startsAt) + '/' + gTime(s.endsAt) + '&location=' + encodeURIComponent(s.address || s.location) +
+                '&details=' + encodeURIComponent((s.note ? s.note + '\n\n' : '') + 'Order ahead: ' + location.origin + '/');
+            html += '<div class="ok-card sch-stop">' +
+                '<span class="sch-time">' + esc(s.label) + (live ? ' · <span class="ok-ok">here now</span>' : '') + '</span>' +
+                '<span class="sch-place">' + esc(s.location) + '</span>' +
+                (s.address ? '<a class="sch-addr" target="_blank" rel="noopener" href="https://maps.google.com/?q=' + encodeURIComponent(s.address) + '">' + esc(s.address) + '</a>' : '') +
+                (s.note ? '<span class="sch-note">' + esc(s.note) + '</span>' : '') +
+                '<div class="sch-actions"><a class="ok-btn small quiet" href="/api/schedule/stop/' + s.id + '.ics">Add to calendar</a>' +
+                '<a class="ok-btn small quiet" target="_blank" rel="noopener" href="' + esc(g) + '">Google</a></div></div>';
+        });
+        $('list').innerHTML = html;
+    }
+
+    function renderNow() {
+        var st = vendor.state || {};
+        var open = st.status === 'open';
+        $('statusPill').hidden = false;
+        $('statusPill').textContent = open ? (st.paused ? 'Window only' : 'Open now') : 'Closed';
+        $('statusPill').className = 'ok-pill' + (open ? ' ok' : '');
+        $('nowCard').hidden = !(open && !st.paused);
+        if (open) {
+            $('nowTitle').textContent = st.location ? 'Open now at ' + st.location : 'Open now';
+            var w = st.wait && st.wait.minutes;
+            $('nowSub').textContent = w ? 'About ' + w + ' min wait' : 'Skip the line';
+        }
+    }
+
+    function renderFollow() {
+        var form = $('followForm');
+        form.hidden = !data.followEnabled;
+        if (!data.followEnabled) return;
+        chips($('fChips'), data.locations || [], pick);
+        form.onsubmit = function (e) {
+            e.preventDefault();
+            $('fErr').textContent = '';
+            var email = $('fEmail').value.trim();
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { $('fErr').textContent = 'Please enter a valid email.'; return; }
+            $('fGo').disabled = true;
+            postJSON('/api/schedule/follow', { email: email, locations: pick }).then(function (r) {
+                $('fGo').disabled = false;
+                if (!r.ok) { $('fErr').textContent = r.b.error || 'Could not follow right now.'; return; }
+                $('fDone').hidden = false; $('fDone').textContent = '✓ ' + r.b.message;
+                $('fGo').hidden = true; $('fEmail').disabled = true;
+            }).catch(function () { $('fGo').disabled = false; $('fErr').textContent = 'No connection. Try again.'; });
+        };
+    }
+
+    function subscribeLinks() {
+        var feed = location.host + '/api/schedule/feed.ics';
+        $('subApple').href = 'webcal://' + feed;
+        $('subGoogle').href = 'https://calendar.google.com/calendar/r?cid=' + encodeURIComponent('webcal://' + feed);
+    }
+
+    function manage() {
+        var chosen = [];
+        $('manage').hidden = false; $('loading').hidden = true;
+        var base = '/api/schedule/follow/' + encodeURIComponent(followToken);
+        function show(f) {
+            chosen.length = 0; (f.locations || []).forEach(function (n) { chosen.push(n); });
+            $('mHead').textContent = 'You’re following';
+            $('mLede').textContent = 'We’ll email ' + f.email + ' when ' + vendor.businessName + ' opens near you or posts their week. Nothing else.';
+            chips($('mChips'), f.allLocations || [], chosen, function () { $('mSaved').textContent = ''; });
+        }
+        function fail(msg) { $('mHead').textContent = 'That link has expired'; $('mLede').textContent = msg || 'Follow again from the schedule page.'; $('mSave').parentNode.hidden = true; $('mUnfollow').hidden = true; }
+        getJSON(base).then(function (r) {
+            if (!r.ok) return fail(r.b.error);
+            // Opening the link from the confirm email is the confirmation.
+            if (!r.b.confirmed) return postJSON(base + '/confirm').then(function (c) { if (!c.ok) return fail(c.b.error); $('mKicker').textContent = 'Confirmed'; show(c.b); });
+            show(r.b);
+        });
+        $('mSave').onclick = function () {
+            postJSON(base, { locations: chosen }).then(function (r) { $('mSaved').textContent = r.ok ? '✓ Saved' : (r.b.error || 'Could not save.'); });
+        };
+        $('mUnfollow').onclick = function () {
+            if (!confirm('Unfollow ' + vendor.businessName + '? Your email is deleted.')) return;
+            postJSON(base + '/unsubscribe').then(function () {
+                $('mKicker').textContent = 'Done'; $('mHead').textContent = 'You’ve unfollowed';
+                $('mLede').textContent = 'Your email was deleted. You won’t hear from ' + vendor.businessName + ' again unless you follow again.';
+                $('mSave').parentNode.hidden = true; $('mUnfollow').hidden = true;
+            });
+        };
+    }
+
+    getJSON('/api/vendor-data').then(function (r) {
+        if (!r.ok || r.b.isDemo) { $('loading').textContent = 'This page isn’t available.'; return; }
+        vendor = r.b;
+        $('truckName').textContent = vendor.businessName; $('mono').textContent = initials(vendor.businessName);
+        document.title = vendor.businessName + ' · Where we’ll be';
+        if (followToken) { history.replaceState(null, '', location.pathname); return manage(); }
+        return getJSON('/api/schedule').then(function (s) {
+            data = s.b; $('loading').hidden = true; $('main').hidden = false;
+            renderNow(); renderList(); renderFollow(); subscribeLinks();
+        });
+    }).catch(function () { $('loading').textContent = 'No connection. Pull to refresh.'; });
+})();
+</script>
+</body>
+</html>

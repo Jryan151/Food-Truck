@@ -15,6 +15,7 @@ const payments = require('./payments');
 const sms = require('./sms');
 const catering = require('./catering');
 const Insights = require('./public/insights-core');
+const schedule = require('./schedule');
 const { run, get, all } = core;
 const { requireVendor, requireRole, getSession, rateLimit } = auth;
 
@@ -52,6 +53,14 @@ router.get('/health', async (req, res) => {
   }
 });
 
+async function nextStop(v) {
+  try {
+    const list = await schedule.upcoming(v.id, Insights.validTz(v.timezone), 30);
+    const s = list[0];
+    return s ? { day: s.day, start: s.start, end: s.end, location: s.location, startsAt: s.startsAt, endsAt: s.endsAt, more: list.length - 1 } : null;
+  } catch (e) { return null; }
+}
+
 router.get('/vendor-data', async (req, res) => {
   const t = req.tenant;
   res.set('Cache-Control', 'no-store');
@@ -76,6 +85,7 @@ router.get('/vendor-data', async (req, res) => {
     payMode: payments.effectivePayMode(v),         // window | both | online
     smsReady: sms.enabledFor(v) && !!v.sms_customer_ready, // show the "text me when it's ready" box
     cateringEnabled: await catering.isEnabled(v.id),   // show the Catering link
+    nextStop: await nextStop(v),                       // "Next: Fri 4 PM at Brewery Row" when closed
   });
 });
 

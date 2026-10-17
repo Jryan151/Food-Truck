@@ -379,6 +379,9 @@ async function ensureSchema() {
     // Kitchen: a note the owner leaves for the crew ("no cilantro today"), shown on the kitchen screen.
     ['crew_note', 'TEXT'],
     ['crew_note_at', 'INTEGER'],
+    // Followers: when the owner last emailed them (keeps it from becoming spam).
+    ['follow_open_at', 'INTEGER'],
+    ['follow_week_at', 'INTEGER'],
   ];
   for (const [c, d] of vendorCols) await addColumn('vendors', c, d);
 
@@ -468,6 +471,35 @@ async function ensureSchema() {
   )`);
   await exec('CREATE INDEX IF NOT EXISTS idx_order_events_order ON order_events (order_id)');
   await exec('CREATE INDEX IF NOT EXISTS idx_order_events_kind ON order_events (vendor_id, event, at)');
+
+  // Where the truck will be (Schedule) and the people who asked to hear about it (followers, double opt-in).
+  await exec(`CREATE TABLE IF NOT EXISTS schedule_stops (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vendor_id INTEGER NOT NULL,
+    day TEXT NOT NULL,            -- YYYY-MM-DD in the truck's time zone
+    start_time TEXT NOT NULL,     -- HH:MM
+    end_time TEXT NOT NULL,       -- HH:MM (at or before start = runs past midnight)
+    location TEXT NOT NULL,
+    address TEXT,
+    note TEXT,
+    series TEXT,                  -- stops made together with "repeat weekly"
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`);
+  await exec('CREATE INDEX IF NOT EXISTS idx_schedule_vendor_day ON schedule_stops (vendor_id, day)');
+  await exec(`CREATE TABLE IF NOT EXISTS followers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vendor_id INTEGER NOT NULL,
+    email TEXT NOT NULL,
+    token_hash TEXT NOT NULL,     -- the manage / unsubscribe link (only its hash is kept)
+    locations TEXT,               -- JSON list; empty = every location
+    pending_locations TEXT,       -- choices waiting for the confirm tap
+    confirmed_at INTEGER,         -- nothing is ever sent before this is set
+    created_at INTEGER NOT NULL,
+    last_mail_at INTEGER
+  )`);
+  await exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_followers_vendor_email ON followers (vendor_id, email)');
+  await exec('CREATE INDEX IF NOT EXISTS idx_followers_token ON followers (token_hash)');
 
   // Catering: one playbook per truck (JSON, cleaned by public/catering-quote.js) and its bookings.
   await exec(`CREATE TABLE IF NOT EXISTS catering_settings (

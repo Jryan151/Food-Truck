@@ -30,18 +30,19 @@
   var pad = function (n) { return (n < 10 ? '0' : '') + n; };
   function dateKey(p) { return p.y + '-' + pad(p.m) + '-' + pad(p.d); }
 
-  /** The UTC moment of local midnight on y-m-d in tz (handles daylight-saving days). */
-  function zonedStart(y, m, d, tz) {
-    var guess = Date.UTC(y, m - 1, d);
-    for (var i = 0; i < 3; i++) {
+  /** The UTC moment of a local wall-clock time in tz (daylight-saving safe). */
+  function zonedTime(y, m, d, h, mi, tz) {
+    var want = Date.UTC(y, m - 1, d, h || 0, mi || 0), guess = want;
+    for (var i = 0; i < 4; i++) {
       var p = parts(guess, tz);
       var asUtc = Date.UTC(p.y, p.m - 1, p.d, p.h, p.min);
-      var want = Date.UTC(y, m - 1, d);
       if (asUtc === want) break;
       guess += want - asUtc;
     }
     return guess;
   }
+  /** The UTC moment of local midnight on y-m-d in tz. */
+  function zonedStart(y, m, d, tz) { return zonedTime(y, m, d, 0, 0, tz); }
 
   function addDaysYMD(y, m, d, n) { var t = new Date(Date.UTC(y, m - 1, d + n)); return { y: t.getUTCFullYear(), m: t.getUTCMonth() + 1, d: t.getUTCDate() }; }
   function parseYMD(s) { var a = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || '')); return a ? { y: +a[1], m: +a[2], d: +a[3] } : null; }
@@ -193,7 +194,7 @@
   function hourLabel(h) { if (h === null || h === undefined) return '—'; var x = h % 12 || 12; return x + (h < 12 ? ' AM' : ' PM'); }
 
   return {
-    DAY: DAY, parts: parts, dateKey: dateKey, zonedStart: zonedStart, period: period, baseName: baseName,
+    DAY: DAY, parts: parts, dateKey: dateKey, zonedStart: zonedStart, zonedTime: zonedTime, period: period, baseName: baseName,
     totals: totals, summarize: summarize, compareLocations: compareLocations, hourLabel: hourLabel, validTz: validTz
   };
 });

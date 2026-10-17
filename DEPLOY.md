@@ -320,3 +320,15 @@ git checkout catering
 pm2 restart foodtruck-backend
 ```
 New tables (`catering_settings`, `catering_bookings`) are created automatically. Email (Resend) must be set up for hosts and owners to get the emails.
+
+## Schedule and followers
+
+- Customers see where the truck will be at `/schedule`. They can add a stop to their calendar, subscribe to a
+  calendar feed that updates itself (`/api/schedule/feed.ics`), or follow by email.
+- Following by email uses the same Resend settings as everything else (`RESEND_API_KEY`, `MAIL_FROM`).
+  Without them, the follow form stays hidden and the schedule and calendar still work.
+- Follow is double opt-in: nothing is sent until the person taps the link in their confirm email. Every email
+  has a one-click unsubscribe, which deletes the email address.
+- Followers only hear from the truck when the owner taps "Email this week" (at most every 3 days) or ticks
+  "tell followers" at Start service (at most every 6 hours).
+- No new environment settings are needed. The tables are created on start.

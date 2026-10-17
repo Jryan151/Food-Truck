@@ -204,8 +204,33 @@
         return {
             isDemo: false, businessName: d.vendor.businessName, slug: SLUG, customDomain: null,
             ownerIG: d.vendor.ownerIG, emoji: d.vendor.emoji, menu: d.menu, state: stateOut(d),
-            showBranding: true, pinOnly: false, hours: d.hours, timezone: d.timezone, payMode: 'window', smsReady: false
+            showBranding: true, pinOnly: false, hours: d.hours, timezone: d.timezone, payMode: 'window', smsReady: false,
+            nextStop: (function () { var u = demoStops(d)[0]; return u ? { day: u.day, start: u.start, end: u.end, location: u.location, startsAt: u.startsAt, endsAt: u.endsAt } : null; })()
         };
+    }
+
+    /* ---------- schedule: the same weekly route as the sales history, two weeks out ---------- */
+    function demoStops(d) {
+        var IC = window.InsightsCore;
+        if (!IC) return [];
+        var tz = d.timezone, today = IC.parts(Date.now(), tz);
+        if (!d.schedule) {
+            var plan = { 1: ['Downtown Plaza — 5th & Main', '11:00', '14:00', '500 S 5th St'], 2: ['Downtown Plaza — 5th & Main', '11:00', '14:00', '500 S 5th St'], 3: ['Downtown Plaza — 5th & Main', '11:00', '14:00', '500 S 5th St'],
+                4: ['Downtown Plaza — 5th & Main', '11:00', '14:00', '500 S 5th St'], 5: ['Brewery Row', '16:00', '21:00', ''], 6: ['Saturday Farmers Market', '09:00', '13:00', ''] };
+            d.schedule = []; d.nextStopId = 1;
+            for (var i = 0; i < 14; i++) {
+                var t = new Date(Date.UTC(today.y, today.m - 1, today.d + i)), p = plan[t.getUTCDay()];
+                if (p) d.schedule.push({ id: d.nextStopId++, day: t.toISOString().slice(0, 10), start: p[1], end: p[2], location: p[0], address: p[3], note: '', series: 'demo' });
+            }
+            save(d);
+        }
+        var key = IC.dateKey(today), now = Date.now();
+        return d.schedule.filter(function (s) { return s.day >= key; }).map(function (s) {
+            var a = s.day.split('-').map(Number), hs = s.start.split(':').map(Number), he = s.end.split(':').map(Number);
+            var st = IC.zonedTime(a[0], a[1], a[2], hs[0], hs[1], tz), en = IC.zonedTime(a[0], a[1], a[2] + (s.end <= s.start ? 1 : 0), he[0], he[1], tz);
+            var lbl = function (x) { var h = +x.split(':')[0], m = +x.split(':')[1]; return (h % 12 || 12) + (m ? ':' + (m < 10 ? '0' : '') + m : '') + (h < 12 ? ' AM' : ' PM'); };
+            return Object.assign({}, s, { startsAt: st, endsAt: en, label: lbl(s.start) + ' – ' + lbl(s.end), dayLabel: new Date(Date.UTC(a[0], a[1] - 1, a[2])).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', timeZone: 'UTC' }) });
+        }).filter(function (s) { return s.endsAt > now; }).sort(function (x, y) { return x.startsAt - y.startsAt; });
     }
     function me(d) {
         return {
@@ -316,6 +341,40 @@
             emit('ORDER_UPDATE', o, true);
             emit('ORDER_STATUS', { tag: o.tag, status: o.status }); emitWait(d);
             return ok({ order: o });
+        }
+
+        /* schedule */
+        if (p === '/api/schedule' && method === 'GET') return ok({ stops: demoStops(d), timezone: d.timezone, followEnabled: true, locations: d.locations.map(function (l) { return l.name; }) });
+        if (p === '/api/schedule/follow' && method === 'POST') return ok({ ok: true, message: 'Check your email and tap the link to confirm.' });
+        if (p === '/api/schedule/owner/stops' && method === 'GET') { var IC0 = window.InsightsCore; return ok({ stops: demoStops(d), timezone: d.timezone, today: IC0 ? IC0.dateKey(IC0.parts(Date.now(), d.timezone)) : '' }); }
+        if (p === '/api/schedule/owner/stops' && method === 'POST') {
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(b.day || '')) return fail(400, 'Pick a date.');
+            if (!b.start || !b.end) return fail(400, 'Set a start and end time.');
+            if (b.start === b.end) return fail(400, 'The end time has to be different from the start.');
+            if (!String(b.location || '').trim()) return fail(400, 'Where will you be?');
+            demoStops(d);
+            var weeks = Math.max(0, Math.min(12, parseInt(b.repeatWeeks, 10) || 0)), series = weeks ? 's' + Date.now() : null;
+            for (var w = 0; w <= weeks; w++) {
+                var a0 = b.day.split('-').map(Number), dd = new Date(Date.UTC(a0[0], a0[1] - 1, a0[2] + 7 * w));
+                d.schedule.push({ id: d.nextStopId++, day: dd.toISOString().slice(0, 10), start: b.start, end: b.end, location: String(b.location).trim(), address: b.address || '', note: b.note || '', series: series });
+            }
+            save(d);
+            return ok({ added: weeks + 1, stops: demoStops(d) }, 201);
+        }
+        if ((m = p.match(/^\/api\/schedule\/owner\/stops\/(\d+)$/)) && method === 'DELETE') {
+            demoStops(d);
+            var sx = d.schedule.filter(function (x) { return x.id === +m[1]; })[0];
+            if (!sx) return fail(404, 'That stop is gone.');
+            var before = d.schedule.length;
+            d.schedule = d.schedule.filter(function (x) { return !(x.id === sx.id || (u.searchParams.get('following') === '1' && sx.series && x.series === sx.series && x.day >= sx.day)); });
+            save(d);
+            return ok({ removed: before - d.schedule.length, stops: demoStops(d) });
+        }
+        if (p === '/api/schedule/owner/followers') return ok({ count: 23, everywhere: 14, byLocation: { 'Brewery Row': 6, 'Saturday Farmers Market': 5 }, mailReady: true, openNextAt: d.followOpenAt ? d.followOpenAt + 6 * 3600000 : 0, weekNextAt: d.followWeekAt ? d.followWeekAt + 3 * 86400000 : 0 });
+        if (p === '/api/schedule/owner/notify' && method === 'POST') {
+            if (b.kind === 'open') { d.followOpenAt = Date.now(); save(d); return ok({ sent: 14 + (d.state.location === 'Brewery Row' ? 6 : 0) }); }
+            if (b.kind === 'week') { if (d.followWeekAt && Date.now() - d.followWeekAt < 3 * 86400000) return fail(429, 'You sent your schedule less than 3 days ago.'); d.followWeekAt = Date.now(); save(d); return ok({ sent: 23 }); }
+            return fail(400, 'Unknown message.');
         }
 
         /* insights (same math as the server) */

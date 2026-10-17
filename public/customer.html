@@ -14,6 +14,7 @@
     <script src="/theme.js"></script>
     <link rel="stylesheet" href="/app.css">
     <link rel="stylesheet" href="/theme.css">
+    <script src="/insights-core.js"></script>
     <script src="/logo.js"></script>
     <style>
         .hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
@@ -80,6 +81,7 @@
                 <div id="usualLanding" style="display:none"></div>
                 <button data-action="open-menu" id="btn-start-order" class="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-semibold py-3.5 rounded-xl transition shadow-lg">Start Order</button>
                 <button data-action="open-tracker" id="btn-track-landing" class="w-full bg-zinc-900 border border-zinc-800 text-zinc-300 font-semibold py-3 rounded-xl text-sm transition" style="display:none;" data-i18n="track_orders">Order Status</button>
+                <a href="/schedule" id="scheduleLink" class="ok-btn-quiet block w-full text-center py-3 rounded-xl text-sm transition" style="display:none;"></a>
                 <a href="/catering" id="cateringLink" class="ok-btn-quiet block w-full text-center font-semibold py-3 rounded-xl text-sm transition" style="display:none;"><span data-i18n="catering_cta">Planning an event? Get a catering quote</span> &rarr;</a>
             </div>
         </div>
@@ -243,6 +245,7 @@
                 open_now: 'Open now • Accepting orders', closed_now: 'Closed right now', paused_now: 'Open for walk-ups • Online ordering paused',
                 start_order: 'Start Order', currently_closed: 'Currently Closed', order_at_window: 'Order at the window',
                 catering_cta: 'Planning an event? Get a catering quote',
+                sched_next: 'Next: {when} · {where}', sched_link: 'Where we’ll be this week', sched_full: 'Full schedule', sched_today: 'Today',
                 wait_now: '⏱ About {n} min wait right now', usual_title: 'Your usual', again_title: 'Order again', alert_chime: '🔔 We’ll chime here when it’s ready. Keep this page open.', usual_add: 'Add to cart', usual_out: '{item} is sold out today.',
                 change_left: 'You can change or cancel for {t}', change_btn: 'Change', cancel_btn: 'Cancel',
                 cancel_confirm: 'Cancel this order?', change_confirm: 'Cancel this order and put the items back in your cart so you can change them?',
@@ -281,6 +284,7 @@
                 open_now: 'Abierto • Aceptando pedidos', closed_now: 'Cerrado ahora', paused_now: 'Abierto en la ventanilla • Pedidos en línea en pausa',
                 start_order: 'Hacer pedido', currently_closed: 'Cerrado', order_at_window: 'Pide en la ventanilla',
                 catering_cta: '¿Un evento? Cotiza el catering',
+                sched_next: 'Próxima parada: {when} · {where}', sched_link: 'Dónde estaremos esta semana', sched_full: 'Ver horario', sched_today: 'Hoy',
                 wait_now: '⏱ Espera de unos {n} min ahora', usual_title: 'Lo de siempre', again_title: 'Pedir de nuevo', alert_chime: '🔔 Sonará aquí cuando esté listo. Deja esta página abierta.', usual_add: 'Agregar', usual_out: '{item} está agotado hoy.',
                 change_left: 'Puedes cambiar o cancelar durante {t}', change_btn: 'Cambiar', cancel_btn: 'Cancelar',
                 cancel_confirm: '¿Cancelar este pedido?', change_confirm: '¿Cancelar este pedido y regresar los productos al carrito para cambiarlos?',
@@ -380,6 +384,23 @@
 
         /* ---------- status / rush / sale / location ---------- */
         function isClosed() { return app.state.status === 'closed'; }
+        // Closed? Say where the truck will be next. Open? A quiet link to the week.
+        function renderNextStop() {
+            var el = $('scheduleLink'), s = app.nextStop;
+            if (!s) { el.style.display = 'none'; return; }
+            el.style.display = 'block';
+            var here = s.startsAt <= Date.now();
+            if (isClosed() && !here) {
+                var d = new Date(s.day + 'T12:00:00Z'), today = new Date();
+                var sameDay = d.getUTCFullYear() === today.getFullYear() && d.getUTCMonth() === today.getMonth() && d.getUTCDate() === today.getDate();
+                var day = sameDay ? t('sched_today') : d.toLocaleDateString(lang === 'es' ? 'es' : 'en-US', { weekday: 'short', timeZone: 'UTC' });
+                var hm = s.start.split(':'), h = +hm[0];
+                var time = (h % 12 || 12) + (+hm[1] ? ':' + hm[1] : '') + (h < 12 ? ' AM' : ' PM');
+                el.innerHTML = '<span class="block font-semibold">' + esc(t('sched_next', { when: day + ' ' + time, where: s.location })) + '</span><span class="block text-xs opacity-70 mt-0.5">' + esc(t('sched_full')) + ' →</span>';
+            } else {
+                el.innerHTML = '<span class="font-semibold">' + esc(t('sched_link')) + '</span> →';
+            }
+        }
         function liveWait() { return app.state.wait && app.state.wait.minutes ? app.state.wait.minutes : 0; }
         function canOrder() { return !isClosed() && !app.state.paused; }
 
@@ -420,6 +441,7 @@
                 : '';
 
             renderUsual();
+            renderNextStop();
             // If the truck closes or pauses while someone has the menu open, send them back instead of letting them build a doomed cart.
             if (!canOrder() && app.view === 'menu') show('landing');
             updateCartUI();
@@ -1018,6 +1040,7 @@
             $('dynamic-truck-name').textContent = d.businessName;
             TruckLogo.set($('dynamic-emoji'), d.emoji, 'var(--z900)');
             $('cateringLink').style.display = d.cateringEnabled ? 'block' : 'none';
+            app.nextStop = d.nextStop || null;
             if (d.ownerIG) {
                 $('ig-container').style.display = 'block';
                 $('dynamic-ig-text').textContent = d.ownerIG;
