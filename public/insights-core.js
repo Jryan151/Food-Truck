@@ -96,9 +96,64 @@
 
   /** rows: [{ t: ms, cents, items: [{name, qty, price}], loc }] */
   function totals(rows) {
-    var cents = 0, items = 0;
-    rows.forEach(function (r) { cents += r.cents; (r.items || []).forEach(function (i) { items += i.qty || 0; }); });
-    return { cents: cents, orders: rows.length, items: items, avgCents: rows.length ? Math.round(cents / rows.length) : 0 };
+    var cents = 0, items = 0, costed = 0, cost = 0, lineCents = 0;
+    rows.forEach(function (r) {
+      cents += r.cents;
+      (r.items || []).forEach(function (i) {
+        var q = i.qty || 0, lc = Math.round((i.price || 0) * 100) * q;
+        items += q; lineCents += lc;
+        if (i.cost !== undefined && i.cost !== null) { costed += lc; cost += Math.round(i.cost * 100) * q; }
+      });
+    });
+    return {
+      cents: cents, orders: rows.length, items: items, avgCents: rows.length ? Math.round(cents / rows.length) : 0,
+      // Profit only over items that have a food cost set; coverage says how much of the sales that is.
+      costCents: cost, profitCents: costed - cost, marginPct: costed ? Math.round((costed - cost) / costed * 1000) / 10 : null,
+      costCoverage: lineCents ? Math.round(costed / lineCents * 100) : 0
+    };
+  }
+
+  /** Each item: sold, sales, food cost, profit and margin, best earners first. */
+  function margins(rows) {
+    var m = {};
+    rows.forEach(function (r) {
+      (r.items || []).forEach(function (i) {
+        var k = baseName(i.name), e = m[k] || (m[k] = { name: k, qty: 0, cents: 0, costCents: 0, costedCents: 0 });
+        var q = i.qty || 0, lc = Math.round((i.price || 0) * 100) * q;
+        e.qty += q; e.cents += lc;
+        if (i.cost !== undefined && i.cost !== null) { e.costCents += Math.round(i.cost * 100) * q; e.costedCents += lc; }
+      });
+    });
+    return Object.keys(m).map(function (k) {
+      var e = m[k], has = e.costedCents > 0;
+      return { name: e.name, qty: e.qty, cents: e.cents, costCents: has ? e.costCents : null, profitCents: has ? e.costedCents - e.costCents : null, marginPct: has ? Math.round((e.costedCents - e.costCents) / e.costedCents * 1000) / 10 : null };
+    }).sort(function (a, b) { return (b.profitCents === null ? -1e12 : b.profitCents) - (a.profitCents === null ? -1e12 : a.profitCents) || b.cents - a.cents; });
+  }
+
+  /**
+   * What to expect: rows are past sales from the same weekday (and spot, when there's enough).
+   * Gives the average orders and sales per day, the average orders in each hour, and a prep list.
+   */
+  function forecast(rows, tz) {
+    var days = {}, hours = [], items = {};
+    for (var h = 0; h < 24; h++) hours.push(0);
+    rows.forEach(function (r) {
+      var p = parts(r.t, tz); days[dateKey(p)] = 1; hours[p.h]++;
+      (r.items || []).forEach(function (i) { var k = baseName(i.name); items[k] = (items[k] || 0) + (i.qty || 0); });
+    });
+    var n = Object.keys(days).length;
+    if (!n) return { days: 0 };
+    var t = totals(rows);
+    var perHour = hours.map(function (c) { return Math.round(c / n * 10) / 10; });
+    var best = 0; perHour.forEach(function (c, i) { if (c > perHour[best]) best = i; });
+    return {
+      days: n,
+      orders: Math.round(t.orders / n),
+      cents: Math.round(t.cents / n),
+      perHour: perHour,
+      busiestHour: perHour[best] ? best : null,
+      prep: Object.keys(items).map(function (k) { return { name: k, qty: Math.round(items[k] / n) }; }).filter(function (x) { return x.qty > 0; }).sort(function (a, b) { return b.qty - a.qty; }).slice(0, 10)
+    };
   }
 
   function change(now, before) {
@@ -152,6 +207,7 @@
       bestHour: bestHour ? bestHour.hour : null,
       bestDay: bestDay ? bestDay.date : null,
       topItems: topItems(rows, 8),
+      margins: margins(rows),
       locations: Object.keys(locs).map(function (k) { return locs[k]; }).sort(function (a, b) { return b.cents - a.cents; })
     };
   }
@@ -195,6 +251,6 @@
 
   return {
     DAY: DAY, parts: parts, dateKey: dateKey, zonedStart: zonedStart, zonedTime: zonedTime, period: period, baseName: baseName,
-    totals: totals, summarize: summarize, compareLocations: compareLocations, hourLabel: hourLabel, validTz: validTz
+    totals: totals, summarize: summarize, margins: margins, forecast: forecast, compareLocations: compareLocations, hourLabel: hourLabel, validTz: validTz
   };
 });

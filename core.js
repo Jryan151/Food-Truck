@@ -110,6 +110,8 @@ function normalizeItem(i, id) {
     name: String(i.name || 'Item').trim().slice(0, 80) || 'Item',
     desc: String(i.desc ?? i.description ?? '').trim().slice(0, 300),
     price: Math.round(Math.max(0, Math.min(10000, num(i.price))) * 100) / 100,
+    // What one costs the truck to make (owner only; never sent to customers or crew). null = not set.
+    cost: i.cost === null || i.cost === undefined || i.cost === '' ? null : Math.round(Math.max(0, Math.min(10000, num(i.cost))) * 100) / 100,
     salePrice: sale > 0 ? Math.round(Math.min(10000, sale) * 100) / 100 : null,
     prep: Number.isFinite(prep) ? Math.max(1, Math.min(120, prep)) : 3,
     meats: i.meats ? String(i.meats).trim().slice(0, 200) : '',
@@ -696,6 +698,7 @@ async function applyRetention() {
 function orderShape(o) {
   let items = [];
   try { items = JSON.parse(o.items_json); } catch (e) {}
+  items = items.map(({ cost, ...rest }) => rest); // food cost is for the owner's Insights only
   return {
     id: o.id,
     ticket: o.ticket_no,

@@ -137,7 +137,7 @@
                             var it = menu[Math.floor(seeded(k * 13 + q) * menu.length)];
                             if (!it) continue;
                             var price = it.salePrice > 0 ? it.salePrice : it.price, qty = seeded(k * 17 + q) < 0.2 ? 2 : 1;
-                            items.push({ name: it.name, qty: qty, price: price }); c += Math.round(price * 100) * qty;
+                            items.push({ name: it.name, qty: qty, price: price, cost: [0, 2.7, 3.2, 3.9, 1.25, 0.7, 0.6][it.id] }); c += Math.round(price * 100) * qty;
                         }
                         rows.push({ t: start + h * 3600000 + Math.floor(seeded(k * 3) * 3600000), cents: c, items: items, loc: pl[0] });
                     }
@@ -211,7 +211,8 @@
         if (!d.stock) {
             d.stock = { 4: 6 }; d.out = [];
             var tags = { 1: ['tortillas', 'cilantro', 'onion'], 2: ['tortillas', 'cheese'], 3: ['rice', 'beans'], 4: ['corn', 'cotija'], 5: ['tortillas'] };
-            d.menu.forEach(function (m) { if (!m.ingredients) m.ingredients = tags[m.id] || []; });
+            var costs = { 1: 2.7, 2: 3.2, 3: 3.9, 4: 1.25, 5: 0.7, 6: 0.6 };
+            d.menu.forEach(function (m) { if (!m.ingredients) m.ingredients = tags[m.id] || []; if (m.cost === undefined) m.cost = costs[m.id] !== undefined ? costs[m.id] : null; });
         }
     }
     function menuFor(d, owner) {
@@ -223,7 +224,7 @@
             var reason = m.soldOut ? 'manual' : left !== null && left <= 0 ? 'stock' : missing ? 'ingredient' : null;
             var it = Object.assign({}, m, { soldOut: !!reason, outReason: reason });
             if (owner) { it.left = left; it.manualSoldOut = !!m.soldOut; it.missing = missing || null; }
-            else { it.left = left !== null && left <= LOW ? Math.max(0, left) : null; delete it.ingredients; }
+            else { it.left = left !== null && left <= LOW ? Math.max(0, left) : null; delete it.ingredients; delete it.cost; }
             return it;
         });
     }
@@ -254,6 +255,7 @@
             category: String(b.category != null ? b.category : prev.category || '').trim().slice(0, 40),
             ingredients: b.ingredients != null ? (Array.isArray(b.ingredients) ? b.ingredients : String(b.ingredients).split(',')).map(function (o) { return String(o).trim().slice(0, 30); }).filter(Boolean).slice(0, 12) : (prev.ingredients || []),
             photo: b.photo != null ? String(b.photo) : (prev.photo || ''),
+            cost: b.cost !== undefined ? (b.cost === null || b.cost === '' ? null : round(Math.max(0, parseFloat(b.cost) || 0))) : (prev.cost !== undefined ? prev.cost : null),
             soldOut: !!prev.soldOut
         };
     }
@@ -539,11 +541,20 @@
         }
 
         /* insights (same math as the server) */
-        if (p === '/api/owner/insights' || p === '/api/owner/insights/locations') {
+        if (p === '/api/owner/insights' || p === '/api/owner/insights/locations' || p === '/api/owner/insights/forecast') {
             var IC = window.InsightsCore;
             if (!IC) return fail(503, 'Loading…');
             var rowsAll = history(d), tz = d.timezone;
             var inRange = function (a, z, loc) { return rowsAll.filter(function (r) { return r.t >= a && r.t < z && (loc === undefined || r.loc === loc); }); };
+            if (p === '/api/owner/insights/forecast') {
+                var td = IC.parts(Date.now(), tz), wdf = new Date(Date.UTC(td.y, td.m - 1, td.d)).getUTCDay();
+                var locf = u.searchParams.get('location') !== null ? u.searchParams.get('location') : (demoStops(d).filter(function (s) { return s.day === IC.dateKey(td); })[0] || {}).location || d.state.location || '';
+                var past = inRange(IC.zonedStart(td.y, td.m, td.d - 56, tz), IC.zonedStart(td.y, td.m, td.d, tz)).filter(function (r) { return IC.parts(r.t, tz).wd === wdf; });
+                var here = past.filter(function (r) { return r.loc === locf; }), hd = {};
+                here.forEach(function (r) { hd[IC.dateKey(IC.parts(r.t, tz))] = 1; });
+                var useHere = locf && Object.keys(hd).length >= 2, fc = IC.forecast(useHere ? here : past, tz);
+                return ok(Object.assign(fc, { date: IC.dateKey(td), weekday: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][wdf], location: locf, basis: useHere ? 'spot' : fc.days ? 'weekday' : 'none' }));
+            }
             if (p === '/api/owner/insights/locations') {
                 var days = [30, 90, 365].indexOf(+u.searchParams.get('days')) >= 0 ? +u.searchParams.get('days') : 90;
                 return ok({ days: days, timezone: tz, locations: IC.compareLocations(inRange(Date.now() - days * IC.DAY, Date.now() + 1), tz) });

@@ -256,3 +256,16 @@ input::placeholder, textarea::placeholder { color: var(--z500); opacity: 1; }
 .punch-use { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--z100); background: var(--z950); border: 1px solid var(--z300); border-radius: 12px; padding: 12px; }
 .punch-use input { width: 20px; height: 20px; accent-color: var(--ink); }
 .left-tag { font-size: 10px; font-weight: 700; color: var(--warn); }
+
+/* Forecast card: what to expect today */
+.fc-card { background: var(--z950); border: 1px solid var(--z700); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+.fc-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.fc-basis { font-size: 10px; color: var(--z500); white-space: nowrap; }
+.fc-big { font-size: 20px; font-weight: 800; color: var(--z100); margin-top: 2px; font-variant-numeric: tabular-nums; }
+.fc-bars { display: flex; align-items: flex-end; gap: 3px; height: 48px; margin-top: 10px; }
+.fc-bars i { flex: 1; background: var(--z600); border-radius: 3px 3px 1px 1px; }
+.fc-bars i.best { background: var(--z200); }
+.fc-axis { display: flex; justify-content: space-between; font-size: 9px; color: var(--z500); margin-top: 3px; }
+.fc-prep { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.fc-prep span { font-size: 12px; color: var(--z300); border: 1px solid var(--z800); border-radius: 8px; padding: 4px 8px; }
+.fc-prep b { color: var(--z100); }

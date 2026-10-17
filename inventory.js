@@ -23,7 +23,7 @@ async function stockMap(vendorId) {
  * The menu as it really is right now. For customers (owner=false) the exact count is only shown when it's low.
  * Each item gets: soldOut (effective), outReason ('manual' | 'stock' | 'ingredient'), left (or null).
  */
-async function menuFor(v, { owner = false } = {}) {
+async function menuFor(v, { owner = false, costs = owner } = {}) {
   const menu = core.parseMenu(v.menu_data);
   const stock = await stockMap(v.id);
   const out = outList(v).map(norm);
@@ -32,8 +32,8 @@ async function menuFor(v, { owner = false } = {}) {
     const missing = (m.ingredients || []).find((i) => out.includes(norm(i)));
     const reason = m.soldOut ? 'manual' : left !== null && left <= 0 ? 'stock' : missing ? 'ingredient' : null;
     const item = Object.assign({}, m, { soldOut: !!reason, outReason: reason });
-    if (owner) { item.left = left; item.manualSoldOut = !!m.soldOut; item.missing = missing || null; }
-    else { item.left = left !== null && left <= LOW ? Math.max(0, left) : null; delete item.ingredients; }
+    if (owner) { item.left = left; item.manualSoldOut = !!m.soldOut; item.missing = missing || null; if (!costs) delete item.cost; }
+    else { item.left = left !== null && left <= LOW ? Math.max(0, left) : null; delete item.ingredients; delete item.cost; }
     return item;
   });
 }

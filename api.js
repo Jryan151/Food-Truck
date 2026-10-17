@@ -28,7 +28,8 @@ const ACTIVE = ['Preparing', 'Ready'];
 /* ---------- shapes sent to browsers ---------- */
 // The menu as it really is (sold out by hand, out of stock, or missing an ingredient). Owners get counts.
 const publicMenu = (v) => inventory.menuFor(v);
-const ownerMenu = async (vendorId) => inventory.menuFor(await get('SELECT * FROM vendors WHERE id = ?', [vendorId]), { owner: true });
+// Crew see counts and why something is out, but never food costs.
+const ownerMenu = async (vendorId, req) => inventory.menuFor(await get('SELECT * FROM vendors WHERE id = ?', [vendorId]), { owner: true, costs: !req || !req.session || req.session.role === 'owner' });
 
 const orderShape = core.orderShape;
 // Who did it, for the service record: the crew member's name when they have their own PIN.
@@ -207,7 +208,7 @@ router.post('/orders', limitOrders, requireVendor, async (req, res) => {
       label += ` (${l.option})`;
     }
     unit = Math.round(unit * 100) / 100;
-    items.push(Object.assign({ id: item.id, name: label, qty, price: unit }, priced.deal ? { deal: priced.deal } : {}));
+    items.push(Object.assign({ id: item.id, name: label, qty, price: unit }, priced.deal ? { deal: priced.deal } : {}, item.cost !== null && item.cost !== undefined ? { cost: item.cost } : {}));
     total += unit * qty;
     prepMinutes += item.prep * qty;
   }
@@ -568,7 +569,7 @@ router.post('/owner/upload', ownerOnly, express.raw({ type: Object.keys(PHOTO_TY
 
 /* ----- menu ----- */
 router.get('/owner/menu', staffOrOwner, async (req, res) => {
-  res.json({ menu: await ownerMenu(req.tenant.vendor.id), maxItems: core.MAX_ITEMS, out: inventory.outList(req.tenant.vendor) });
+  res.json({ menu: await ownerMenu(req.tenant.vendor.id, req), maxItems: core.MAX_ITEMS, out: inventory.outList(req.tenant.vendor) });
 });
 
 router.patch('/owner/menu/:id/soldout', staffOrOwner, async (req, res) => {
@@ -579,7 +580,7 @@ router.patch('/owner/menu/:id/soldout', staffOrOwner, async (req, res) => {
   item.soldOut = !!(req.body || {}).soldOut;
   await core.saveMenu(v.id, menu);
   await inventory.announce(v.id, [item.id]);
-  res.json({ item: (await ownerMenu(v.id)).find((m) => m.id === item.id) });
+  res.json({ item: (await ownerMenu(v.id, req)).find((m) => m.id === item.id) });
 });
 
 // "40 left" (null stops counting). Crew can do this from the kitchen.
@@ -596,7 +597,7 @@ router.put('/owner/stock/:id', staffOrOwner, async (req, res) => {
     await run('INSERT INTO item_stock (vendor_id, item_id, left_count) VALUES (?, ?, ?) ON CONFLICT (vendor_id, item_id) DO UPDATE SET left_count = excluded.left_count', [v.id, id, n]);
   }
   await inventory.announce(v.id, [id]);
-  res.json({ item: (await ownerMenu(v.id)).find((m) => m.id === id) });
+  res.json({ item: (await ownerMenu(v.id, req)).find((m) => m.id === id) });
 });
 
 // "Out of cilantro": every item with that ingredient sells out until it's back.
@@ -612,7 +613,7 @@ router.put('/owner/out', staffOrOwner, async (req, res) => {
   core.logOrderEvent(v.id, 0, `${(req.body || {}).out ? 'out-of' : 'back-in'}:${ing}`, actorOf(req));
   await inventory.broadcastMenu(v.id);
   core.broadcast(v.id, 'OUT_UPDATE', { out }, true);
-  res.json({ out, menu: await ownerMenu(v.id) });
+  res.json({ out, menu: await ownerMenu(v.id, req) });
 });
 
 router.post('/owner/menu', ownerOnly, async (req, res) => {
@@ -833,6 +834,34 @@ router.get('/owner/insights', ownerOnly, async (req, res) => {
   // Every location the truck has sold at, so the filter can list ones outside this period too.
   const names = await all(`SELECT DISTINCT COALESCE(location, '') AS name FROM orders WHERE vendor_id = ? AND ${SOLD}`, [v.id]);
   res.json(Object.assign(out, { timezone: tz, allLocations: names.map((n) => n.name) }));
+});
+
+// What to expect today (or any date): the same weekday over the last 8 weeks, at the same spot when
+// there's enough history there. The prep list is the average sold per day.
+router.get('/owner/insights/forecast', ownerOnly, async (req, res) => {
+  const v = req.tenant.vendor;
+  if (!insightsOpen(v)) return res.status(402).json({ error: 'Insights are part of Pro.', upgrade: true });
+  const tz = Insights.validTz(v.timezone);
+  const todayKey = Insights.dateKey(Insights.parts(Date.now(), tz));
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || '')) ? String(req.query.date) : todayKey;
+  const [y, m, d] = day.split('-').map(Number);
+  // Where: asked for, else today's schedule, else where the truck is parked now.
+  let location = req.query.location !== undefined ? String(req.query.location).slice(0, 80) : null;
+  if (location === null) {
+    const stop = (await schedule.upcoming(v.id, tz, 0)).find((s) => s.day === day);
+    location = stop ? stop.location : (await core.getState(v.id)).location || '';
+  }
+  const from = Insights.zonedStart(y, m, d - 56, tz);
+  const to = Insights.zonedStart(y, m, d, tz);
+  const wd = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  const all = (await salesRows(v.id, from, to)).filter((r) => Insights.parts(r.t, tz).wd === wd);
+  const here = all.filter((r) => r.loc === location);
+  const useHere = location && new Set(here.map((r) => Insights.dateKey(Insights.parts(r.t, tz)))).size >= 2;
+  const f = Insights.forecast(useHere ? here : all, tz);
+  res.json(Object.assign(f, {
+    date: day, weekday: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][wd],
+    location, basis: useHere ? 'spot' : f.days ? 'weekday' : 'none',
+  }));
 });
 
 router.get('/owner/insights/locations', ownerOnly, async (req, res) => {

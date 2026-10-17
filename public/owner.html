@@ -450,6 +450,7 @@
                     </div>
                     <select id="insLocation" aria-label="Location" class="mt-3 w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 text-xs text-zinc-200"></select>
                     <div id="insBody" class="mt-4">
+                        <div id="fcBox" class="fc-card" style="display:none"></div>
                         <div class="grid grid-cols-2 gap-2" id="insStats"></div>
                         <h4 class="ins-h">Revenue by hour</h4>
                         <div id="insHourly"></div>
@@ -459,6 +460,8 @@
                         </div>
                         <h4 class="ins-h">Best sellers</h4>
                         <div id="insTop"></div>
+                        <h4 class="ins-h">What each item earns</h4>
+                        <div id="insMargins"></div>
                     </div>
                     <div id="insLocked" class="mt-4 text-xs text-zinc-400" style="display:none"></div>
                 </div>
@@ -497,6 +500,8 @@
             <p class="text-xs text-zinc-400 mt-1">What wait should customers see to start? After three tickets, your real kitchen pace takes over. You can change it any time.</p>
             <div class="grid grid-cols-5 gap-2 mt-4" id="startChips"></div>
             <div id="startLoc" class="text-[11px] text-zinc-500 mt-3"></div>
+            <label id="startSpotRow" class="flex items-center gap-3 mt-3 text-xs text-zinc-300" style="display:none"><input type="checkbox" id="startSpot" checked style="width:20px;height:20px"> <span id="startSpotText"></span></label>
+            <div id="startForecast" class="text-[11px] text-zinc-300 mt-3 leading-snug" style="display:none"></div>
             <label id="startTellRow" class="flex items-center gap-3 mt-3 text-xs text-zinc-300" style="display:none"><input type="checkbox" id="startTell" style="width:20px;height:20px"> <span id="startTellText"></span></label>
             <div class="flex gap-2 mt-5">
                 <button data-action="start-cancel" class="flex-1 py-3 rounded-xl text-sm font-semibold bg-zinc-950 text-zinc-300 border border-zinc-800">Not yet</button>
@@ -553,6 +558,10 @@
                 <div><label class="block text-[10px] text-zinc-400 mb-1">Reg. Price ($)</label><input type="number" step="0.01" min="0" inputmode="decimal" id="editPrice" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2 text-sm text-zinc-200"></div>
                 <div><label class="block text-[10px] text-zinc-400 mb-1">Sale Price ($)</label><input type="number" step="0.01" min="0" inputmode="decimal" id="editSalePrice" placeholder="Optional" class="w-full bg-zinc-950 border border-red-500/30 focus:border-red-500 rounded-xl p-2 text-sm text-zinc-200"></div>
                 <div><label class="block text-[10px] text-zinc-400 mb-1">Prep (Mins)</label><input type="number" step="1" min="1" max="120" inputmode="numeric" id="editPrep" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2 text-sm text-zinc-200"></div>
+            </div>
+            <div class="flex items-end gap-3">
+                <div style="width:33%"><label class="block text-[10px] text-zinc-400 mb-1" for="editCost">Food cost ($)</label><input type="number" step="0.01" min="0" inputmode="decimal" id="editCost" placeholder="Optional" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2 text-sm text-zinc-200"></div>
+                <p class="text-[10px] text-zinc-500 pb-2" id="editCostNote">Only you see this. Insights uses it to show your profit on each item.</p>
             </div>
             <div>
                 <label class="block text-xs text-zinc-400 mb-1">Protein / modification choices (comma separated, optional)</label>
@@ -1125,6 +1134,7 @@
             $('editPrice').value = item ? item.price.toFixed(2) : '';
             $('editSalePrice').value = item && item.salePrice ? item.salePrice.toFixed(2) : '';
             $('editPrep').value = item ? item.prep : 3;
+            $('editCost').value = item && item.cost !== null && item.cost !== undefined ? item.cost.toFixed(2) : '';
             $('editMeats').value = item ? item.meats : '';
             $('editUpcharge').value = item ? (item.premiumSurcharge || 0).toFixed(2) : '';
             $('editOptions').value = item && item.options ? item.options.join(', ') : '';
@@ -1147,6 +1157,7 @@
                 price: parseFloat($('editPrice').value) || 0,
                 salePrice: parseFloat($('editSalePrice').value) || null,
                 prep: parseInt($('editPrep').value, 10) || 3,
+                cost: $('editCost').value.trim() === '' ? null : Math.max(0, parseFloat($('editCost').value) || 0),
                 meats: $('editMeats').value.trim(),
                 premiumSurcharge: parseFloat($('editUpcharge').value) || 0,
                 options: $('editOptions').value,
@@ -1239,6 +1250,26 @@
             $('startLoc').textContent = app.state.location ? 'Location: ' + app.state.location + ' (change it in Locations below)' : '';
             renderStartTell();
             if (isOwner()) loadFollowers().then(renderStartTell);
+            $('startForecast').style.display = 'none';
+            $('startSpotRow').style.display = 'none'; app.startSpot = null;
+            // Today's schedule says somewhere else? Offer to set it as part of opening.
+            if (isOwner()) api('GET', '/api/schedule/owner/stops').then(function (r) {
+                if (!r.ok) return;
+                var stop = (r.data.stops || []).filter(function (s) { return s.day === r.data.today; })[0];
+                var saved = (app.locations && app.locations.active || []).some(function (l) { return stop && l.name === stop.location; });
+                if (!stop || !saved || stop.location === app.state.location) return;
+                app.startSpot = stop.location;
+                $('startSpotText').textContent = 'Set location to ' + stop.location + ' (today’s schedule, ' + stop.label + ')';
+                $('startSpotRow').style.display = 'flex';
+            });
+            if (isOwner()) api('GET', '/api/owner/insights/forecast').then(function (r) {
+                if (!r.ok || !r.data.days) return;
+                var f = r.data;
+                $('startForecast').innerHTML = '<b>Expect about ' + f.orders + ' online orders</b>' + (f.busiestHour !== null ? ', busiest around ' + esc(hourName(f.busiestHour)) : '') + '.' +
+                    (f.prep.length ? '<br>Prep: ' + f.prep.slice(0, 4).map(function (x) { return x.qty + ' ' + esc(x.name); }).join(', ') + '.' : '') +
+                    '<br><span class="text-zinc-500">From your last ' + f.days + ' ' + esc(f.weekday) + 's' + (f.basis === 'spot' ? ' at ' + esc(f.location) : '') + '.</span>';
+                $('startForecast').style.display = 'block';
+            });
             $('startModal').style.display = 'flex';
         }
         function renderStartTell() {
@@ -1500,7 +1531,9 @@
         function loadInsights() {
             var st = insState();
             var q = '?range=' + st.range + (st.anchor ? '&anchor=' + st.anchor : '') + (st.location !== '*' ? '&location=' + encodeURIComponent(st.location) : '');
+            var seq = app.insSeq = (app.insSeq || 0) + 1; // only the newest answer may draw (taps can outrun the network)
             api('GET', '/api/owner/insights' + q).then(function (r) {
+                if (seq !== app.insSeq) return;
                 if (r.status === 402) return insLocked(r.data.error);
                 if (!r.ok) return;
                 app.insData = r.data; renderInsights();
@@ -1540,14 +1573,47 @@
                 statCard('Average order', cents(t.avgCents), d.change.avgCents, '') +
                 statCard(per.range === 'day' ? 'Busiest hour' : 'Best day', per.range === 'day' ? hourName(d.bestHour) : (d.bestDay ? dayLabel(d.bestDay) : '—'),
                     undefined, per.range === 'day' ? (d.bestHour !== null ? cents(d.hourly[d.bestHour].cents) : 'no sales yet') : d.daysWorked + ' days worked');
+            if (t.costCoverage > 0) {
+                $('insStats').innerHTML += statCard('Profit after food cost', cents(t.profitCents), undefined, (t.marginPct !== null ? t.marginPct + '% margin' : '') + (t.costCoverage < 100 ? ' · costs set for ' + t.costCoverage + '% of sales' : ''));
+            }
             renderHourly(d);
             renderDaily(d);
+            renderMargins(d);
+            if (per.isCurrent && per.range === 'day') loadForecast(); else $('fcBox').style.display = 'none';
             var top = d.topItems || [];
             var maxQ = top.length ? top[0].qty : 1;
             $('insTop').innerHTML = top.length ? top.map(function (x) {
                 return '<div class="ins-row"><span class="ins-name">' + esc(x.name) + '</span><span class="ins-meter"><i style="width:' + Math.max(4, Math.round(x.qty / maxQ * 100)) + '%"></i></span>' +
                     '<span class="ins-num">' + x.qty + ' sold</span><span class="ins-num">' + cents(x.cents) + '</span></div>';
             }).join('') : '<div class="ins-empty">No sales in this period.</div>';
+        }
+        function renderMargins(d) {
+            var list = (d.margins || []).slice(0, 10), any = list.some(function (x) { return x.profitCents !== null; });
+            if (!list.length) { $('insMargins').innerHTML = '<div class="ins-empty">No sales in this period.</div>'; return; }
+            if (!any) { $('insMargins').innerHTML = '<div class="ins-empty">Add a food cost to your items (Menu → Edit) to see what each one earns.</div>'; return; }
+            $('insMargins').innerHTML = '<table class="ins-table"><thead><tr><th>Item</th><th>Sold</th><th>Profit</th><th>Margin</th></tr></thead><tbody>' + list.map(function (x) {
+                return '<tr><td>' + esc(x.name) + '</td><td>' + x.qty + '</td><td>' + (x.profitCents === null ? '<small>no cost set</small>' : cents(x.profitCents)) + '</td><td>' + (x.marginPct === null ? '—' : x.marginPct + '%') + '</td></tr>';
+            }).join('') + '</tbody></table>';
+        }
+        function loadForecast() {
+            var st = insState();
+            var seq = app.insSeq;
+            api('GET', '/api/owner/insights/forecast' + (st.location !== '*' ? '?location=' + encodeURIComponent(st.location) : '')).then(function (r) {
+                var box = $('fcBox');
+                if (seq !== app.insSeq) return; // they've moved on to another view
+                if (!r.ok || !r.data.days) { box.style.display = 'none'; return; }
+                var f = r.data, max = Math.max.apply(null, f.perHour) || 1, lo = 23, hi = 0;
+                f.perHour.forEach(function (c, h) { if (c) { lo = Math.min(lo, h); hi = Math.max(hi, h); } });
+                var bars = '';
+                for (var h = lo; h <= hi; h++) bars += '<i title="' + esc(hourName(h)) + ': about ' + f.perHour[h] + ' orders" style="height:' + Math.max(4, Math.round(f.perHour[h] / max * 100)) + '%"' + (h === f.busiestHour ? ' class="best"' : '') + '></i>';
+                box.innerHTML = '<div class="fc-head"><span class="ins-k">What to expect today' + (f.basis === 'spot' && f.location ? ' at ' + esc(f.location) : '') + '</span>' +
+                    '<span class="fc-basis">' + 'last ' + f.days + ' ' + esc(f.weekday) + 's' + (f.basis === 'weekday' ? ', all spots' : '') + '</span></div>' +
+                    '<div class="fc-big">~' + f.orders + ' orders · ~' + centsShort(f.cents) + '</div>' +
+                    (f.busiestHour !== null ? '<div class="ins-s">Busiest around ' + esc(hourName(f.busiestHour)) + '</div>' : '') +
+                    '<div class="fc-bars">' + bars + '</div><div class="fc-axis"><span>' + esc(hourName(lo)) + '</span><span>' + esc(hourName(hi)) + '</span></div>' +
+                    (f.prep.length ? '<div class="ins-k" style="margin-top:10px">Prep list</div><div class="fc-prep">' + f.prep.map(function (x) { return '<span><b>' + x.qty + '</b> ' + esc(x.name) + '</span>'; }).join('') + '</div>' : '');
+                box.style.display = 'block';
+            });
         }
         function dayLabel(key) { var a = key.split('-'); return new Date(Date.UTC(+a[0], +a[1] - 1, +a[2])).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }); }
         function renderHourly(d) {
@@ -1583,8 +1649,9 @@
 
         function loadCompare() {
             var st = insState();
+            var seq = app.cmpSeq = (app.cmpSeq || 0) + 1;
             api('GET', '/api/owner/insights/locations?days=' + st.cmpDays).then(function (r) {
-                if (!r.ok) return;
+                if (seq !== app.cmpSeq || !r.ok) return;
                 app.cmpData = r.data;
                 var names = r.data.locations.map(function (l) { return l.location; });
                 if (!st.pick || st.pick.some(function (n) { return names.indexOf(n) < 0; })) st.pick = names.slice(0, 2);
@@ -1629,7 +1696,11 @@
         }
         function insClick(a, el) {
             var st = insState();
-            if (a === 'ins-range') { st.range = el.getAttribute('data-range'); st.anchor = ''; loadInsights(); return true; }
+            if (a === 'ins-range') {
+                st.range = el.getAttribute('data-range'); st.anchor = '';
+                document.querySelectorAll('[data-action="ins-range"]').forEach(function (b) { b.setAttribute('aria-pressed', String(b === el)); }); // feels instant
+                loadInsights(); return true;
+            }
             if (a === 'ins-step') {
                 var per = app.insData && app.insData.period;
                 if (!per) return true;
@@ -1645,7 +1716,11 @@
                 document.querySelectorAll('#insHourly tbody tr').forEach(function (r) { r.classList.toggle('sel', r === tr); });
                 return true;
             }
-            if (a === 'cmp-days') { st.cmpDays = +el.getAttribute('data-days'); loadCompare(); return true; }
+            if (a === 'cmp-days') {
+                st.cmpDays = +el.getAttribute('data-days');
+                document.querySelectorAll('[data-action="cmp-days"]').forEach(function (b) { b.setAttribute('aria-pressed', String(b === el)); });
+                loadCompare(); return true;
+            }
             if (a === 'cmp-pick') {
                 var n = el.getAttribute('data-loc'), i = st.pick.indexOf(n);
                 if (i >= 0) st.pick.splice(i, 1); else { st.pick.push(n); if (st.pick.length > 2) st.pick.shift(); }
@@ -2098,7 +2173,9 @@
                     $('startModal').style.display = 'none';
                     var tell = $('startTellRow').style.display !== 'none' && $('startTell').checked;
                     try { localStorage.setItem('ok_start_tell', tell ? '1' : '0'); } catch (er) {}
-                    putState({ status: 'open', waitStart: app.startPick }).then(function () {
+                    var openBody = { status: 'open', waitStart: app.startPick };
+                    if (app.startSpot && $('startSpot').checked) openBody.location = app.startSpot;
+                    putState(openBody).then(function () {
                         if (tell) api('POST', '/api/schedule/owner/notify', { kind: 'open' }).then(function (r) { toast(r.ok ? 'Told ' + r.data.sent + ' follower' + (r.data.sent === 1 ? '' : 's') + ' you’re open.' : (r.data.error || 'Could not email followers.')); loadFollowers(); });
                     });
                     break;
