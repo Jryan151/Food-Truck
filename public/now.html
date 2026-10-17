@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Now serving</title>
+    <meta name="robots" content="noindex">
+    <meta name="theme-color" content="#0a0a0b">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+    <script src="/theme.js"></script>
+    <link rel="stylesheet" href="/theme.css">
+    <script src="/qr.js"></script>
+    <style>
+        /* A screen facing the line: readable from across a parking lot, quiet otherwise. */
+        * { box-sizing: border-box; }
+        html, body { margin: 0; height: 100%; }
+        body { font-family: Manrope, system-ui, sans-serif; overflow: hidden; display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+        .ns { flex: 1; min-height: 0; display: grid; grid-template-rows: auto 1fr auto; padding: 3vh 4vw; gap: 3vh; }
+        .ns-top { display: flex; justify-content: space-between; align-items: baseline; gap: 2vw; }
+        .ns-name { font-size: clamp(22px, 3.4vw, 54px); font-weight: 800; letter-spacing: -0.02em; color: var(--z100); }
+        .ns-clock { font-size: clamp(16px, 2.2vw, 34px); font-weight: 700; color: var(--z500); font-variant-numeric: tabular-nums; }
+        .ns-main { display: grid; grid-template-columns: 1.6fr 1fr; gap: 3vw; min-height: 0; }
+        .ns-col { min-height: 0; display: flex; flex-direction: column; gap: 2vh; }
+        .ns-h { font-size: clamp(13px, 1.5vw, 24px); font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--z500); }
+        .ns-ready { display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(150px, 15vw, 300px), 1fr)); gap: 1.6vw; align-content: start; overflow: hidden; }
+        .ns-tile { background: var(--ink); color: var(--on-ink); border-radius: 2vw; padding: 2vh 1.4vw; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 18vh; }
+        .ns-tile b { font-size: clamp(40px, 7vw, 130px); font-weight: 800; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+        .ns-tile span { font-size: clamp(14px, 1.8vw, 30px); font-weight: 700; margin-top: 1vh; opacity: .8; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ns-tile.fresh { animation: pop 1.2s ease-out 1; }
+        @keyframes pop { 0% { transform: scale(.85); } 40% { transform: scale(1.04); } 100% { transform: scale(1); } }
+        .ns-prep { display: flex; flex-wrap: wrap; gap: 1vw; align-content: flex-start; overflow: hidden; }
+        .ns-prep b { font-size: clamp(26px, 3.6vw, 64px); font-weight: 800; color: var(--z300); border: 2px solid var(--z800); border-radius: 1.2vw; padding: .6vh 1.2vw; font-variant-numeric: tabular-nums; }
+        .ns-empty { font-size: clamp(16px, 2vw, 32px); color: var(--z600); font-weight: 600; }
+        .ns-foot { display: flex; justify-content: space-between; align-items: center; gap: 3vw; border-top: 1px solid var(--z800); padding-top: 2vh; }
+        .ns-msg { font-size: clamp(16px, 2.2vw, 36px); font-weight: 700; color: var(--z200); }
+        .ns-msg small { display: block; font-size: .6em; color: var(--z500); font-weight: 600; margin-top: .6vh; }
+        .ns-qr { background: #fff; padding: 1vh; border-radius: 1vw; line-height: 0; }
+        .ns-qr svg { width: clamp(80px, 11vh, 160px); height: auto; display: block; }
+        .ns-closed { font-size: clamp(30px, 5vw, 90px); font-weight: 800; color: var(--z200); align-self: center; }
+        @media (max-aspect-ratio: 1/1) { .ns-main { grid-template-columns: 1fr; grid-template-rows: 1.6fr 1fr; } }
+    </style>
+</head>
+<body>
+<main class="ns">
+    <div class="ns-top"><span class="ns-name" id="name">&nbsp;</span><span class="ns-clock" id="clock"></span></div>
+    <div class="ns-main" id="main">
+        <section class="ns-col"><div class="ns-h">Ready for pickup</div><div class="ns-ready" id="ready"></div></section>
+        <section class="ns-col"><div class="ns-h">Preparing</div><div class="ns-prep" id="prep"></div></section>
+    </div>
+    <div class="ns-foot">
+        <div class="ns-msg" id="msg">Skip the line next time: order ahead<small id="host"></small></div>
+        <div class="ns-qr" id="qr"></div>
+    </div>
+</main>
+<script>
+(function () {
+    'use strict';
+    var $ = function (id) { return document.getElementById(id); };
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    var seen = {}, first = true, wake = null;
+
+    function tick() { $('clock').textContent = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); }
+    setInterval(tick, 10000); tick();
+
+    function chime() {
+        try {
+            var AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+            var a = window.__nsAudio || (window.__nsAudio = new AC());
+            if (a.state !== 'running') return;
+            var o = a.createOscillator(), g = a.createGain(), t = a.currentTime;
+            o.frequency.value = 988; o.connect(g); g.connect(a.destination);
+            g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.2, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
+            o.start(t); o.stop(t + 0.65);
+        } catch (e) {}
+    }
+    // A tap anywhere lets the screen chime for new ready orders (browsers need one tap first).
+    document.addEventListener('click', function () { try { var AC = window.AudioContext || window.webkitAudioContext; if (AC) { var a = window.__nsAudio || (window.__nsAudio = new AC()); a.resume(); } } catch (e) {} });
+
+    function render(d) {
+        $('name').textContent = d.name; document.title = d.name + ' · Now serving';
+        var st = d.state || {};
+        if (st.status === 'closed') {
+            $('main').innerHTML = '<div class="ns-closed">' + esc(st.closedNote || 'Closed right now. Thanks for coming!') + '</div>';
+            return;
+        }
+        if (!$('ready')) location.reload();
+        var fresh = false;
+        $('ready').innerHTML = d.ready.length ? d.ready.slice(0, 12).map(function (r) {
+            var isNew = !first && !seen[r.ticket]; if (isNew) fresh = true; seen[r.ticket] = 1;
+            return '<div class="ns-tile' + (isNew ? ' fresh' : '') + '"><b>' + r.ticket + '</b>' + (r.name ? '<span>' + esc(r.name) + '</span>' : '') + '</div>';
+        }).join('') : '<div class="ns-empty">Ready orders show here.</div>';
+        $('prep').innerHTML = d.preparing.length ? d.preparing.slice(0, 30).map(function (n) { return '<b>' + n + '</b>'; }).join('') : '<div class="ns-empty">—</div>';
+        var w = st.wait && st.wait.minutes;
+        $('msg').firstChild.textContent = st.paused ? 'Order at the window' : w ? 'About ' + w + ' min wait · skip the line: order ahead' : 'Skip the line next time: order ahead';
+        if (fresh) chime();
+        first = false;
+    }
+    function load() {
+        fetch('/api/now', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) { if (d) render(d); }).catch(function () {});
+    }
+    load();
+    setInterval(function () { if (!document.hidden) load(); }, 5000);
+    // Live: any order status change on this truck → refresh right away.
+    if (window.EventSource) {
+        var es = new EventSource('/api/live-stream');
+        es.onmessage = function (e) { try { var m = JSON.parse(e.data); if (/^(ORDER_STATUS|STORE_STATUS|PAUSED|WAIT|STATE)$/.test(m.type)) load(); } catch (er) {} };
+    }
+    $('host').textContent = location.host;
+    try { $('qr').innerHTML = QR.svg(location.origin + '/', { size: 200 }); } catch (e) { $('qr').style.display = 'none'; }
+    // Keep a wall screen awake.
+    function keep() { if (navigator.wakeLock && !wake && !document.hidden) navigator.wakeLock.request('screen').then(function (l) { wake = l; l.addEventListener('release', function () { wake = null; }); }).catch(function () {}); }
+    keep(); document.addEventListener('visibilitychange', keep);
+})();
+</script>
+</body>
+</html>

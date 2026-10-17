@@ -179,7 +179,7 @@ const saveMenu = (vendorId, menu) =>
 
 /* ---------- store state (open/closed, rush, location, wait) ---------- */
 async function getState(vendorId) {
-  let s = await get('SELECT status, rush_minutes, active_location, paused, wait_start, wait_lock, service_started_at FROM store_state WHERE vendor_id = ?', [vendorId]);
+  let s = await get('SELECT status, rush_minutes, active_location, paused, wait_start, wait_lock, service_started_at, pace_limit, closed_note FROM store_state WHERE vendor_id = ?', [vendorId]);
   if (!s) {
     await run('INSERT OR IGNORE INTO store_state (vendor_id) VALUES (?)', [vendorId]);
     s = { status: 'open', rush_minutes: 0, active_location: '', paused: 0 };
@@ -188,6 +188,8 @@ async function getState(vendorId) {
   return {
     status: s.status, rush: s.rush_minutes, location: s.active_location || '', paused: !!s.paused,
     wait: await computeWait(vendorId, s),
+    pace: await computePace(vendorId, s.pace_limit || 0),
+    closedNote: s.status === 'closed' ? s.closed_note || '' : '',
   };
 }
 
@@ -198,6 +200,18 @@ async function getState(vendorId) {
    - never less than the oldest ticket still cooking has already waited (the line is real);
    - plus the owner's Busy minutes.
    The owner can lock a number instead; the live suggestion is still worked out so they can take it. */
+/* ---------- pacing ----------
+   With a limit set, once that many online orders came in within 10 minutes, new ones wait until the
+   oldest of them is 10 minutes old. Customers are told exactly when ordering opens again. */
+const PACE_WINDOW_MS = 10 * 60 * 1000;
+async function computePace(vendorId, limit) {
+  if (!limit) return { limit: 0, until: 0 };
+  const now = Date.now();
+  const rows = await all("SELECT created_at FROM orders WHERE vendor_id = ? AND created_at > ? AND status != 'Canceled' ORDER BY created_at ASC", [vendorId, now - PACE_WINDOW_MS]);
+  if (rows.length < limit) return { limit, until: 0 };
+  return { limit, until: rows[rows.length - limit].created_at + PACE_WINDOW_MS };
+}
+
 const WAIT_SAMPLES_NEEDED = 3;
 const WAIT_LOOKBACK_MS = 60 * 60 * 1000;
 const WAIT_MAX = 90;
@@ -243,10 +257,11 @@ const lastWait = new Map();
 async function refreshWait(vendorId) {
   try {
     const st = await getState(vendorId);
-    const key = JSON.stringify([st.wait.minutes, st.wait.mode, st.wait.suggested]);
+    const key = JSON.stringify([st.wait.minutes, st.wait.mode, st.wait.suggested, st.pace.until, st.pace.limit]);
     if (lastWait.get(vendorId) === key) return st.wait;
     lastWait.set(vendorId, key);
     broadcast(vendorId, 'WAIT', st.wait);
+    broadcast(vendorId, 'PACE', st.pace); // ordering pauses (and reopens) by itself
     return st.wait;
   } catch (e) {
     console.error('wait:', e.message);
@@ -320,6 +335,14 @@ function dropStreams(vendorId, match) {
     try { c.res.write(`data: ${JSON.stringify({ type: 'SESSION_ENDED', payload: {} })}\n\n`); c.res.end(); } catch (e) {}
     set.delete(c); n++;
   }
+  return n;
+}
+
+/** How many kitchen screens (owner or crew) are open right now. */
+function staffOnline(vendorId) {
+  const set = clients.get(vendorId);
+  let n = 0;
+  if (set) for (const c of set) if (c.staff) n++;
   return n;
 }
 
@@ -431,6 +454,9 @@ async function ensureSchema() {
   await addColumn('store_state', 'wait_start', 'INTEGER');
   await addColumn('store_state', 'wait_lock', 'INTEGER');
   await addColumn('store_state', 'service_started_at', 'INTEGER');
+  // Pacing: at most this many online orders per 10 minutes (0 = no limit). Closed note: why we closed.
+  await addColumn('store_state', 'pace_limit', 'INTEGER NOT NULL DEFAULT 0');
+  await addColumn('store_state', 'closed_note', 'TEXT');
   await exec(`CREATE TABLE IF NOT EXISTS locations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     vendor_id INTEGER NOT NULL,
@@ -705,6 +731,8 @@ module.exports = {
   DEFAULT_MENU, normalizeItem, normalizeMenu, normalizeOptions, parseMenu, saveMenu, num, PHOTO_RE,
   normalizeHours, parseHours, validTimezone,
   getState,
+  staffOnline,
+  PACE_WINDOW_MS,
   dropStreams,
   pinLookup,
   onOrderClosed,

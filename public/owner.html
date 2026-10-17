@@ -206,6 +206,12 @@
                             <button data-action="wait-auto" id="btnWaitAuto" class="flex-1 py-2 rounded-lg text-xs font-bold bg-zinc-950 text-zinc-300 border border-zinc-800" style="display:none">Back to kitchen pace</button>
                         </div>
                     </div>
+                    <div class="flex items-center justify-between gap-3 mt-4">
+                        <div class="min-w-0"><div class="text-xs font-bold text-zinc-200">Pace online orders</div><div class="text-[10px] text-zinc-500" id="paceWhy">So a rush can’t bury the kitchen. Customers see when ordering opens again.</div></div>
+                        <select id="paceLimit" aria-label="Online orders per 10 minutes" class="bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200">
+                            <option value="0">No limit</option><option value="4">4 per 10 min</option><option value="6">6 per 10 min</option><option value="8">8 per 10 min</option><option value="10">10 per 10 min</option><option value="15">15 per 10 min</option><option value="20">20 per 10 min</option>
+                        </select>
+                    </div>
                     <div class="text-[11px] text-zinc-500 mt-4 mb-1.5">Busy at the window? Adds minutes on top.</div>
                     <div class="grid grid-cols-3 gap-2">
                         <button id="btnRush0" data-action="set-rush" data-rush="0" class="py-2 rounded-lg text-[10px] font-bold transition">Normal</button>
@@ -222,6 +228,8 @@
                     </div>
                     <p class="text-[10px] text-zinc-500 mt-2">Share this link on social media, and print a QR sign for your window.</p>
                     <button data-action="open-qr" class="mt-3 w-full bg-zinc-100 hover:bg-white text-zinc-950 py-2.5 rounded-lg text-xs font-bold">🖨️ Print QR code sign</button>
+                    <a href="/now" id="nowLink" target="_blank" rel="noopener" class="mt-2 block w-full text-center border border-zinc-700 text-zinc-200 py-2.5 rounded-lg text-xs font-bold">📺 Now-serving screen for a TV or tablet ↗</a>
+                    <p class="text-[10px] text-zinc-500 mt-1">Shows ready ticket numbers big enough to read from the line, plus a QR code to order ahead.</p>
                 </div>
 
                 <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" data-owner id="hoursBox">
@@ -493,6 +501,19 @@
             <div class="flex gap-2 mt-5">
                 <button data-action="start-cancel" class="flex-1 py-3 rounded-xl text-sm font-semibold bg-zinc-950 text-zinc-300 border border-zinc-800">Not yet</button>
                 <button data-action="start-go" class="flex-1 py-3 rounded-xl text-sm font-bold bg-zinc-100 text-zinc-950">Open</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="closeModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" style="display:none;align-items:center" role="dialog" aria-labelledby="closeTitle">
+        <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 w-full max-w-sm">
+            <h3 id="closeTitle" class="font-bold text-base text-zinc-100">Close for now?</h3>
+            <p class="text-xs text-zinc-400 mt-1">Tell customers why (optional). It shows on your page until you open again.</p>
+            <div class="flex flex-wrap gap-1.5 mt-3" id="closeChips"></div>
+            <input type="text" id="closeNote" maxlength="120" placeholder="Or write your own" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 text-sm text-zinc-200 mt-2">
+            <div class="flex gap-2 mt-4">
+                <button data-action="close-cancel" class="flex-1 py-3 rounded-xl text-sm font-semibold bg-zinc-950 text-zinc-300 border border-zinc-800">Stay open</button>
+                <button data-action="close-go" class="flex-1 py-3 rounded-xl text-sm font-bold bg-zinc-100 text-zinc-950">Close</button>
             </div>
         </div>
     </div>
@@ -1185,6 +1206,9 @@
             $('waitWhy').textContent = why;
             $('btnWaitLock').style.display = locked || !m ? 'none' : '';
             $('btnWaitAuto').style.display = locked ? '' : 'none';
+            var pl = app.state.pace || { limit: 0, until: 0 };
+            if (document.activeElement !== $('paceLimit')) $('paceLimit').value = String(pl.limit || 0);
+            $('paceWhy').textContent = pl.until > Date.now() ? 'At the limit now. Online ordering opens again at ' + new Date(pl.until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + '.' : 'So a rush can’t bury the kitchen. Customers see when ordering opens again.';
             $('btnWaitAuto').textContent = locked && w.suggested ? 'Use kitchen pace (~' + w.suggested + ' min)' : 'Back to kitchen pace';
             var chip = $('waitChip');
             if (m && app.state.status !== 'closed') {
@@ -1195,6 +1219,16 @@
         function stepWait(by) {
             var base = waitShown() || (app.state.wait && app.state.wait.start) || 10;
             putState({ waitLock: Math.max(1, Math.min(90, base + by)) });
+        }
+
+        if (window.__FT_DEMO) { var nl = document.getElementById('nowLink'); if (nl) nl.href = '/demo/now'; }
+
+        /* ---------- closing (early or for the day) ---------- */
+        var CLOSE_NOTES = ['Sold out for today. Thank you!', 'Closed early today. Back tomorrow!', 'Closed for weather. Stay safe!', 'At a private event today.'];
+        function openClose() { $('closeNote').value = ''; renderCloseChips(); $('closeModal').style.display = 'flex'; }
+        function renderCloseChips() {
+            var cur = $('closeNote').value;
+            $('closeChips').innerHTML = CLOSE_NOTES.map(function (n) { return '<button data-action="close-pick" data-note="' + esc(n) + '" aria-pressed="' + (cur === n) + '" class="deal-chip" style="height:auto;padding:8px 10px;text-align:left">' + esc(n) + '</button>'; }).join('');
         }
 
         /* ---------- start service ---------- */
@@ -1646,12 +1680,13 @@
                         if (p.byCustomer && p.status === 'Canceled') { beep(); toast('Ticket #' + p.ticket + ' (' + p.name + ') was canceled by the customer.'); }
                         break;
                     case 'WAIT': app.state.wait = p; renderSettings(); break;
-                    case 'STATE': app.state = { status: p.status, rush: p.rush, location: p.location || '', paused: !!p.paused, wait: p.wait, crewNote: app.state.crewNote, crewNoteAt: app.state.crewNoteAt }; renderSettings(); break;
+                    case 'STATE': app.state = { status: p.status, rush: p.rush, location: p.location || '', paused: !!p.paused, wait: p.wait, pace: p.pace, crewNote: app.state.crewNote, crewNoteAt: app.state.crewNoteAt }; renderSettings(); break;
                     case 'SESSION_ENDED': stopLive(); sessionEnded('You were signed out. Ask the owner for your PIN.'); break;
                     case 'CREW_NOTE': app.state.crewNote = p.note || ''; app.state.crewNoteAt = p.at || 0; renderCrewNote(); if (p.note) beep(); break;
                     case 'PAUSED': app.state.paused = !!p.paused; renderSettings(); break;
                     case 'HOURS_UPDATE': if (app.pub) { app.pub.hours = p.hours; app.pub.timezone = p.timezone; } renderSetup(); break;
                     case 'STORE_STATUS': app.state.status = p.status; renderSettings(); break;
+                    case 'PACE': app.state.pace = p; renderSettings(); break;
                     case 'RUSH_MODE': app.state.rush = Number(p.minutes) || 0; renderSettings(); break;
                     case 'LOCATION_UPDATE': app.state.location = p.location || ''; renderSettings(); break;
                     // The kitchen keeps the full picture (counts, why it's out): refetch instead of using the customer version.
@@ -1996,6 +2031,7 @@
             }
             if (e.target && e.target.getAttribute && e.target.getAttribute('data-stock')) { setStock(+e.target.getAttribute('data-stock'), e.target.value.trim()); return; }
             if (e.target && e.target.id === 'insLocation') { insState().location = e.target.value; loadInsights(); }
+            if (e.target && e.target.id === 'paceLimit') { putState({ paceLimit: +e.target.value }); return; }
             if (e.target && e.target.id === 'schLoc') { $('schLocNew').style.display = e.target.value === '__new' ? 'block' : 'none'; if (e.target.value === '__new') $('schLocNew').focus(); }
         });
 
@@ -2050,8 +2086,12 @@
                 case 'set-status':
                     // Opening from closed = start of service: one quick question about the wait.
                     if (el.getAttribute('data-status') === 'open' && app.state.status === 'closed') openStart();
+                    else if (el.getAttribute('data-status') === 'closed' && app.state.status !== 'closed') openClose();
                     else putState({ status: el.getAttribute('data-status') });
                     break;
+                case 'close-pick': $('closeNote').value = el.getAttribute('data-note'); renderCloseChips(); break;
+                case 'close-cancel': $('closeModal').style.display = 'none'; break;
+                case 'close-go': $('closeModal').style.display = 'none'; putState({ status: 'closed', closedNote: $('closeNote').value.trim() }); break;
                 case 'start-pick': app.startPick = parseInt(el.getAttribute('data-n'), 10); renderStartChips(); break;
                 case 'start-cancel': $('startModal').style.display = 'none'; break;
                 case 'start-go':

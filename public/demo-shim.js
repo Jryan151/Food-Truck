@@ -169,7 +169,13 @@
         if (o.stamped) { o.stamped = false; c.stamps = Math.max(0, c.stamps - 1); }
     }
 
-    function stateOut(d) { return Object.assign({}, d.state, { wait: demoWait(d) }); }
+    function demoPace(d) {
+        var lim = d.state.paceLimit || 0, now = Date.now();
+        if (!lim) return { limit: 0, until: 0 };
+        var ts = d.orders.filter(function (o) { return o.status !== 'Canceled' && o.createdAt > now - 600000; }).map(function (o) { return o.createdAt; }).sort(function (a, b) { return a - b; });
+        return { limit: lim, until: ts.length < lim ? 0 : ts[ts.length - lim] + 600000 };
+    }
+    function stateOut(d) { return Object.assign({}, d.state, { wait: demoWait(d), pace: demoPace(d), closedNote: d.state.status === 'closed' ? d.state.closedNote || '' : '' }); }
     function emitWait(d) { emit('WAIT', demoWait(d)); }
 
     function FakeEventSource(url) {
@@ -367,7 +373,14 @@
         /* public */
         if (p === '/api/plans') return ok({ plans: {}, maxItems: MAX_ITEMS, pro: { price: '$34.99/mo' } });
         if (p === '/api/vendor-data') return ok(vendorPublic(d));
-        if (p === '/api/orders' && method === 'POST') { if (d.state.paused) return fail(403, 'Online ordering is paused right now. Please order at the window.'); return placeOrder(d, b); }
+        if (p === '/api/orders' && method === 'POST') {
+            if (d.state.paused) return fail(403, 'Online ordering is paused right now. Please order at the window.');
+            var pc = demoPace(d);
+            if (pc.until > Date.now()) return fail(409, 'The kitchen is catching up. Online ordering opens again at ' + new Date(pc.until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + '.', { paced: true, retryAt: pc.until });
+            var placed = placeOrder(d, b);
+            setTimeout(function () { emit('PACE', demoPace(load())); }, 0);
+            return placed;
+        }
         if (p === '/api/orders/track') {
             var toks = String(u.searchParams.get('tokens') || '').split(',');
             return ok({ now: Date.now(), orders: d.orders.filter(function (o) { return toks.indexOf(o.token) >= 0; }).map(function (o) { return { ticket: o.ticket, token: o.token, name: o.name, status: o.status, changeUntil: o.status === 'Preparing' ? o.createdAt + 120000 : 0 }; }) });
@@ -483,6 +496,14 @@
             return ok({ deals: nd, runningNow: IC2 ? DC2.active(nd, IC2.parts(Date.now(), d.timezone)).map(function (x) { return x.id; }) : [] });
         }
 
+        /* now serving */
+        if (p === '/api/now') {
+            var act = d.orders.filter(function (o) { return o.status === 'Preparing' || o.status === 'Ready'; });
+            return ok({ name: d.vendor.businessName, state: stateOut(d),
+                ready: act.filter(function (o) { return o.status === 'Ready'; }).sort(function (a, c) { return c.updatedAt - a.updatedAt; }).map(function (o) { var fn = String(o.name || '').split(/\s+/)[0]; return { ticket: o.ticket, name: fn === 'Guest' ? '' : fn }; }),
+                preparing: act.filter(function (o) { return o.status === 'Preparing'; }).sort(function (a, c) { return a.createdAt - c.createdAt; }).map(function (o) { return o.ticket; }) });
+        }
+
         /* schedule */
         if (p === '/api/schedule' && method === 'GET') return ok({ stops: demoStops(d), timezone: d.timezone, followEnabled: true, locations: d.locations.map(function (l) { return l.name; }) });
         if (p === '/api/schedule/follow' && method === 'POST') return ok({ ok: true, message: 'Check your email and tap the link to confirm.' });
@@ -545,7 +566,9 @@
             if (b.status !== undefined) {
                 if (['open', 'closed'].indexOf(b.status) < 0) return fail(400, 'Invalid status.');
                 if (b.status === 'open' && d.state.status !== 'open') { d.state.serviceStartedAt = Date.now(); d.state.waitLock = null; }
-                d.state.status = b.status; emit('STORE_STATUS', { status: b.status });
+                d.state.status = b.status;
+                d.state.closedNote = b.status === 'closed' ? String(b.closedNote || '').trim().slice(0, 120) : '';
+                emit('STORE_STATUS', { status: b.status, note: d.state.closedNote });
             }
             var wn = function (x) { var n = parseInt(x, 10); return n >= 1 && n <= 90 ? n : NaN; };
             if (b.waitStart !== undefined) { var ws = b.waitStart === null ? null : wn(b.waitStart); if (ws !== ws) return fail(400, 'Starting wait must be 1 to 90 minutes.'); d.state.waitStart = ws; }
@@ -557,6 +580,7 @@
             }
             if (b.location !== undefined) { d.state.location = String(b.location || ''); emit('LOCATION_UPDATE', { location: d.state.location }); }
             if (b.paused !== undefined) { d.state.paused = !!b.paused; emit('PAUSED', { paused: d.state.paused }); }
+            if (b.paceLimit !== undefined) { var pl = parseInt(b.paceLimit, 10); if (!(pl >= 0 && pl <= 60)) return fail(400, 'Pick how many online orders per 10 minutes (or off).'); d.state.paceLimit = pl; }
             save(d); emitWait(d);
             return ok(stateOut(d));
         }

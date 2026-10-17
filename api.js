@@ -167,6 +167,10 @@ router.post('/orders', limitOrders, requireVendor, async (req, res) => {
   const state = await core.getState(v.id);
   if (state.status === 'closed') return res.status(403).json({ error: 'Sorry, we are closed right now.' });
   if (state.paused) return res.status(403).json({ error: 'Online ordering is paused right now. Please order at the window.' });
+  if (state.pace.until > Date.now()) {
+    const at = new Date(state.pace.until).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: Insights.validTz(v.timezone) });
+    return res.status(409).json({ error: `The kitchen is catching up. Online ordering opens again at ${at}.`, paced: true, retryAt: state.pace.until });
+  }
 
   const menu = await inventory.menuFor(v, { owner: true });
   const byId = new Map(menu.map((m) => [m.id, m]));
@@ -333,6 +337,20 @@ router.get('/orders/track', requireVendor, async (req, res) => {
   });
 });
 
+// The "now serving" screen (a TV or tablet facing the line): ticket numbers, and first names once ready.
+router.get('/now', requireVendor, async (req, res) => {
+  const v = req.tenant.vendor;
+  const rows = await all("SELECT ticket_no, customer_name, status, updated_at FROM orders WHERE vendor_id = ? AND status IN ('Preparing','Ready') ORDER BY created_at ASC LIMIT 60", [v.id]);
+  const first = (n) => String(n || '').trim().split(/\s+/)[0].slice(0, 14);
+  res.set('Cache-Control', 'no-store');
+  res.json({
+    name: v.business_name,
+    ready: rows.filter((r) => r.status === 'Ready').sort((a, b) => b.updated_at - a.updated_at).map((r) => ({ ticket: r.ticket_no, name: first(r.customer_name) === 'Guest' ? '' : first(r.customer_name) })),
+    preparing: rows.filter((r) => r.status === 'Preparing').map((r) => r.ticket_no),
+    state: await core.getState(v.id),
+  });
+});
+
 router.post('/orders/:token/cancel', limitOrders, requireVendor, async (req, res) => {
   const v = req.tenant.vendor;
   const token = String(req.params.token || '');
@@ -443,7 +461,9 @@ router.put('/owner/state', staffOrOwner, async (req, res) => {
   if (b.status !== undefined) {
     if (!['open', 'closed'].includes(b.status)) return res.status(400).json({ error: 'Invalid status.' });
     const before = await core.getState(v.id);
-    await run('UPDATE store_state SET status = ? WHERE vendor_id = ?', [b.status, v.id]);
+    // Closing can say why ("Sold out for today"); opening clears it.
+    const note = b.status === 'closed' ? String(b.closedNote || '').trim().slice(0, 120) || null : null;
+    await run('UPDATE store_state SET status = ?, closed_note = ? WHERE vendor_id = ?', [b.status, note, v.id]);
     // Start of service: a fresh day. Yesterday's lock and pace don't carry over.
     if (b.status === 'open' && before.status !== 'open') {
       await run('UPDATE store_state SET service_started_at = ?, wait_lock = NULL WHERE vendor_id = ?', [Date.now(), v.id]);
@@ -453,7 +473,12 @@ router.put('/owner/state', staffOrOwner, async (req, res) => {
         await inventory.broadcastMenu(v.id);
       }
     }
-    core.broadcast(v.id, 'STORE_STATUS', { status: b.status });
+    core.broadcast(v.id, 'STORE_STATUS', { status: b.status, note: note || '' });
+  }
+  if (b.paceLimit !== undefined) {
+    const n = parseInt(b.paceLimit, 10);
+    if (!Number.isInteger(n) || n < 0 || n > 60) return res.status(400).json({ error: 'Pick how many online orders per 10 minutes (or off).' });
+    await run('UPDATE store_state SET pace_limit = ? WHERE vendor_id = ?', [n, v.id]);
   }
   const waitNum = (x) => { const n = parseInt(x, 10); return Number.isInteger(n) && n >= 1 && n <= core.WAIT_MAX ? n : NaN; };
   if (b.waitStart !== undefined) {

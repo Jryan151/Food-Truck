@@ -130,6 +130,7 @@ app.get('/catering/b/:token', vendorPage('catering-booking.html', 'catering'));
 app.get('/catering/manage', vendorPage('catering-manage.html', 'owner'));
 // Where the truck will be: list, add-to-calendar, calendar feed, follow by email.
 app.get(['/schedule', '/schedule/'], vendorPage('schedule.html', 'schedule'));
+app.get(['/now', '/now/'], vendorPage('now.html', 'now'));
 app.get('/schedule.ics', (req, res) => res.redirect(301, '/api/schedule/feed.ics'));
 app.get(['/signup', '/signup.html'], rootPage('signup.html'));
 app.get(['/login', '/login.html'], (req, res) =>
@@ -158,6 +159,7 @@ app.get(['/demo', '/demo/'], (req, res) =>
   req.tenant.isRoot ? res.redirect('/demo/customer') : res.status(404).send('<h1>Page not found</h1>'));
 app.get('/demo/customer', demoPage('customer.html'));
 app.get('/demo/owner', demoPage('owner.html'));
+app.get('/demo/now', demoPage('now.html'));
 
 /* ---------- installable app (PWA) ----------
    Two manifests per truck: the owner portal installs as "<Truck> Kitchen" and opens the dashboard;

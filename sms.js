@@ -80,12 +80,34 @@ async function notifyNewOrder(vendorId, order) {
   const screens = core.broadcast(vendorId, 'ORDER_NEW', order, true);
   try {
     const v = await get('SELECT * FROM vendors WHERE id = ?', [vendorId]);
-    if (!v || !enabledFor(v) || !v.owner_phone || !v.owner_phone_verified) return;
+    if (!v) return;
+    if (!enabledFor(v) || !v.owner_phone || !v.owner_phone_verified) {
+      // No texts set up: if nobody has the kitchen screen open, an email is the safety net.
+      if (screens === 0) await heartbeatMail(v, order);
+      return;
+    }
     const mode = v.sms_owner_mode || 'idle';
     if (mode === 'off' || (mode === 'idle' && screens > 0)) return;
     const paid = order.payment === 'paid' ? ' (paid online)' : '';
     await sendForVendor(v, 'owner_new', v.owner_phone, `New order #${order.ticket} from ${order.name}: ${order.summary} — $${Number(order.total).toFixed(2)}${paid}`);
   } catch (e) { console.error('Owner SMS failed:', e.message); }
+}
+
+// At most one "no kitchen screen" email every 15 minutes per truck.
+const lastHeartbeat = new Map();
+const HEARTBEAT_EVERY_MS = 15 * 60 * 1000;
+async function heartbeatMail(v, order) {
+  if (!v.email || !auth.mailConfigured()) return;
+  const last = lastHeartbeat.get(v.id) || 0;
+  if (Date.now() - last < HEARTBEAT_EVERY_MS) return;
+  lastHeartbeat.set(v.id, Date.now());
+  const url = auth.vendorUrl(v.slug, '/owner.html');
+  await auth.sendMail({
+    to: v.email,
+    subject: `Order #${order.ticket} came in and no kitchen screen is open`,
+    text: `${order.name} ordered ${order.summary} ($${Number(order.total).toFixed(2)}). No kitchen screen is open right now, so nobody may have seen it.${url ? '\n\nOpen your kitchen screen: ' + url : ''}\n\nYou'll get at most one of these every 15 minutes.`,
+    html: `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:520px;margin:0 auto;color:#111"><h2 style="margin:0 0 8px">Order #${order.ticket} is waiting</h2><p>${auth.escHtml(order.name)} ordered ${auth.escHtml(order.summary)} ($${Number(order.total).toFixed(2)}).</p><p>No kitchen screen is open right now, so nobody may have seen it.</p>${url ? `<p><a href="${url}" style="display:inline-block;background:#111;color:#fff;padding:12px 18px;border-radius:10px;text-decoration:none;font-weight:700">Open the kitchen screen</a></p>` : ''}<p style="color:#777;font-size:12px">You’ll get at most one of these every 15 minutes.</p></div>`,
+  }).catch(() => {});
 }
 
 /** Call when the kitchen taps Mark Ready. */
