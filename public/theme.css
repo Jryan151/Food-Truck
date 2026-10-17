@@ -181,3 +181,6 @@ input::placeholder, textarea::placeholder { color: var(--z500); opacity: 1; }
 .text-zinc-600{color:var(--z600)}
 .text-zinc-700{color:var(--z700)}
 .text-zinc-950{color:var(--z950)}
+
+/* ---------- kitchen: big, glove-friendly tap targets on tickets ---------- */
+#ownerOrdersList button { min-height: 46px; }

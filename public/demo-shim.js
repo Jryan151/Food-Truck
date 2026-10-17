@@ -11,7 +11,7 @@
     'use strict';
     window.__FT_DEMO = true; // tells the pages not to register the offline helper, etc.
 
-    var KEY = 'ft_demo_v2';            // the demo truck's data
+    var KEY = 'ft_demo_v3';            // the demo truck's data
     var EVT = 'ft_demo_evt';           // cross-tab live events
     var SLUG = 'demo-truck';
     var MAX_ITEMS = 200;
@@ -53,9 +53,10 @@
                 order(1, 101, 'Sam', [{ id: 3, name: 'Burrito Bowl (Asada)', qty: 1, price: 13 }, { id: 6, name: 'Agua Fresca (Horchata)', qty: 1, price: 4 }], 'Fulfilled', 95),
                 order(2, 102, 'Priya', [{ id: 1, name: 'Street Tacos (3) (Al Pastor)', qty: 2, price: 9 }], 'Fulfilled', 70),
                 order(3, 103, 'Jordan', [{ id: 2, name: 'Loaded Quesadilla (Pollo)', qty: 1, price: 10.5 }, { id: 5, name: 'Chips & Salsa', qty: 1, price: 3.5 }], 'Fulfilled', 40),
-                order(4, 104, 'Maria', [{ id: 1, name: 'Street Tacos (3) (Asada)', qty: 1, price: 9 }, { id: 4, name: 'Street Corn', qty: 1, price: 4 }], 'Preparing', 3, 'Extra salsa please')
+                order(4, 104, 'Maria', [{ id: 1, name: 'Street Tacos (3) (Asada)', qty: 1, price: 9 }, { id: 4, name: 'Street Corn', qty: 1, price: 4 }], 'Preparing', 3, 'Extra salsa please'),
+                Object.assign(order(5, 105, 'Devon', [{ id: 2, name: 'Loaded Quesadilla (Pollo)', qty: 2, price: 11.5 }, { id: 1, name: 'Street Tacos (3) (Pollo)', qty: 1, price: 9 }], 'Preparing', 1), { allergy: 'peanuts', allergyAck: false })
             ],
-            nextTicket: 105, nextOrderId: 5, nextLocId: 4
+            nextTicket: 106, nextOrderId: 6, nextLocId: 4
         };
     }
 
@@ -186,7 +187,8 @@
         var o = {
             id: id, ticket: ticket, token: 'demo-' + id + '-' + Math.random().toString(36).slice(2, 8), name: String(b.customerName || '').trim().slice(0, 40) || 'Guest',
             items: items, summary: items.map(function (x) { return x.qty + 'x ' + x.name; }).join(', '),
-            notes: String(b.notes || '').trim().slice(0, 300), total: round(total), status: 'Preparing', createdAt: now, updatedAt: now
+            notes: String(b.notes || '').trim().slice(0, 300), total: round(total), status: 'Preparing', createdAt: now, updatedAt: now,
+            allergy: String(b.allergy || '').trim().slice(0, 120), allergyAck: false
         };
         o.tag = o.token;
         d.orders.push(o); save(d);
@@ -218,11 +220,17 @@
             var f = u.searchParams.get('status') || 'Active', list;
             if (f === 'Fulfilled' || f === 'Canceled') list = d.orders.filter(function (o) { return o.status === f; }).sort(function (a, c) { return c.updatedAt - a.updatedAt; });
             else list = d.orders.filter(function (o) { return o.status === 'Preparing' || o.status === 'Ready'; }).sort(function (a, c) { return a.createdAt - c.createdAt; });
-            return ok({ orders: list });
+            return ok({ orders: list, now: Date.now() });
         }
         if (p === '/api/owner/orders' && method === 'DELETE') {
             d.orders = d.orders.filter(function (o) { return o.status === 'Preparing' || o.status === 'Ready'; }); save(d);
             return ok({ ok: true });
+        }
+        if ((m = p.match(/^\/api\/owner\/orders\/(\d+)$/)) && method === 'PATCH' && b.action === 'ack-allergy') {
+            var oa = d.orders.filter(function (x) { return x.id === parseInt(m[1], 10); })[0];
+            if (!oa || !oa.allergy || oa.allergyAck) return fail(409, 'That allergy was already confirmed.');
+            oa.allergyAck = true; oa.updatedAt = Date.now(); save(d); emit('ORDER_UPDATE', oa, true);
+            return ok({ order: oa });
         }
         if ((m = p.match(/^\/api\/owner\/orders\/(\d+)$/)) && method === 'PATCH') {
             var next = { ready: 'Ready', fulfill: 'Fulfilled', cancel: 'Canceled' }[b.action];
@@ -230,6 +238,7 @@
             var o = d.orders.filter(function (x) { return x.id === parseInt(m[1], 10); })[0];
             var from = b.action === 'ready' ? ['Preparing'] : ['Preparing', 'Ready'];
             if (!o || from.indexOf(o.status) < 0) return fail(409, 'That order cannot be changed.');
+            if (b.action !== 'cancel' && o.allergy && !o.allergyAck) return fail(409, 'Confirm the allergy on this ticket first.');
             o.status = next; o.updatedAt = Date.now(); save(d);
             emit('ORDER_UPDATE', o, true);
             emit('ORDER_STATUS', { tag: o.tag, status: o.status });
@@ -237,7 +246,12 @@
         }
 
         /* state */
-        if (p === '/api/owner/state' && method === 'GET') return ok(d.state);
+        if (p === '/api/owner/state' && method === 'GET') return ok(Object.assign({}, d.state, { crewNote: d.crewNote || '', crewNoteAt: d.crewNoteAt || 0 }));
+        if (p === '/api/owner/crew-note' && method === 'PUT') {
+            d.crewNote = String(b.note || '').trim().slice(0, 240); d.crewNoteAt = d.crewNote ? Date.now() : 0; save(d);
+            emit('CREW_NOTE', { note: d.crewNote, at: d.crewNoteAt }, true);
+            return ok({ note: d.crewNote, at: d.crewNoteAt });
+        }
         if (p === '/api/owner/state' && method === 'PUT') {
             if (b.status !== undefined) {
                 if (['open', 'closed'].indexOf(b.status) < 0) return fail(400, 'Invalid status.');

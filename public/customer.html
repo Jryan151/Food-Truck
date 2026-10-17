@@ -181,6 +181,11 @@
                     <textarea id="customerNotes" maxlength="300" data-i18n-ph="notes_ph" placeholder="Any requests for the kitchen?" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200 resize-none h-16"></textarea>
                 </div>
                 <div>
+                    <label class="block text-xs text-zinc-400 mb-1" for="customerAllergy" data-i18n="allergy_label">Food allergy? (optional)</label>
+                    <input id="customerAllergy" maxlength="120" data-i18n-ph="allergy_ph" placeholder="e.g. peanuts, shellfish" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200">
+                    <p class="text-[11px] text-zinc-500 mt-1" data-i18n="allergy_note">The kitchen has to confirm it before your order is marked ready.</p>
+                </div>
+                <div>
                     <label class="block text-xs text-zinc-400 mb-1" for="customerName" data-i18n="name_label">Your name</label>
                     <input type="text" id="customerName" maxlength="40" autocomplete="given-name" data-i18n-ph="name_ph" placeholder="So we can call you" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200">
                 </div>
@@ -237,7 +242,8 @@
                 item: '{n} item', items: '{n} items', view_cart: 'View Cart', choose_protein: 'Choose your protein / style', choose_option: 'Choose an option',
                 quantity: 'Quantity', add_to_cart: 'Add to Cart', add_title: 'Add {name}', your_order: 'Your Order', wait_time: '⏱️ Wait time:', total: 'Total',
                 pay_window_long: 'Pay at the window when you pick up. No card needed now.', pay_window_short: '💵 Pay at the window when you pick up.',
-                notes_label: 'Special instructions (optional)', notes_ph: 'Any requests for the kitchen?', name_label: 'Your name', name_ph: 'So we can call you',
+                notes_label: 'Special instructions (optional)', notes_ph: 'Any requests for the kitchen?',
+                allergy_label: 'Food allergy? (optional)', allergy_ph: 'e.g. peanuts, shellfish', allergy_note: 'The kitchen has to confirm it before your order is marked ready.', name_label: 'Your name', name_ph: 'So we can call you',
                 place_order: 'Place Order', placing: 'Placing order…', sold_out_in_cart: 'An item in your cart just sold out. Please remove it.',
                 order_failed: 'Could not place your order. Please try again.', connection: 'Connection problem. Please check your signal and try again.',
                 order_placed: 'Order placed!', ticket_number: 'Your ticket number:', est_wait: 'Estimated wait: ~{n} min', view_tracker: 'Order Status',
@@ -268,7 +274,8 @@
                 item: '{n} artículo', items: '{n} artículos', view_cart: 'Ver carrito', choose_protein: 'Elige tu proteína / estilo', choose_option: 'Elige una opción',
                 quantity: 'Cantidad', add_to_cart: 'Agregar al carrito', add_title: 'Agregar {name}', your_order: 'Tu pedido', wait_time: '⏱️ Tiempo de espera:', total: 'Total',
                 pay_window_long: 'Pagas en la ventanilla al recoger. No necesitas tarjeta ahora.', pay_window_short: '💵 Pagas en la ventanilla al recoger.',
-                notes_label: 'Instrucciones especiales (opcional)', notes_ph: '¿Algo especial para la cocina?', name_label: 'Tu nombre', name_ph: 'Para llamarte cuando esté listo',
+                notes_label: 'Instrucciones especiales (opcional)', notes_ph: '¿Algo especial para la cocina?',
+                allergy_label: '¿Alergia a algún alimento? (opcional)', allergy_ph: 'p. ej. cacahuates, mariscos', allergy_note: 'La cocina debe confirmarla antes de marcar tu pedido como listo.', name_label: 'Tu nombre', name_ph: 'Para llamarte cuando esté listo',
                 place_order: 'Enviar pedido', placing: 'Enviando pedido…', sold_out_in_cart: 'Algo en tu carrito se acaba de agotar. Quítalo, por favor.',
                 order_failed: 'No pudimos enviar tu pedido. Inténtalo de nuevo.', connection: 'Problema de conexión. Revisa tu señal e inténtalo de nuevo.',
                 order_placed: '¡Pedido enviado!', ticket_number: 'Tu número de ticket:', est_wait: 'Espera aproximada: ~{n} min', view_tracker: 'Estado del pedido',
@@ -649,7 +656,7 @@
             if (phone && !consent) { setCartError(t('consent_needed')); app.placing = false; btn.disabled = false; renderPayChoice(); return; }
             var payNow = willPayNow();
             // One key per cart: a second tap or a retry after a dropped signal can't create a second order.
-            var sig = JSON.stringify(tt.lines.map(function (x) { return [x.line.id, x.line.qty, x.line.meat || '', x.line.option || '']; })) + '|' + name + '|' + notes + '|' + payNow;
+            var sig = JSON.stringify(tt.lines.map(function (x) { return [x.line.id, x.line.qty, x.line.meat || '', x.line.option || '']; })) + '|' + name + '|' + notes + '|' + payNow + '|' + $('customerAllergy').value.trim();
             if (!app.orderKey || app.orderKeySig !== sig) {
                 app.orderKeySig = sig;
                 app.orderKey = (window.crypto && crypto.randomUUID) ? crypto.randomUUID().replace(/-/g, '') : (Date.now().toString(36) + Math.random().toString(36).slice(2, 14));
@@ -663,6 +670,7 @@
                     notes: notes,
                     website: $('website').value,
                     clientKey: app.orderKey,
+                    allergy: $('customerAllergy').value.trim() || undefined,
                     payNow: payNow,
                     customerPhone: phone || undefined,
                     smsConsent: consent || undefined,
@@ -688,7 +696,7 @@
                     return 'redirect';
                 }
                 app.cart = [];
-                $('customerNotes').value = '';
+                $('customerNotes').value = ''; $('customerAllergy').value = '';
                 closeCartModal();
                 updateCartUI();
                 updateTrackButtons();

@@ -306,6 +306,9 @@ async function ensureSchema() {
     ['owner_phone_verified', 'INTEGER DEFAULT 0'],
     ['sms_owner_mode', "TEXT DEFAULT 'idle'"],     // off | idle (only when no kitchen screen is open) | always
     ['sms_customer_ready', 'INTEGER DEFAULT 1'],
+    // Kitchen: a note the owner leaves for the crew ("no cilantro today"), shown on the kitchen screen.
+    ['crew_note', 'TEXT'],
+    ['crew_note_at', 'INTEGER'],
   ];
   for (const [c, d] of vendorCols) await addColumn('vendors', c, d);
 
@@ -348,6 +351,8 @@ async function ensureSchema() {
     ['stripe_payment_intent', 'TEXT'],
     ['customer_phone', 'TEXT'],                    // only kept until the order is closed
     ['client_key', 'TEXT'],                        // the checkout's own key: a double tap can't make two orders
+    ['allergy', 'TEXT'],                           // what the customer is allergic to (shown in red in the kitchen)
+    ['allergy_ack_at', 'INTEGER'],                 // when the crew confirmed they saw it (needed before Ready)
   ];
   for (const [c, d] of orderCols) await addColumn('orders', c, d);
   await run('CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_client_key ON orders(vendor_id, client_key) WHERE client_key IS NOT NULL');
@@ -488,6 +493,8 @@ function orderShape(o) {
     status: o.status,
     payment: o.payment_status || 'window',
     textMe: !!o.customer_phone,
+    allergy: o.allergy || '',
+    allergyAck: !!o.allergy_ack_at,
     createdAt: o.created_at,
     updatedAt: o.updated_at,
   };

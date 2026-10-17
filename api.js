@@ -167,6 +167,7 @@ router.post('/orders', limitOrders, requireVendor, async (req, res) => {
 
   const name = String(b.customerName || '').trim().slice(0, 40) || 'Guest';
   const notes = String(b.notes || '').trim().slice(0, 300);
+  const allergy = String(b.allergy || '').trim().slice(0, 120) || null;
 
   // How they're paying. Free trucks (and Pro trucks without Stripe connected) are window-only.
   const payMode = payments.effectivePayMode(v);
@@ -203,9 +204,9 @@ router.post('/orders', limitOrders, requireVendor, async (req, res) => {
   let r;
   try {
     r = await run(
-      `INSERT INTO orders (vendor_id, ticket_no, public_token, customer_name, items_json, notes, total, status, payment_status, customer_phone, client_key, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [v.id, row.ticket, token, name, JSON.stringify(items), notes, total, payNow ? 'Pending' : 'Preparing', payNow ? 'pending' : 'window', phone, clientKey, now, now]
+      `INSERT INTO orders (vendor_id, ticket_no, public_token, customer_name, items_json, notes, total, status, payment_status, customer_phone, client_key, allergy, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [v.id, row.ticket, token, name, JSON.stringify(items), notes, total, payNow ? 'Pending' : 'Preparing', payNow ? 'pending' : 'window', phone, clientKey, allergy, now, now]
     );
   } catch (err) {
     // Two taps arrived at the same instant: the first one won, so answer with its order.
@@ -266,12 +267,22 @@ router.get('/owner/orders', staffOrOwner, async (req, res) => {
   } else {
     rows = await all("SELECT * FROM orders WHERE vendor_id = ? AND status IN ('Preparing','Ready') ORDER BY created_at ASC LIMIT 200", [vid]);
   }
-  res.json({ orders: rows.map(orderShape) });
+  // `now` lets the kitchen screen time orders by the server's clock, since tablet clocks drift.
+  res.json({ orders: rows.map(orderShape), now: Date.now() });
 });
 
 router.patch('/owner/orders/:id', staffOrOwner, async (req, res) => {
   const v = req.tenant.vendor;
   const action = String((req.body || {}).action || '');
+  // Allergies: the crew taps to confirm they saw it. Ready and Fulfill wait for that tap.
+  if (action === 'ack-allergy') {
+    const row = await get('UPDATE orders SET allergy_ack_at = ?, updated_at = ? WHERE id = ? AND vendor_id = ? AND allergy IS NOT NULL AND allergy_ack_at IS NULL RETURNING *',
+      [Date.now(), Date.now(), parseInt(req.params.id, 10), v.id]);
+    if (!row) return res.status(409).json({ error: 'That allergy was already confirmed.' });
+    core.logOrderEvent(v.id, row.id, 'allergy-confirmed', req.session.role);
+    core.broadcast(v.id, 'ORDER_UPDATE', orderShape(row), true);
+    return res.json({ order: orderShape(row) });
+  }
   const next = { ready: 'Ready', fulfill: 'Fulfilled', cancel: 'Canceled' }[action];
   if (!next) return res.status(400).json({ error: 'Unknown action.' });
   // 'ready' is only valid from Preparing; fulfill/cancel from any open state.
@@ -279,6 +290,9 @@ router.patch('/owner/orders/:id', staffOrOwner, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const existing = await get(`SELECT * FROM orders WHERE id = ? AND vendor_id = ? AND status IN (${from.map(() => '?').join(',')})`, [id, v.id, ...from]);
   if (!existing) return res.status(409).json({ error: 'That order cannot be changed.' });
+  if (action !== 'cancel' && existing.allergy && !existing.allergy_ack_at) {
+    return res.status(409).json({ error: 'Confirm the allergy on this ticket first.', allergy: true });
+  }
 
   // Canceling an order that was paid online refunds the card first. If the refund fails, nothing changes.
   if (action === 'cancel' && existing.payment_status === 'paid') {
@@ -302,7 +316,17 @@ router.patch('/owner/orders/:id', staffOrOwner, async (req, res) => {
 });
 
 router.get('/owner/state', staffOrOwner, async (req, res) => {
-  res.json(await core.getState(req.tenant.vendor.id));
+  const v = await get('SELECT crew_note, crew_note_at FROM vendors WHERE id = ?', [req.tenant.vendor.id]);
+  res.json(Object.assign(await core.getState(req.tenant.vendor.id), { crewNote: (v && v.crew_note) || '', crewNoteAt: (v && v.crew_note_at) || 0 }));
+});
+
+// The owner's note to the crew, shown on every kitchen screen until it's changed or cleared.
+router.put('/owner/crew-note', ownerOnly, async (req, res) => {
+  const note = String((req.body || {}).note || '').trim().slice(0, 240);
+  const at = note ? Date.now() : 0;
+  await run('UPDATE vendors SET crew_note = ?, crew_note_at = ?, updated_at = ? WHERE id = ?', [note || null, at || null, Date.now(), req.tenant.vendor.id]);
+  core.broadcast(req.tenant.vendor.id, 'CREW_NOTE', { note, at }, true);
+  res.json({ note, at });
 });
 
 router.put('/owner/state', staffOrOwner, async (req, res) => {

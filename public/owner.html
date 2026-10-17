@@ -123,10 +123,11 @@
                     <div id="setupList" class="space-y-1.5"></div>
                 </div>
                 <button data-action="enable-sound" id="soundPrompt" class="w-full bg-amber-500/10 border border-amber-500/40 text-amber-400 text-xs font-bold py-3 rounded-xl" style="display:none;">🔇 Tap here to turn on new-order sounds</button>
-                <div class="flex justify-between items-center mb-1">
-                    <h3 class="font-semibold text-sm text-zinc-400">Live Incoming Tickets</h3>
-                    <div class="flex items-center gap-3">
+                <div class="flex justify-between items-center gap-2 mb-1">
+                    <h3 class="font-semibold text-sm text-zinc-400" style="white-space:nowrap">Tickets</h3>
+                    <div class="flex items-center gap-3" style="white-space:nowrap">
                         <button data-action="toggle-sound" id="btnSound" class="text-xs text-zinc-400 hover:text-white">🔔 Sound on</button>
+                        <button data-action="toggle-speak" id="btnSpeak" class="text-xs text-zinc-400 hover:text-white" aria-pressed="false">🗣 Read aloud</button>
                         <button data-action="refresh-orders" class="text-xs text-zinc-300 hover:underline">Refresh ↻</button>
                     </div>
                 </div>
@@ -136,6 +137,8 @@
                     <button data-action="filter" data-filter="Fulfilled" id="filterFulfilled" class="px-4 py-1.5 rounded-lg text-[11px] font-bold text-zinc-400 hover:text-zinc-200 transition">Fulfilled</button>
                     <button data-action="filter" data-filter="Canceled" id="filterCanceled" class="px-4 py-1.5 rounded-lg text-[11px] font-bold text-zinc-400 hover:text-zinc-200 transition">Canceled</button>
                 </div>
+                <div id="crewNoteBar" class="rounded-xl p-3 mb-3 text-sm font-semibold" style="display:none;background:var(--ink);color:var(--on-ink)" role="status"></div>
+                <div id="batchBar" class="mb-3" style="display:none"></div>
                 <div class="space-y-3 relative" id="ownerOrdersList"></div>
             </div>
 
@@ -189,6 +192,18 @@
                     <select id="hoursTz" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200"></select>
                     <button data-action="save-hours" class="mt-3 w-full bg-zinc-100 hover:bg-white text-zinc-950 py-2.5 rounded-lg text-xs font-bold">Save Hours</button>
                     <div id="hoursMsg" class="text-[11px] text-center mt-2" style="display:none;"></div>
+                </div>
+
+                <!-- Note for the crew: shows on every kitchen screen -->
+                <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" data-owner id="crewNoteBox">
+                    <h3 class="font-bold text-sm text-zinc-100 mb-1 border-b border-zinc-800 pb-2">Note for the crew</h3>
+                    <p class="text-[11px] text-zinc-400 mt-3 mb-2">Shows at the top of every kitchen screen until you clear it. For example: "Out of cilantro today."</p>
+                    <textarea id="crewNoteInput" maxlength="240" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200 resize-none h-16" placeholder="Nothing for the crew right now"></textarea>
+                    <div class="flex gap-2 mt-2">
+                        <button data-action="save-crew-note" class="flex-1 bg-zinc-100 hover:bg-white text-zinc-950 py-2.5 rounded-lg text-xs font-bold">Post note</button>
+                        <button data-action="clear-crew-note" class="px-4 bg-zinc-950 border border-zinc-800 text-zinc-300 py-2.5 rounded-lg text-xs font-bold">Clear</button>
+                    </div>
+                    <div id="crewNoteMsg" class="text-[11px] text-center mt-2" style="display:none;"></div>
                 </div>
 
                 <!-- Catering lives in its own space -->
@@ -433,6 +448,7 @@
             editPhoto: '', uploading: false, installEvt: null
         };
         try { app.sound = localStorage.getItem('ft_sound') !== 'off'; } catch (e) {}
+        try { app.speak = localStorage.getItem('ok_speak') === 'on'; } catch (e) {}
 
         /* ---------- network ---------- */
         function api(method, url, body) {
@@ -548,7 +564,7 @@
             $('pwEmail').style.display = (isOwner() && !v.hasPassword) ? 'block' : 'none';
             $('pwCurrent').style.display = v.hasPassword ? 'block' : 'none';
             $('currentEmail').textContent = v.email || 'No email set yet — add one under Change password.';
-            renderSound();
+            renderSound(); renderSpeak();
             renderSoundPrompt();
             keepAwake();
             renderInstall();
@@ -701,9 +717,62 @@
 
         function loadOrders() {
             return api('GET', '/api/owner/orders?status=' + encodeURIComponent(app.filter)).then(function (r) {
-                if (r.ok) { app.orders = r.data.orders || []; renderOrders(); if (app.orders.length) setFlag('test'); }
+                if (r.ok) {
+                    if (r.data.now) app.clockOffset = r.data.now - Date.now(); // time tickets by the server's clock
+                    app.orders = r.data.orders || []; renderOrders(); if (app.orders.length) setFlag('test');
+                }
             });
         }
+
+        /* ---------- kitchen helpers ---------- */
+        function serverNow() { return Date.now() + (app.clockOffset || 0); }
+        // How long a ticket has waited: green under 5 minutes, amber 5 to 10, red over 10.
+        function ageInfo(o) {
+            var secs = Math.max(0, Math.floor((serverNow() - o.createdAt) / 1000));
+            var tone = secs < 300 ? 'ok' : secs < 600 ? 'warn' : 'bad';
+            return { color: 'var(--' + tone + ')', label: Math.floor(secs / 60) + ':' + String(secs % 60).padStart(2, '0') };
+        }
+        function menuItem(id) { for (var i = 0; i < app.menu.length; i++) if (app.menu[i].id === id) return app.menu[i]; return null; }
+        function baseName(item) { var m = menuItem(item.id); return m ? m.name : String(item.name || '').replace(/\s*\([^)]*\)$/, ''); }
+        // "Cook now, across orders": the grill cooks in batches instead of ticket by ticket.
+        function renderBatch() {
+            var bar = $('batchBar');
+            var prep = app.filter === 'Active' ? app.orders.filter(function (o) { return o.status === 'Preparing'; }) : [];
+            if (prep.length < 2) { bar.style.display = 'none'; return; }
+            var totals = {}, order = [];
+            prep.forEach(function (o) { (o.items || []).forEach(function (i) { var k = baseName(i); if (!totals[k]) { totals[k] = 0; order.push(k); } totals[k] += i.qty; }); });
+            order.sort(function (a, b) { return totals[b] - totals[a]; });
+            bar.innerHTML = '<div class="text-[10px] font-bold tracking-widest text-zinc-500 mb-1.5">COOK NOW · ACROSS ' + prep.length + ' ORDERS</div><div class="flex flex-wrap gap-2">' +
+                order.map(function (k) { return '<span class="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm"><b class="font-mono">× ' + totals[k] + '</b> ' + esc(k) + '</span>'; }).join('') + '</div>';
+            bar.style.display = 'block';
+        }
+        // Finish together: items with shorter cook times start later, so the whole order is ready at once.
+        function finishTogether(o) {
+            if (o.status !== 'Preparing') return '';
+            var lines = (o.items || []).map(function (i) { var m = menuItem(i.id); return { name: baseName(i), prep: m ? Number(m.prep) || 0 : 0 }; });
+            var max = Math.max.apply(null, lines.map(function (l) { return l.prep; }).concat([0]));
+            var later = lines.filter(function (l) { return l.prep < max; });
+            if (!later.length || lines.length < 2) return '';
+            var now = lines.filter(function (l) { return l.prep === max; }).map(function (l) { return l.name; });
+            var parts = ['Start ' + now.join(', ') + ' now'].concat(later.map(function (l) { return l.name + ' in ' + (max - l.prep) + ' min'; }));
+            return '<div class="text-[11px] mt-1 text-zinc-300">⏱ ' + esc(parts.join(' · ')) + '</div>';
+        }
+        function speakOrder(o) {
+            if (!app.speak || !window.speechSynthesis || !o) return;
+            try {
+                var text = 'Order ' + o.ticket + (o.name && o.name !== 'Guest' ? ', ' + o.name : '') + '. ' +
+                    (o.items || []).map(function (i) { return i.qty + ' ' + i.name; }).join(', ') + (o.allergy ? '. Allergy: ' + o.allergy : '');
+                window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+            } catch (e) {}
+        }
+        function renderSpeak() { var b = $('btnSpeak'); if (!b) return; b.textContent = app.speak ? '🗣 Reading aloud' : '🗣 Read aloud'; b.style.fontWeight = app.speak ? '800' : ''; b.setAttribute('aria-pressed', String(!!app.speak)); }
+        function renderCrewNote() {
+            var n = (app.state && app.state.crewNote) || '', bar = $('crewNoteBar');
+            bar.style.display = n ? 'block' : 'none'; bar.textContent = n ? '📌 ' + n : '';
+            if ($('crewNoteInput') && document.activeElement !== $('crewNoteInput')) $('crewNoteInput').value = n;
+        }
+        // Keep the ticket timers moving.
+        setInterval(function () { if (app.me && app.tab === 'Orders' && app.filter === 'Active' && app.orders.length && !document.hidden) renderOrders(); }, 15000);
 
         function renderOrders() {
             var active = 'px-4 py-1.5 rounded-lg text-[11px] font-bold bg-zinc-100 text-zinc-950 shadow transition';
@@ -711,6 +780,7 @@
             ['Active', 'Fulfilled', 'Canceled'].forEach(function (f) { $('filter' + f).className = (f === app.filter) ? active : inactive; });
 
             var c = $('ownerOrdersList');
+            renderBatch();
             if (!app.orders.length) {
                 c.innerHTML = '<div class="text-center text-zinc-500 py-6 text-xs bg-zinc-900 border border-zinc-800 rounded-xl">No ' + esc(app.filter.toLowerCase()) + ' orders.</div>';
                 return;
@@ -718,18 +788,25 @@
             c.innerHTML = app.orders.map(function (o) {
                 var ready = o.status === 'Ready';
                 var color = app.filter === 'Fulfilled' ? 'text-emerald-400' : app.filter === 'Canceled' ? 'text-rose-400' : (ready ? 'text-blue-400' : 'text-amber-500');
-                var buttons = '';
-                if (app.filter === 'Active') {
+                var buttons = '', active = app.filter === 'Active';
+                var age = active ? ageInfo(o) : null;
+                var needAck = !!(o.allergy && !o.allergyAck);
+                var allergy = !o.allergy ? '' : needAck
+                    ? '<button data-action="order" data-act="ack-allergy" data-id="' + o.id + '" class="w-full text-left rounded-lg px-3 py-2.5 text-xs font-extrabold" style="border:2px solid var(--bad);color:var(--bad);background:color-mix(in srgb, var(--bad) 10%, transparent)">⚠ ALLERGY: ' + esc(o.allergy).toUpperCase() + ' · tap to confirm</button>'
+                    : '<div class="rounded-lg px-3 py-2 text-xs font-bold" style="border:1px solid var(--bad);color:var(--bad)">⚠ Allergy: ' + esc(o.allergy) + ' · confirmed</div>';
+                if (active) {
+                    var lockReady = ready || needAck;
                     buttons = '<div class="flex gap-2 pt-2 border-t border-zinc-800/80">' +
                         '<button data-action="order" data-act="cancel" data-id="' + o.id + '" class="bg-zinc-950 text-rose-400 border border-rose-500/30 px-3 py-2 rounded-lg text-xs font-medium">Cancel</button>' +
-                        '<button data-action="order" data-act="ready" data-id="' + o.id + '" class="flex-1 ' + (ready ? 'bg-zinc-800 text-zinc-500' : 'bg-blue-600 hover:bg-blue-500 text-white') + ' py-2 rounded-lg text-xs font-bold shadow-lg transition"' + (ready ? ' disabled' : '') + '>' + (ready ? 'Marked Ready ✓' : 'Mark Ready') + '</button>' +
-                        '<button data-action="order" data-act="fulfill" data-id="' + o.id + '" class="flex-1 bg-emerald-600 hover:bg-emerald-500 py-2 rounded-lg text-xs font-bold text-white shadow-lg shadow-emerald-600/20">Fulfill ✓</button></div>';
+                        '<button data-action="order" data-act="ready" data-id="' + o.id + '" class="flex-1 ' + (lockReady ? 'bg-zinc-800 text-zinc-500' : 'bg-blue-600 hover:bg-blue-500 text-white') + ' py-2 rounded-lg text-xs font-bold shadow-lg transition"' + (lockReady ? ' disabled' : '') + '>' + (ready ? 'Marked Ready ✓' : needAck ? 'Allergy first' : 'Mark Ready') + '</button>' +
+                        '<button data-action="order" data-act="fulfill" data-id="' + o.id + '" class="flex-1 ' + (needAck ? 'bg-zinc-800 text-zinc-500' : 'bg-emerald-600 hover:bg-emerald-500 text-white') + ' py-2 rounded-lg text-xs font-bold shadow-lg"' + (needAck ? ' disabled' : '') + '>Fulfill ✓</button></div>';
                 }
                 var items = (o.items || []).map(function (i) { return esc(i.qty + 'x ' + i.name); }).join('<br>');
-                return '<div class="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex flex-col gap-3 relative">' +
+                return '<div class="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex flex-col gap-3 relative"' + (age ? ' style="border-left:6px solid ' + age.color + '"' : '') + '>' +
                     '<div class="flex justify-between items-start gap-3"><div class="min-w-0">' +
-                    '<span class="text-xs font-mono font-bold">#' + esc(o.ticket) + ' (' + esc(o.name) + ') <span class="text-zinc-500 font-normal">' + esc(fmtTime(o.createdAt)) + '</span></span>' +
-                    '<h4 class="font-bold text-sm mt-1">' + items + '</h4>' +
+                    '<span class="text-xs font-mono font-bold">#' + esc(o.ticket) + ' (' + esc(o.name) + ') ' +
+                    (age ? '<span class="font-bold" style="color:' + age.color + '" title="Waiting time">' + age.label + '</span>' : '<span class="text-zinc-500 font-normal">' + esc(fmtTime(o.createdAt)) + '</span>') + '</span>' +
+                    '<h4 class="font-bold text-sm mt-1">' + items + '</h4>' + (active ? finishTogether(o) : '') +
                     '<div class="mt-1.5 flex flex-wrap gap-1">' +
                     (o.payment === 'paid' ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">💳 PAID ONLINE</span>'
                         : o.payment === 'refunded' ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-zinc-700 text-zinc-300">↩ REFUNDED</span>'
@@ -738,7 +815,7 @@
                     '</div>' +
                     (o.notes ? '<div class="text-[11px] text-zinc-400 mt-1 whitespace-pre-line">Note: ' + esc(o.notes) + '</div>' : '') +
                     '<div class="text-[10px] ' + color + ' mt-1 font-semibold">' + esc(o.status) + '</div></div>' +
-                    '<span class="font-bold text-emerald-400">' + money(o.total) + '</span></div>' + buttons + '</div>';
+                    '<span class="font-bold text-emerald-400">' + money(o.total) + '</span></div>' + allergy + buttons + '</div>';
             }).join('');
         }
 
@@ -746,6 +823,7 @@
             var ord = app.orders.find(function (o) { return o.id === id; });
             var paid = ord && ord.payment === 'paid';
             if (act === 'cancel' && !confirm(paid ? 'Cancel this order and refund the customer\'s card in full?' : 'Cancel this order?')) return;
+            if (act === 'ack-allergy' && !confirm('Allergy: ' + (ord ? ord.allergy : '') + '\n\nConfirm the kitchen has seen this and is preparing the order safely?')) return;
             api('PATCH', '/api/owner/orders/' + id, { action: act }).then(function (r) {
                 if (!r.ok) { alert(r.data.error || 'Could not update that order.'); loadOrders(); return; }
                 loadOrders();
@@ -758,12 +836,12 @@
             b.style.display = (app.newCount > 0 && app.tab !== 'Orders') ? 'inline' : 'none';
             document.title = (app.newCount > 0 ? '(' + app.newCount + ') ' : '') + (app.me ? app.me.vendor.businessName : 'Manage');
         }
-        function renderSound() { $('btnSound').textContent = app.sound ? '🔔 Sound on' : '🔕 Sound off'; }
+        function renderSound() { $('btnSound').textContent = app.sound ? '🔔 Sound' : '🔕 Muted'; $('btnSound').setAttribute('aria-pressed', String(!!app.sound)); }
 
         /* ---------- inventory ---------- */
         function loadMenu() {
             return api('GET', '/api/owner/menu').then(function (r) {
-                if (r.ok) { app.menu = r.data.menu || []; renderMenuList(); }
+                if (r.ok) { app.menu = r.data.menu || []; renderMenuList(); if (app.tab === 'Orders' && app.orders.length) renderOrders(); } // tickets use menu cook times
             });
         }
         // Same grouping as the customer page: categories in the order they first appear.
@@ -880,7 +958,7 @@
 
         /* ---------- settings ---------- */
         function loadState() {
-            return api('GET', '/api/owner/state').then(function (r) { if (r.ok) { app.state = r.data; } });
+            return api('GET', '/api/owner/state').then(function (r) { if (r.ok) { app.state = r.data; renderCrewNote(); } });
         }
         function renderSettings() {
             var closed = app.state.status === 'closed';
@@ -977,12 +1055,13 @@
                 var p = msg.payload || {};
                 switch (msg.type) {
                     case 'ORDER_NEW':
-                        beep(); setFlag('test');
+                        beep(); setFlag('test'); speakOrder(p);
                         if (app.tab !== 'Orders') { app.newCount++; renderBadge(); }
                         if (app.filter === 'Active' && !app.orders.some(function (o) { return o.id === p.id; })) { app.orders.push(p); if (app.tab === 'Orders') renderOrders(); }
                         break;
                     case 'ORDER_UPDATE': loadOrders(); break;
-                    case 'STATE': app.state = { status: p.status, rush: p.rush, location: p.location || '', paused: !!p.paused }; renderSettings(); break;
+                    case 'STATE': app.state = { status: p.status, rush: p.rush, location: p.location || '', paused: !!p.paused, crewNote: app.state.crewNote, crewNoteAt: app.state.crewNoteAt }; renderSettings(); break;
+                    case 'CREW_NOTE': app.state.crewNote = p.note || ''; app.state.crewNoteAt = p.at || 0; renderCrewNote(); if (p.note) beep(); break;
                     case 'PAUSED': app.state.paused = !!p.paused; renderSettings(); break;
                     case 'HOURS_UPDATE': if (app.pub) { app.pub.hours = p.hours; app.pub.timezone = p.timezone; } renderSetup(); break;
                     case 'STORE_STATUS': app.state.status = p.status; renderSettings(); break;
@@ -1343,6 +1422,19 @@
                 case 'toggle-sound':
                     app.sound = !app.sound; try { localStorage.setItem('ft_sound', app.sound ? 'on' : 'off'); } catch (er) {}
                     renderSound(); if (app.sound) beep(); renderSoundPrompt(); break;
+                case 'toggle-speak':
+                    app.speak = !app.speak; try { localStorage.setItem('ok_speak', app.speak ? 'on' : 'off'); } catch (er) {}
+                    renderSpeak();
+                    if (app.speak && window.speechSynthesis) { try { window.speechSynthesis.speak(new SpeechSynthesisUtterance('New orders will be read aloud.')); } catch (er) {} }
+                    break;
+                case 'save-crew-note': case 'clear-crew-note':
+                    var note = a === 'clear-crew-note' ? '' : $('crewNoteInput').value.trim();
+                    api('PUT', '/api/owner/crew-note', { note: note }).then(function (r) {
+                        if (!r.ok) { say('crewNoteMsg', r.data.error || 'Could not save.'); return; }
+                        app.state.crewNote = r.data.note; renderCrewNote(); $('crewNoteInput').value = r.data.note;
+                        say('crewNoteMsg', r.data.note ? 'Posted to every kitchen screen.' : 'Cleared.', true);
+                    });
+                    break;
                 case 'refresh-orders': loadOrders(); break;
                 case 'filter': app.filter = el.getAttribute('data-filter'); loadOrders(); break;
                 case 'order': orderAction(id, el.getAttribute('data-act')); break;
