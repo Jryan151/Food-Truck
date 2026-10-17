@@ -48,8 +48,8 @@ const orderTag = (token) => sha256('order:' + token).slice(0, 24);
 const MAX_ITEMS = 200;
 
 const PLANS = {
-  free: { label: 'Free', customDomain: false, sms: false, removeBranding: false, onlinePayments: false },
-  pro: { label: 'Pro', customDomain: true, sms: true, removeBranding: true, onlinePayments: true },
+  free: { label: 'Free', customDomain: false, sms: false, removeBranding: false, onlinePayments: false, insights: false },
+  pro: { label: 'Pro', customDomain: true, sms: true, removeBranding: true, onlinePayments: true, insights: true },
 };
 const GRACE_MS = 7 * 24 * 60 * 60 * 1000; // paid features stay on 7 days after a failed payment
 
@@ -429,6 +429,8 @@ async function ensureSchema() {
     ['allergy_ack_at', 'INTEGER'],                 // when the crew confirmed they saw it (needed before Ready)
   ];
   for (const [c, d] of orderCols) await addColumn('orders', c, d);
+  // Where the truck was parked when the order came in (for comparing locations in Insights).
+  await addColumn('orders', 'location', 'TEXT');
   await run('CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_client_key ON orders(vendor_id, client_key) WHERE client_key IS NOT NULL');
   await exec(`CREATE TABLE IF NOT EXISTS sms_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

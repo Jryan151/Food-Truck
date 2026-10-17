@@ -109,6 +109,48 @@
         var sug = base === null ? null : Math.min(90, Math.max(1, base + (st.rush || 0)));
         return { minutes: st.waitLock || sug, mode: st.waitLock ? 'locked' : 'auto', basis: basis, samples: xs.length, suggested: sug, start: st.waitStart || null };
     }
+    /* ---------- Insights: a believable, repeatable sales history ----------
+       Weekday lunch downtown, Friday evenings at the brewery, Saturday mornings at the market.
+       Seeded, so every visitor sees the same numbers, and the same math as the real server (insights-core.js). */
+    var demoHistory = null;
+    function seeded(n) { var x = Math.sin(n * 9301 + 49297) * 233280; return x - Math.floor(x); }
+    function history(d) {
+        var IC = window.InsightsCore;
+        if (!IC) return [];
+        if (!demoHistory) {
+            var tz = d.timezone, rows = [], today = IC.parts(Date.now(), tz);
+            var plan = { 1: ['Downtown Plaza — 5th & Main', 11, 14, 9], 2: ['Downtown Plaza — 5th & Main', 11, 14, 8], 3: ['Downtown Plaza — 5th & Main', 11, 14, 10],
+                4: ['Downtown Plaza — 5th & Main', 11, 14, 11], 5: ['Brewery Row', 16, 21, 9], 6: ['Saturday Farmers Market', 9, 13, 16] };
+            var shape = function (h, a, b) { var mid = (a + b) / 2; return Math.max(0.25, 1 - Math.abs(h + 0.5 - mid) / ((b - a) / 1.6)); };
+            var menu = d.menu, k = 0;
+            for (var back = 120; back >= 1; back--) {
+                var day = new Date(Date.UTC(today.y, today.m - 1, today.d - back)), wd = day.getUTCDay(), pl = plan[wd];
+                if (!pl || back % 23 === 0) continue; // the odd day off
+                var start = IC.zonedStart(day.getUTCFullYear(), day.getUTCMonth() + 1, day.getUTCDate(), tz);
+                var trend = 0.8 + (120 - back) / 300; // business growing
+                for (var h = pl[1]; h < pl[2]; h++) {
+                    var n = Math.round(pl[3] * shape(h, pl[1], pl[2]) * trend * (0.7 + seeded(back * 31 + h) * 0.6));
+                    for (var j = 0; j < n; j++) {
+                        k++;
+                        var items = [], c = 0, lines = 1 + Math.floor(seeded(k * 7) * 2.4);
+                        for (var q = 0; q < lines; q++) {
+                            var it = menu[Math.floor(seeded(k * 13 + q) * menu.length)];
+                            if (!it) continue;
+                            var price = it.salePrice > 0 ? it.salePrice : it.price, qty = seeded(k * 17 + q) < 0.2 ? 2 : 1;
+                            items.push({ name: it.name, qty: qty, price: price }); c += Math.round(price * 100) * qty;
+                        }
+                        rows.push({ t: start + h * 3600000 + Math.floor(seeded(k * 3) * 3600000), cents: c, items: items, loc: pl[0] });
+                    }
+                }
+            }
+            demoHistory = rows;
+        }
+        var live = d.orders.filter(function (o) { return o.status === 'Fulfilled' || o.status === 'Ready'; }).map(function (o) {
+            return { t: o.createdAt, cents: Math.round(o.total * 100), items: o.items, loc: o.location || d.state.location || '' };
+        });
+        return demoHistory.concat(live);
+    }
+
     function stateOut(d) { return Object.assign({}, d.state, { wait: demoWait(d) }); }
     function emitWait(d) { emit('WAIT', demoWait(d)); }
 
@@ -207,7 +249,7 @@
             id: id, ticket: ticket, token: 'demo-' + id + '-' + Math.random().toString(36).slice(2, 8), name: String(b.customerName || '').trim().slice(0, 40) || 'Guest',
             items: items, summary: items.map(function (x) { return x.qty + 'x ' + x.name; }).join(', '),
             notes: String(b.notes || '').trim().slice(0, 300), total: round(total), status: 'Preparing', createdAt: now, updatedAt: now,
-            allergy: String(b.allergy || '').trim().slice(0, 120), allergyAck: false
+            allergy: String(b.allergy || '').trim().slice(0, 120), allergyAck: false, location: d.state.location || ''
         };
         o.tag = o.token;
         d.orders.push(o); save(d);
@@ -274,6 +316,23 @@
             emit('ORDER_UPDATE', o, true);
             emit('ORDER_STATUS', { tag: o.tag, status: o.status }); emitWait(d);
             return ok({ order: o });
+        }
+
+        /* insights (same math as the server) */
+        if (p === '/api/owner/insights' || p === '/api/owner/insights/locations') {
+            var IC = window.InsightsCore;
+            if (!IC) return fail(503, 'Loading…');
+            var rowsAll = history(d), tz = d.timezone;
+            var inRange = function (a, z, loc) { return rowsAll.filter(function (r) { return r.t >= a && r.t < z && (loc === undefined || r.loc === loc); }); };
+            if (p === '/api/owner/insights/locations') {
+                var days = [30, 90, 365].indexOf(+u.searchParams.get('days')) >= 0 ? +u.searchParams.get('days') : 90;
+                return ok({ days: days, timezone: tz, locations: IC.compareLocations(inRange(Date.now() - days * IC.DAY, Date.now() + 1), tz) });
+            }
+            var range = u.searchParams.get('range') || 'day', per = IC.period(range, u.searchParams.get('anchor') || '', tz);
+            var lq = u.searchParams.get('location'), lsel = lq === null || lq === '*' ? undefined : lq;
+            var out = IC.summarize(inRange(per.from, per.to, lsel), inRange(per.prevFrom, per.prevTo, lsel), per, tz);
+            var seen = {}; rowsAll.forEach(function (r) { seen[r.loc] = 1; });
+            return ok(Object.assign(out, { timezone: tz, allLocations: Object.keys(seen) }));
         }
 
         /* state */

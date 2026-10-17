@@ -14,6 +14,7 @@ const billing = require('./billing');
 const payments = require('./payments');
 const sms = require('./sms');
 const catering = require('./catering');
+const Insights = require('./public/insights-core');
 const { run, get, all } = core;
 const { requireVendor, requireRole, getSession, rateLimit } = auth;
 
@@ -217,9 +218,9 @@ router.post('/orders', limitOrders, requireVendor, async (req, res) => {
   let r;
   try {
     r = await run(
-      `INSERT INTO orders (vendor_id, ticket_no, public_token, customer_name, items_json, notes, total, status, payment_status, customer_phone, client_key, allergy, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [v.id, row.ticket, token, name, JSON.stringify(items), notes, total, payNow ? 'Pending' : 'Preparing', payNow ? 'pending' : 'window', phone, clientKey, allergy, now, now]
+      `INSERT INTO orders (vendor_id, ticket_no, public_token, customer_name, items_json, notes, total, status, payment_status, customer_phone, client_key, allergy, location, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [v.id, row.ticket, token, name, JSON.stringify(items), notes, total, payNow ? 'Pending' : 'Preparing', payNow ? 'pending' : 'window', phone, clientKey, allergy, state.location || null, now, now]
     );
   } catch (err) {
     // Two taps arrived at the same instant: the first one won, so answer with its order.
@@ -652,6 +653,45 @@ router.get('/owner/analytics', ownerOnly, async (req, res) => {
 });
 
 // The service record for one order: every change, who made it, and when.
+/* ----- Insights (Pro; open to everyone during the free beta) ----- */
+const insightsOpen = (v) => core.features(v).insights || process.env.FREE_BETA === 'true' || !(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PRICE_ID);
+const SOLD = "status IN ('Fulfilled','Ready') AND COALESCE(payment_status, 'window') != 'pending'";
+
+async function salesRows(vendorId, from, to, location) {
+  const params = [vendorId, from, to];
+  let where = `vendor_id = ? AND ${SOLD} AND created_at >= ? AND created_at < ?`;
+  if (location !== undefined) { where += " AND COALESCE(location, '') = ?"; params.push(location); }
+  const rows = await all(`SELECT created_at, total, items_json, location FROM orders WHERE ${where}`, params);
+  return rows.map((r) => {
+    let items = [];
+    try { items = JSON.parse(r.items_json) || []; } catch (e) {}
+    return { t: r.created_at, cents: Math.round(r.total * 100), items, loc: r.location || '' };
+  });
+}
+
+router.get('/owner/insights', ownerOnly, async (req, res) => {
+  const v = req.tenant.vendor;
+  if (!insightsOpen(v)) return res.status(402).json({ error: 'Insights are part of Pro.', upgrade: true });
+  const tz = Insights.validTz(v.timezone);
+  const range = ['day', 'week', 'month'].includes(req.query.range) ? req.query.range : 'day';
+  const per = Insights.period(range, String(req.query.anchor || ''), tz);
+  const loc = req.query.location === undefined || req.query.location === '*' ? undefined : String(req.query.location).slice(0, 80);
+  const [rows, prev] = await Promise.all([salesRows(v.id, per.from, per.to, loc), salesRows(v.id, per.prevFrom, per.prevTo, loc)]);
+  const out = Insights.summarize(rows, prev, per, tz);
+  // Every location the truck has sold at, so the filter can list ones outside this period too.
+  const names = await all(`SELECT DISTINCT COALESCE(location, '') AS name FROM orders WHERE vendor_id = ? AND ${SOLD}`, [v.id]);
+  res.json(Object.assign(out, { timezone: tz, allLocations: names.map((n) => n.name) }));
+});
+
+router.get('/owner/insights/locations', ownerOnly, async (req, res) => {
+  const v = req.tenant.vendor;
+  if (!insightsOpen(v)) return res.status(402).json({ error: 'Insights are part of Pro.', upgrade: true });
+  const tz = Insights.validTz(v.timezone);
+  const days = [30, 90, 365].includes(parseInt(req.query.days, 10)) ? parseInt(req.query.days, 10) : 90;
+  const rows = await salesRows(v.id, Date.now() - days * Insights.DAY, Date.now() + 1);
+  res.json({ days, timezone: tz, locations: Insights.compareLocations(rows, tz) });
+});
+
 router.get('/owner/orders/:id/history', staffOrOwner, async (req, res) => {
   const v = req.tenant.vendor;
   const id = parseInt(req.params.id, 10);
