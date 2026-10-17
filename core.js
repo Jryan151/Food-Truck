@@ -181,7 +181,7 @@ const saveMenu = (vendorId, menu) =>
 
 /* ---------- store state (open/closed, rush, location, wait) ---------- */
 async function getState(vendorId) {
-  let s = await get('SELECT status, rush_minutes, active_location, paused, wait_start, wait_lock, service_started_at, pace_limit, closed_note FROM store_state WHERE vendor_id = ?', [vendorId]);
+  let s = await get('SELECT status, rush_minutes, active_location, paused, wait_start, wait_lock, service_started_at, pace_limit, closed_note, sched_on, slot_cap FROM store_state WHERE vendor_id = ?', [vendorId]);
   if (!s) {
     await run('INSERT OR IGNORE INTO store_state (vendor_id) VALUES (?)', [vendorId]);
     s = { status: 'open', rush_minutes: 0, active_location: '', paused: 0 };
@@ -192,6 +192,7 @@ async function getState(vendorId) {
     wait: await computeWait(vendorId, s),
     pace: await computePace(vendorId, s.pace_limit || 0),
     closedNote: s.status === 'closed' ? s.closed_note || '' : '',
+    sched: { on: !!s.sched_on, cap: s.slot_cap || 4 },
   };
 }
 
@@ -209,7 +210,7 @@ const PACE_WINDOW_MS = 10 * 60 * 1000;
 async function computePace(vendorId, limit) {
   if (!limit) return { limit: 0, until: 0 };
   const now = Date.now();
-  const rows = await all("SELECT created_at FROM orders WHERE vendor_id = ? AND created_at > ? AND status != 'Canceled' ORDER BY created_at ASC", [vendorId, now - PACE_WINDOW_MS]);
+  const rows = await all("SELECT created_at FROM orders WHERE vendor_id = ? AND created_at > ? AND status != 'Canceled' AND pickup_at IS NULL ORDER BY created_at ASC", [vendorId, now - PACE_WINDOW_MS]);
   if (rows.length < limit) return { limit, until: 0 };
   return { limit, until: rows[rows.length - limit].created_at + PACE_WINDOW_MS };
 }
@@ -228,12 +229,13 @@ async function computeWait(vendorId, s) {
   const now = Date.now();
   const since = Math.max(now - WAIT_LOOKBACK_MS, s.service_started_at || 0);
   const rows = await all(
-    `SELECT e.at - o.created_at AS ms FROM order_events e JOIN orders o ON o.id = e.order_id
-     WHERE e.vendor_id = ? AND e.event = 'ready' AND e.at > ? AND o.created_at >= ? ORDER BY e.at DESC LIMIT 12`,
+    `SELECT e.at - COALESCE(o.fire_at, o.created_at) AS ms FROM order_events e JOIN orders o ON o.id = e.order_id
+     WHERE e.vendor_id = ? AND e.event = 'ready' AND e.at > ? AND COALESCE(o.fire_at, o.created_at) >= ? ORDER BY e.at DESC LIMIT 12`,
     [vendorId, since, since]
   );
   const samples = rows.map((r) => r.ms).filter((ms) => ms > 0);
-  const oldest = await get("SELECT MIN(created_at) AS at FROM orders WHERE vendor_id = ? AND status = 'Preparing'", [vendorId]);
+  // Scheduled orders only join the line once it's time to start them.
+  const oldest = await get("SELECT MIN(COALESCE(fire_at, created_at)) AS at FROM orders WHERE vendor_id = ? AND status = 'Preparing' AND COALESCE(fire_at, 0) <= ?", [vendorId, now]);
   const queueMin = oldest && oldest.at ? Math.round((now - oldest.at) / 60000) : 0;
 
   let base = null;
@@ -459,6 +461,9 @@ async function ensureSchema() {
   // Pacing: at most this many online orders per 10 minutes (0 = no limit). Closed note: why we closed.
   await addColumn('store_state', 'pace_limit', 'INTEGER NOT NULL DEFAULT 0');
   await addColumn('store_state', 'closed_note', 'TEXT');
+  // Scheduled pickup: on/off and how many orders fit in one 15-minute slot.
+  await addColumn('store_state', 'sched_on', 'INTEGER NOT NULL DEFAULT 0');
+  await addColumn('store_state', 'slot_cap', 'INTEGER NOT NULL DEFAULT 4');
   await exec(`CREATE TABLE IF NOT EXISTS locations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     vendor_id INTEGER NOT NULL,
@@ -505,6 +510,9 @@ async function ensureSchema() {
     PRIMARY KEY (vendor_id, item_id)
   )`);
   await addColumn('orders', 'stock_json', 'TEXT');
+  // Scheduled pickup: when they'll come, and when the kitchen should start it (pickup minus cook time).
+  await addColumn('orders', 'pickup_at', 'INTEGER');
+  await addColumn('orders', 'fire_at', 'INTEGER');
   await addColumn('orders', 'stock_returned', 'INTEGER NOT NULL DEFAULT 0');
   await exec(`CREATE TABLE IF NOT EXISTS reward_cards (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -659,8 +667,8 @@ async function autoCloseOrders() {
   closed.push(...(await all("UPDATE orders SET status = 'Fulfilled', customer_phone = NULL WHERE status = 'Ready' AND updated_at < ? RETURNING id, vendor_id, 'fulfilled' AS event", [now - READY_AUTO_CLOSE_MS])));
   // Paid orders are never auto-canceled (that would keep the money without making the food look like a refund);
   // they close as Fulfilled, and the owner can refund from their Stripe Dashboard if something went wrong.
-  closed.push(...(await all("UPDATE orders SET status = 'Fulfilled', customer_phone = NULL WHERE status = 'Preparing' AND payment_status = 'paid' AND created_at < ? RETURNING id, vendor_id, 'fulfilled' AS event", [now - PREPARING_AUTO_CLOSE_MS])));
-  closed.push(...(await all("UPDATE orders SET status = 'Canceled', customer_phone = NULL, updated_at = ? WHERE status = 'Preparing' AND payment_status != 'paid' AND created_at < ? RETURNING id, vendor_id, 'canceled' AS event", [now, now - PREPARING_AUTO_CLOSE_MS])));
+  closed.push(...(await all("UPDATE orders SET status = 'Fulfilled', customer_phone = NULL WHERE status = 'Preparing' AND payment_status = 'paid' AND COALESCE(pickup_at, created_at) < ? RETURNING id, vendor_id, 'fulfilled' AS event", [now - PREPARING_AUTO_CLOSE_MS])));
+  closed.push(...(await all("UPDATE orders SET status = 'Canceled', customer_phone = NULL, updated_at = ? WHERE status = 'Preparing' AND payment_status != 'paid' AND COALESCE(pickup_at, created_at) < ? RETURNING id, vendor_id, 'canceled' AS event", [now, now - PREPARING_AUTO_CLOSE_MS])));
   closed.push(...(await all("UPDATE orders SET status = 'Canceled', payment_status = 'expired', customer_phone = NULL, updated_at = ? WHERE status = 'Pending' AND created_at < ? RETURNING id, vendor_id, 'expired' AS event", [now, now - PENDING_PAYMENT_MS])));
   for (const o of closed) {
     logOrderEvent(o.vendor_id, o.id, o.event, 'system');
@@ -714,6 +722,8 @@ function orderShape(o) {
     allergy: o.allergy || '',
     allergyAck: !!o.allergy_ack_at,
     rewardCents: o.reward_cents || 0,   // a punch-card free item on this ticket
+    pickupAt: o.pickup_at || null,      // scheduled pickup time (null = as soon as possible)
+    fireAt: o.fire_at || null,          // when the kitchen should start it
     createdAt: o.created_at,
     updatedAt: o.updated_at,
   };

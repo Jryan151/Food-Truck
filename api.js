@@ -158,7 +158,55 @@ function waitFor(state, prepMinutes) {
 // Customers get a short window to cancel (or change: cancel and reorder) before the kitchen is
 // committed. Only orders paid at the window: a paid order needs a refund, so that's done in person.
 const CHANGE_WINDOW_MS = 2 * 60 * 1000;
-const changeUntil = (o) => (o.payment_status === 'window' && o.status === 'Preparing' ? o.created_at + CHANGE_WINDOW_MS : 0);
+// A scheduled order can also be changed until 30 minutes before its pickup time.
+const SCHED_CHANGE_MS = 30 * 60 * 1000;
+const changeUntil = (o) => (o.payment_status === 'window' && o.status === 'Preparing'
+  ? Math.max(o.created_at + CHANGE_WINDOW_MS, o.pickup_at ? o.pickup_at - SCHED_CHANGE_MS : 0) : 0);
+
+/* ----- Scheduled pickup -----
+   Slots every 15 minutes, from the soonest the kitchen can honestly have it ready until 10 minutes
+   before today's closing time (posted hours, or today's schedule stop), up to 4 hours ahead.
+   Each slot holds the owner's set number of orders. */
+const SLOT_MS = 15 * 60 * 1000;
+async function pickupSlots(v, state) {
+  if (!state.sched.on || state.status !== 'open' || state.paused) return { on: false, slots: [] };
+  const tz = Insights.validTz(v.timezone);
+  const now = Date.now();
+  const p = Insights.parts(now, tz);
+  const todayKey = Insights.dateKey(p);
+  const ends = [];
+  const hours = core.parseHours(v.hours_json);
+  const h = hours && hours[p.wd];
+  if (h && !h.closed) {
+    const [ch, cm] = h.close.split(':').map(Number);
+    ends.push(Insights.zonedTime(p.y, p.m, p.d + (h.close <= h.open ? 1 : 0), ch, cm, tz));
+  }
+  const stop = (await schedule.upcoming(v.id, tz, 0)).find((s) => s.day === todayKey && s.startsAt <= now + 60000);
+  if (stop) ends.push(stop.endsAt);
+  if (!ends.length) return { on: false, slots: [], reason: 'Add your hours (or today’s stop) so customers can pick a time.' };
+  const closeAt = Math.max(...ends);
+  const lead = Math.max(15, (state.wait && state.wait.minutes) || 10) * 60000;
+  // Round up to the next quarter hour on the truck's clock.
+  const minsNow = p.h * 60 + p.min;
+  const firstMin = Math.ceil((minsNow + lead / 60000) / 15) * 15;
+  const first = Insights.zonedTime(p.y, p.m, p.d, 0, firstMin, tz);
+  const last = Math.min(closeAt - 10 * 60000, now + 4 * 3600000);
+  const rows = await all("SELECT pickup_at, COUNT(*) AS n FROM orders WHERE vendor_id = ? AND pickup_at >= ? AND status IN ('Pending','Preparing','Ready') GROUP BY pickup_at", [v.id, first]);
+  const taken = new Map(rows.map((r) => [r.pickup_at, r.n]));
+  const fmt = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz });
+  const slots = [];
+  for (let t = first; t <= last && slots.length < 16; t += SLOT_MS) {
+    const left = state.sched.cap - (taken.get(t) || 0);
+    slots.push({ at: t, label: fmt.format(new Date(t)), left: Math.max(0, left), full: left <= 0 });
+  }
+  return { on: true, slots, cap: state.sched.cap };
+}
+
+router.get('/pickup-slots', requireVendor, async (req, res) => {
+  const v = req.tenant.vendor;
+  res.set('Cache-Control', 'no-store');
+  res.json(await pickupSlots(v, await core.getState(v.id)));
+});
 
 router.post('/orders', limitOrders, requireVendor, async (req, res) => {
   const v = req.tenant.vendor;
@@ -168,7 +216,16 @@ router.post('/orders', limitOrders, requireVendor, async (req, res) => {
   const state = await core.getState(v.id);
   if (state.status === 'closed') return res.status(403).json({ error: 'Sorry, we are closed right now.' });
   if (state.paused) return res.status(403).json({ error: 'Online ordering is paused right now. Please order at the window.' });
-  if (state.pace.until > Date.now()) {
+  // Later pickup: must be one of today's open slots (slots have their own limit, so pacing doesn't apply).
+  let pickupAt = null;
+  if (b.pickupAt) {
+    const ps = await pickupSlots(v, state);
+    const slot = ps.slots.find((s) => s.at === Number(b.pickupAt));
+    if (!slot) return res.status(409).json({ error: 'That pickup time isn’t available anymore. Please pick another.', slotGone: true });
+    if (slot.full) return res.status(409).json({ error: `${slot.label} just filled up. Please pick another time.`, slotGone: true });
+    pickupAt = slot.at;
+  }
+  if (!pickupAt && state.pace.until > Date.now()) {
     const at = new Date(state.pace.until).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: Insights.validTz(v.timezone) });
     return res.status(409).json({ error: `The kitchen is catching up. Online ordering opens again at ${at}.`, paced: true, retryAt: state.pace.until });
   }
@@ -254,7 +311,7 @@ router.post('/orders', limitOrders, requireVendor, async (req, res) => {
       res.status(409).json({ error: 'This order is already waiting for payment. Finish paying in the other tab, or refresh the page.' });
       return true;
     }
-    res.status(200).json({ ticket: o.ticket_no, token: o.public_token, tag: core.orderTag(o.public_token), status: o.status, total: o.total, estimatedMinutes: waitFor(state, prepMinutes), changeUntil: changeUntil(o), now: Date.now(), repeat: true });
+    res.status(200).json({ ticket: o.ticket_no, token: o.public_token, tag: core.orderTag(o.public_token), status: o.status, total: o.total, estimatedMinutes: o.pickup_at ? Math.ceil((o.pickup_at - Date.now()) / 60000) : waitFor(state, prepMinutes), pickupAt: o.pickup_at || null, changeUntil: changeUntil(o), now: Date.now(), repeat: true });
     return true;
   };
   if (await sameOrder()) return;
@@ -279,9 +336,11 @@ router.post('/orders', limitOrders, requireVendor, async (req, res) => {
   let r;
   try {
     r = await run(
-      `INSERT INTO orders (vendor_id, ticket_no, public_token, customer_name, items_json, notes, total, status, payment_status, customer_phone, client_key, allergy, location, card_id, reward_cents, reward_every, stock_json, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [v.id, row.ticket, token, name, JSON.stringify(items), notes, total, payNow ? 'Pending' : 'Preparing', payNow ? 'pending' : 'window', phone, clientKey, allergy, state.location || null, rw.cardId || null, rw.rewardCents || 0, rw.rewardEvery || null, stockJson, now, now]
+      `INSERT INTO orders (vendor_id, ticket_no, public_token, customer_name, items_json, notes, total, status, payment_status, customer_phone, client_key, allergy, location, card_id, reward_cents, reward_every, stock_json, pickup_at, fire_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [v.id, row.ticket, token, name, JSON.stringify(items), notes, total, payNow ? 'Pending' : 'Preparing', payNow ? 'pending' : 'window', phone, clientKey, allergy, state.location || null, rw.cardId || null, rw.rewardCents || 0, rw.rewardEvery || null, stockJson,
+       // Start it so it's ready at pickup: the order's own cook time, at least 5 and at most 45 minutes ahead.
+       pickupAt, pickupAt ? pickupAt - Math.min(45, Math.max(5, prepMinutes)) * 60000 : null, now, now]
     );
   } catch (err) {
     await rewards.giveBack(rw.cardId, rw.rewardEvery); // the order wasn't saved, so the reward wasn't spent
@@ -299,7 +358,8 @@ router.post('/orders', limitOrders, requireVendor, async (req, res) => {
     tag: core.orderTag(token),
     status: orderRow.status,
     total,
-    estimatedMinutes: waitFor(state, prepMinutes),
+    estimatedMinutes: pickupAt ? Math.ceil((pickupAt - Date.now()) / 60000) : waitFor(state, prepMinutes),
+    pickupAt,
     changeUntil: changeUntil(orderRow),
     now: Date.now(),
     rewardCents: rw.rewardCents,
@@ -328,20 +388,20 @@ router.get('/orders/track', requireVendor, async (req, res) => {
   const tokens = String(req.query.tokens || '').split(',').map((t) => t.trim()).filter(Boolean).slice(0, 20);
   if (!tokens.length) return res.json({ orders: [] });
   const rows = await all(
-    `SELECT ticket_no, public_token, customer_name, status, payment_status, created_at FROM orders
+    `SELECT ticket_no, public_token, customer_name, status, payment_status, created_at, pickup_at FROM orders
      WHERE vendor_id = ? AND public_token IN (${tokens.map(() => '?').join(',')})`,
     [req.tenant.vendor.id, ...tokens]
   );
   res.json({
     now: Date.now(),
-    orders: rows.map((o) => ({ ticket: o.ticket_no, token: o.public_token, name: o.customer_name, status: o.status, payment: o.payment_status, changeUntil: changeUntil(o) })),
+    orders: rows.map((o) => ({ ticket: o.ticket_no, token: o.public_token, name: o.customer_name, status: o.status, payment: o.payment_status, changeUntil: changeUntil(o), pickupAt: o.pickup_at || null })),
   });
 });
 
 // The "now serving" screen (a TV or tablet facing the line): ticket numbers, and first names once ready.
 router.get('/now', requireVendor, async (req, res) => {
   const v = req.tenant.vendor;
-  const rows = await all("SELECT ticket_no, customer_name, status, updated_at FROM orders WHERE vendor_id = ? AND status IN ('Preparing','Ready') ORDER BY created_at ASC LIMIT 60", [v.id]);
+  const rows = await all("SELECT ticket_no, customer_name, status, updated_at FROM orders WHERE vendor_id = ? AND status IN ('Preparing','Ready') AND COALESCE(fire_at, 0) <= ? ORDER BY COALESCE(fire_at, created_at) ASC LIMIT 60", [v.id, Date.now()]);
   const first = (n) => String(n || '').trim().split(/\s+/)[0].slice(0, 14);
   res.set('Cache-Control', 'no-store');
   res.json({
@@ -358,8 +418,9 @@ router.post('/orders/:token/cancel', limitOrders, requireVendor, async (req, res
   const now = Date.now();
   const row = await get(
     `UPDATE orders SET status = 'Canceled', updated_at = ?, customer_phone = NULL
-     WHERE vendor_id = ? AND public_token = ? AND status = 'Preparing' AND payment_status = 'window' AND created_at > ? RETURNING *`,
-    [now, v.id, token, now - CHANGE_WINDOW_MS]
+     WHERE vendor_id = ? AND public_token = ? AND status = 'Preparing' AND payment_status = 'window'
+       AND (created_at > ? OR (pickup_at IS NOT NULL AND pickup_at - ? > ?)) RETURNING *`,
+    [now, v.id, token, now - CHANGE_WINDOW_MS, SCHED_CHANGE_MS, now]
   );
   if (!row) {
     const o = await get('SELECT status, payment_status FROM orders WHERE vendor_id = ? AND public_token = ?', [v.id, token]);
@@ -476,6 +537,12 @@ router.put('/owner/state', staffOrOwner, async (req, res) => {
     }
     core.broadcast(v.id, 'STORE_STATUS', { status: b.status, note: note || '' });
   }
+  if (b.schedOn !== undefined) await run('UPDATE store_state SET sched_on = ? WHERE vendor_id = ?', [b.schedOn ? 1 : 0, v.id]);
+  if (b.slotCap !== undefined) {
+    const n = parseInt(b.slotCap, 10);
+    if (!Number.isInteger(n) || n < 1 || n > 30) return res.status(400).json({ error: 'Orders per 15-minute slot: 1 to 30.' });
+    await run('UPDATE store_state SET slot_cap = ? WHERE vendor_id = ?', [n, v.id]);
+  }
   if (b.paceLimit !== undefined) {
     const n = parseInt(b.paceLimit, 10);
     if (!Number.isInteger(n) || n < 0 || n > 60) return res.status(400).json({ error: 'Pick how many online orders per 10 minutes (or off).' });
@@ -514,7 +581,9 @@ router.put('/owner/state', staffOrOwner, async (req, res) => {
     core.broadcast(v.id, 'LOCATION_UPDATE', { location: loc });
   }
   await core.refreshWait(v.id);
-  res.json(await core.getState(v.id));
+  const after = await core.getState(v.id);
+  if (b.schedOn !== undefined || b.slotCap !== undefined) core.broadcast(v.id, 'SCHED', after.sched);
+  res.json(after);
 });
 
 /* ----- menu photos ----- */

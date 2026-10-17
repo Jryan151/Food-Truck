@@ -207,6 +207,14 @@
                         </div>
                     </div>
                     <div class="flex items-center justify-between gap-3 mt-4">
+                        <div class="min-w-0"><div class="text-xs font-bold text-zinc-200">Scheduled pickup</div><div class="text-[10px] text-zinc-500">Customers can pick a time later today. Tickets wait in “Later” until it’s time to start them.</div></div>
+                        <button data-action="toggle-sched" id="schedSwitch" aria-label="Scheduled pickup on or off" class="switch"></button>
+                    </div>
+                    <div id="slotRow" class="flex items-center justify-between gap-3 mt-2" style="display:none">
+                        <div class="text-[11px] text-zinc-400">Orders per 15-minute pickup slot</div>
+                        <select id="slotCap" class="bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200"><option>2</option><option>3</option><option>4</option><option>6</option><option>8</option><option>10</option><option>15</option></select>
+                    </div>
+                    <div class="flex items-center justify-between gap-3 mt-4">
                         <div class="min-w-0"><div class="text-xs font-bold text-zinc-200">Pace online orders</div><div class="text-[10px] text-zinc-500" id="paceWhy">So a rush can’t bury the kitchen. Customers see when ordering opens again.</div></div>
                         <select id="paceLimit" aria-label="Online orders per 10 minutes" class="bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200">
                             <option value="0">No limit</option><option value="4">4 per 10 min</option><option value="6">6 per 10 min</option><option value="8">8 per 10 min</option><option value="10">10 per 10 min</option><option value="15">15 per 10 min</option><option value="20">20 per 10 min</option>
@@ -912,8 +920,15 @@
         /* ---------- kitchen helpers ---------- */
         function serverNow() { return Date.now() + (app.clockOffset || 0); }
         // How long a ticket has waited: green under 5 minutes, amber 5 to 10, red over 10.
+        // Scheduled orders join the line when it's time to start them.
+        function isDue(o) { return !o.fireAt || o.fireAt <= serverNow(); }
+        function laterRow(o) {
+            var items = (o.items || []).map(function (i) { return esc(i.qty + '× ' + i.name); }).join(', ');
+            return '<div class="later-row"><div class="min-w-0"><b>#' + esc(o.ticket) + ' ' + esc(o.name) + '</b><span>' + items + '</span></div>' +
+                '<div class="later-time"><b>' + esc(fmtTime(o.pickupAt)) + '</b><span>start ' + esc(fmtTime(o.fireAt)) + '</span></div></div>';
+        }
         function ageInfo(o) {
-            var secs = Math.max(0, Math.floor((serverNow() - o.createdAt) / 1000));
+            var secs = Math.max(0, Math.floor((serverNow() - (o.fireAt || o.createdAt)) / 1000));
             var tone = secs < 300 ? 'ok' : secs < 600 ? 'warn' : 'bad';
             return { color: 'var(--' + tone + ')', label: Math.floor(secs / 60) + ':' + String(secs % 60).padStart(2, '0') };
         }
@@ -922,7 +937,7 @@
         // "Cook now, across orders": the grill cooks in batches instead of ticket by ticket.
         function renderBatch() {
             var bar = $('batchBar');
-            var prep = app.filter === 'Active' ? app.orders.filter(function (o) { return o.status === 'Preparing'; }) : [];
+            var prep = app.filter === 'Active' ? app.orders.filter(function (o) { return o.status === 'Preparing' && isDue(o); }) : [];
             if (prep.length < 2) { bar.style.display = 'none'; return; }
             var totals = {}, order = [];
             prep.forEach(function (o) { (o.items || []).forEach(function (i) { var k = baseName(i); if (!totals[k]) { totals[k] = 0; order.push(k); } totals[k] += i.qty; }); });
@@ -970,7 +985,16 @@
                 c.innerHTML = '<div class="text-center text-zinc-500 py-6 text-xs bg-zinc-900 border border-zinc-800 rounded-xl">No ' + esc(app.filter.toLowerCase()) + ' orders.</div>';
                 return;
             }
-            c.innerHTML = app.orders.map(function (o) {
+            var later = app.filter === 'Active' ? app.orders.filter(function (o) { return o.status === 'Preparing' && !isDue(o); }).sort(function (a, b) { return a.fireAt - b.fireAt; }) : [];
+            // A scheduled ticket that just came due: same alert as a new order.
+            app.dueSeen = app.dueSeen || {};
+            app.orders.forEach(function (o) {
+                if (!o.fireAt) return;
+                if (!isDue(o)) app.dueSeen[o.id] = 'later';
+                else if (app.dueSeen[o.id] === 'later') { app.dueSeen[o.id] = 'due'; beep(); speakOrder(o); }
+            });
+            var shown = app.orders.filter(function (o) { return later.indexOf(o) < 0; });
+            c.innerHTML = (shown.length ? '' : '<div class="text-center text-zinc-500 py-6 text-xs bg-zinc-900 border border-zinc-800 rounded-xl">Nothing to cook right now.</div>') + shown.map(function (o) {
                 var ready = o.status === 'Ready';
                 var color = app.filter === 'Fulfilled' ? 'text-emerald-400' : app.filter === 'Canceled' ? 'text-rose-400' : (ready ? 'text-blue-400' : 'text-amber-500');
                 var buttons = '', active = app.filter === 'Active';
@@ -998,11 +1022,12 @@
                         : '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">💵 PAY AT WINDOW</span>') +
                     (o.textMe ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-300 border border-blue-500/30">📱 texts when ready</span>' : '') +
                     (o.rewardCents ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full border border-zinc-500 text-zinc-200">🎁 PUNCH CARD −' + money(o.rewardCents / 100) + '</span>' : '') +
+                    (o.pickupAt ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full border border-zinc-300 text-zinc-100">🕑 PICKUP ' + esc(fmtTime(o.pickupAt)) + '</span>' : '') +
                     '</div>' +
                     (o.notes ? '<div class="text-[11px] text-zinc-400 mt-1 whitespace-pre-line">Note: ' + esc(o.notes) + '</div>' : '') +
                     '<div class="text-[10px] ' + color + ' mt-1 font-semibold">' + esc(o.status) + '</div></div>' +
                     '<span class="font-bold text-emerald-400">' + money(o.total) + '</span></div>' + allergy + buttons + '</div>';
-            }).join('');
+            }).join('') + (later.length ? '<div class="later-box"><div class="later-head">LATER · ' + later.length + ' SCHEDULED</div>' + later.map(laterRow).join('') + '</div>' : '');
         }
 
         function orderAction(id, act) {
@@ -1217,6 +1242,10 @@
             $('waitWhy').textContent = why;
             $('btnWaitLock').style.display = locked || !m ? 'none' : '';
             $('btnWaitAuto').style.display = locked ? '' : 'none';
+            var sc = app.state.sched || { on: false, cap: 4 };
+            $('schedSwitch').className = 'switch' + (sc.on ? ' on' : '');
+            $('slotRow').style.display = sc.on ? 'flex' : 'none';
+            if (document.activeElement !== $('slotCap')) { $('slotCap').value = String(sc.cap); if (!$('slotCap').value) { var so = document.createElement('option'); so.textContent = String(sc.cap); $('slotCap').appendChild(so); $('slotCap').value = String(sc.cap); } }
             var pl = app.state.pace || { limit: 0, until: 0 };
             if (document.activeElement !== $('paceLimit')) $('paceLimit').value = String(pl.limit || 0);
             $('paceWhy').textContent = pl.until > Date.now() ? 'At the limit now. Online ordering opens again at ' + new Date(pl.until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + '.' : 'So a rush can’t bury the kitchen. Customers see when ordering opens again.';
@@ -1755,13 +1784,14 @@
                         if (p.byCustomer && p.status === 'Canceled') { beep(); toast('Ticket #' + p.ticket + ' (' + p.name + ') was canceled by the customer.'); }
                         break;
                     case 'WAIT': app.state.wait = p; renderSettings(); break;
-                    case 'STATE': app.state = { status: p.status, rush: p.rush, location: p.location || '', paused: !!p.paused, wait: p.wait, pace: p.pace, crewNote: app.state.crewNote, crewNoteAt: app.state.crewNoteAt }; renderSettings(); break;
+                    case 'STATE': app.state = { status: p.status, rush: p.rush, location: p.location || '', paused: !!p.paused, wait: p.wait, pace: p.pace, sched: p.sched, crewNote: app.state.crewNote, crewNoteAt: app.state.crewNoteAt }; renderSettings(); break;
                     case 'SESSION_ENDED': stopLive(); sessionEnded('You were signed out. Ask the owner for your PIN.'); break;
                     case 'CREW_NOTE': app.state.crewNote = p.note || ''; app.state.crewNoteAt = p.at || 0; renderCrewNote(); if (p.note) beep(); break;
                     case 'PAUSED': app.state.paused = !!p.paused; renderSettings(); break;
                     case 'HOURS_UPDATE': if (app.pub) { app.pub.hours = p.hours; app.pub.timezone = p.timezone; } renderSetup(); break;
                     case 'STORE_STATUS': app.state.status = p.status; renderSettings(); break;
                     case 'PACE': app.state.pace = p; renderSettings(); break;
+                    case 'SCHED': app.state.sched = p; renderSettings(); break;
                     case 'RUSH_MODE': app.state.rush = Number(p.minutes) || 0; renderSettings(); break;
                     case 'LOCATION_UPDATE': app.state.location = p.location || ''; renderSettings(); break;
                     // The kitchen keeps the full picture (counts, why it's out): refetch instead of using the customer version.
@@ -2106,6 +2136,7 @@
             }
             if (e.target && e.target.getAttribute && e.target.getAttribute('data-stock')) { setStock(+e.target.getAttribute('data-stock'), e.target.value.trim()); return; }
             if (e.target && e.target.id === 'insLocation') { insState().location = e.target.value; loadInsights(); }
+            if (e.target && e.target.id === 'slotCap') { putState({ slotCap: +e.target.value }); return; }
             if (e.target && e.target.id === 'paceLimit') { putState({ paceLimit: +e.target.value }); return; }
             if (e.target && e.target.id === 'schLoc') { $('schLocNew').style.display = e.target.value === '__new' ? 'block' : 'none'; if (e.target.value === '__new') $('schLocNew').focus(); }
         });
@@ -2195,6 +2226,7 @@
                 case 'wait-step': stepWait(parseInt(el.getAttribute('data-by'), 10)); break;
                 case 'wait-lock': if (waitShown()) putState({ waitLock: waitShown() }); break;
                 case 'wait-auto': putState({ waitLock: null }); break;
+                case 'toggle-sched': putState({ schedOn: !(app.state.sched && app.state.sched.on) }); break;
                 case 'go-wait': switchTab('Settings'); setTimeout(function () { var b = $('waitBox'); if (b) b.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 50); break;
                 case 'toggle-pause': putState({ paused: !app.state.paused }); break;
                 case 'pick-logo': $('profEmoji').value = el.getAttribute('data-logo') || ''; renderLogoPicker(); break;

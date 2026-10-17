@@ -175,7 +175,26 @@
         var ts = d.orders.filter(function (o) { return o.status !== 'Canceled' && o.createdAt > now - 600000; }).map(function (o) { return o.createdAt; }).sort(function (a, b) { return a - b; });
         return { limit: lim, until: ts.length < lim ? 0 : ts[ts.length - lim] + 600000 };
     }
-    function stateOut(d) { return Object.assign({}, d.state, { wait: demoWait(d), pace: demoPace(d), closedNote: d.state.status === 'closed' ? d.state.closedNote || '' : '' }); }
+    /* ---------- scheduled pickup (same rules as the server) ---------- */
+    function demoSlots(d) {
+        var IC = window.InsightsCore, st = d.state;
+        if (!IC || !st.schedOn || st.status !== 'open' || st.paused) return { on: false, slots: [] };
+        var tz = d.timezone, now = Date.now(), p = IC.parts(now, tz), h = d.hours[p.wd], ends = [];
+        if (h && !h.closed) { var c = h.close.split(':').map(Number); ends.push(IC.zonedTime(p.y, p.m, p.d + (h.close <= h.open ? 1 : 0), c[0], c[1], tz)); }
+        var stop = demoStops(d).filter(function (s) { return s.day === IC.dateKey(p) && s.startsAt <= now + 60000; })[0];
+        if (stop) ends.push(stop.endsAt);
+        if (!ends.length) return { on: false, slots: [] };
+        var lead = Math.max(15, demoWait(d).minutes || 10), first = IC.zonedTime(p.y, p.m, p.d, 0, Math.ceil((p.h * 60 + p.min + lead) / 15) * 15, tz);
+        var last = Math.min(Math.max.apply(null, ends) - 600000, now + 4 * 3600000), cap = st.slotCap || 4, out = [];
+        var fmt = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz });
+        for (var t = first; t <= last && out.length < 16; t += 900000) {
+            var n = d.orders.filter(function (o) { return o.pickupAt === t && (o.status === 'Preparing' || o.status === 'Ready'); }).length;
+            out.push({ at: t, label: fmt.format(new Date(t)), left: Math.max(0, cap - n), full: n >= cap });
+        }
+        return { on: true, slots: out, cap: cap };
+    }
+
+    function stateOut(d) { return Object.assign({}, d.state, { sched: { on: !!d.state.schedOn, cap: d.state.slotCap || 4 }, wait: demoWait(d), pace: demoPace(d), closedNote: d.state.status === 'closed' ? d.state.closedNote || '' : '' }); }
     function emitWait(d) { emit('WAIT', demoWait(d)); }
 
     function FakeEventSource(url) {
@@ -306,7 +325,7 @@
         };
     }
 
-    function placeOrder(d, b) {
+    function placeOrder(d, b, pickupAt) {
         if (d.state.status === 'closed') return fail(403, 'Sorry, we are closed right now.');
         var lines = Array.isArray(b.items) ? b.items.slice(0, 30) : [];
         if (!lines.length) return fail(400, 'Your cart is empty.');
@@ -358,14 +377,15 @@
             notes: String(b.notes || '').trim().slice(0, 300), total: round(total), status: 'Preparing', createdAt: now, updatedAt: now,
             allergy: String(b.allergy || '').trim().slice(0, 120), allergyAck: false, location: d.state.location || '',
             cardToken: s.on ? tok : null, rewardCents: rewardCents, rewardEvery: rewardCents ? s.every : null,
-            stockTaken: Object.keys(stockTaken).length ? stockTaken : null
+            stockTaken: Object.keys(stockTaken).length ? stockTaken : null,
+            pickupAt: pickupAt || null, fireAt: pickupAt ? pickupAt - Math.min(45, Math.max(5, prep)) * 60000 : null
         };
         if (o.stockTaken) setTimeout(function () { announceStock(d, Object.keys(stockTaken)); }, 0);
         o.tag = o.token;
         d.orders.push(o); save(d);
         emit('ORDER_NEW', o, true); emitWait(d);
         var w = demoWait(d).minutes;
-        return ok({ ticket: o.ticket, token: o.token, tag: o.tag, status: o.status, total: o.total, estimatedMinutes: w ? Math.max(w, Math.min(prep, 90)) : prep + (d.state.rush || 0), changeUntil: now + 120000, now: now, rewardCents: rewardCents, cardToken: newTok || undefined }, 201);
+        return ok({ ticket: o.ticket, token: o.token, tag: o.tag, status: o.status, total: o.total, estimatedMinutes: pickupAt ? Math.ceil((pickupAt - now) / 60000) : w ? Math.max(w, Math.min(prep, 90)) : prep + (d.state.rush || 0), pickupAt: pickupAt || null, changeUntil: pickupAt ? Math.max(now + 120000, pickupAt - 1800000) : now + 120000, now: now, rewardCents: rewardCents, cardToken: newTok || undefined }, 201);
     }
 
     function handle(method, u, b) {
@@ -377,22 +397,29 @@
         if (p === '/api/vendor-data') return ok(vendorPublic(d));
         if (p === '/api/orders' && method === 'POST') {
             if (d.state.paused) return fail(403, 'Online ordering is paused right now. Please order at the window.');
+            var pickupAt = null;
+            if (b.pickupAt) {
+                var sl = demoSlots(d).slots.filter(function (x) { return x.at === Number(b.pickupAt); })[0];
+                if (!sl) return fail(409, 'That pickup time isn’t available anymore. Please pick another.', { slotGone: true });
+                if (sl.full) return fail(409, sl.label + ' just filled up. Please pick another time.', { slotGone: true });
+                pickupAt = sl.at;
+            }
             var pc = demoPace(d);
-            if (pc.until > Date.now()) return fail(409, 'The kitchen is catching up. Online ordering opens again at ' + new Date(pc.until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + '.', { paced: true, retryAt: pc.until });
-            var placed = placeOrder(d, b);
+            if (!pickupAt && pc.until > Date.now()) return fail(409, 'The kitchen is catching up. Online ordering opens again at ' + new Date(pc.until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + '.', { paced: true, retryAt: pc.until });
+            var placed = placeOrder(d, b, pickupAt);
             setTimeout(function () { emit('PACE', demoPace(load())); }, 0);
             return placed;
         }
         if (p === '/api/orders/track') {
             var toks = String(u.searchParams.get('tokens') || '').split(',');
-            return ok({ now: Date.now(), orders: d.orders.filter(function (o) { return toks.indexOf(o.token) >= 0; }).map(function (o) { return { ticket: o.ticket, token: o.token, name: o.name, status: o.status, changeUntil: o.status === 'Preparing' ? o.createdAt + 120000 : 0 }; }) });
+            return ok({ now: Date.now(), orders: d.orders.filter(function (o) { return toks.indexOf(o.token) >= 0; }).map(function (o) { return { ticket: o.ticket, token: o.token, name: o.name, status: o.status, pickupAt: o.pickupAt || null, changeUntil: o.status === 'Preparing' ? Math.max(o.createdAt + 120000, o.pickupAt ? o.pickupAt - 1800000 : 0) : 0 }; }) });
         }
         if ((m = p.match(/^\/api\/orders\/([^/]+)\/cancel$/)) && method === 'POST') {
             var oc = d.orders.filter(function (x) { return x.token === decodeURIComponent(m[1]); })[0];
             if (!oc) return fail(404, 'Order not found.');
             if (oc.status === 'Canceled') return ok({ status: 'Canceled' });
             if (oc.status !== 'Preparing') return fail(409, 'Your order is already made.');
-            if (Date.now() - oc.createdAt > 120000) return fail(409, 'The kitchen has started on it. Please ask at the window.');
+            if (Date.now() - oc.createdAt > 120000 && !(oc.pickupAt && oc.pickupAt - 1800000 > Date.now())) return fail(409, 'The kitchen has started on it. Please ask at the window.');
             oc.status = 'Canceled'; oc.updatedAt = Date.now(); undoDemo(d, oc); restoreStock(d, oc); save(d);
             emit('ORDER_UPDATE', Object.assign({}, oc, { byCustomer: true }), true);
             emit('ORDER_STATUS', { tag: oc.tag, status: 'Canceled' }); emitWait(d);
@@ -498,6 +525,8 @@
             return ok({ deals: nd, runningNow: IC2 ? DC2.active(nd, IC2.parts(Date.now(), d.timezone)).map(function (x) { return x.id; }) : [] });
         }
 
+        if (p === '/api/pickup-slots') return ok(demoSlots(d));
+
         /* now serving */
         if (p === '/api/now') {
             var act = d.orders.filter(function (o) { return o.status === 'Preparing' || o.status === 'Ready'; });
@@ -591,6 +620,9 @@
             }
             if (b.location !== undefined) { d.state.location = String(b.location || ''); emit('LOCATION_UPDATE', { location: d.state.location }); }
             if (b.paused !== undefined) { d.state.paused = !!b.paused; emit('PAUSED', { paused: d.state.paused }); }
+            if (b.schedOn !== undefined) { d.state.schedOn = !!b.schedOn; }
+            if (b.slotCap !== undefined) { var sc = parseInt(b.slotCap, 10); if (!(sc >= 1 && sc <= 30)) return fail(400, 'Orders per 15-minute slot: 1 to 30.'); d.state.slotCap = sc; }
+            if (b.schedOn !== undefined || b.slotCap !== undefined) setTimeout(function () { emit('SCHED', { on: !!d.state.schedOn, cap: d.state.slotCap || 4 }); }, 0);
             if (b.paceLimit !== undefined) { var pl = parseInt(b.paceLimit, 10); if (!(pl >= 0 && pl <= 60)) return fail(400, 'Pick how many online orders per 10 minutes (or off).'); d.state.paceLimit = pl; }
             save(d); emitWait(d);
             return ok(stateOut(d));

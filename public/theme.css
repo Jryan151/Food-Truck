@@ -269,3 +269,17 @@ input::placeholder, textarea::placeholder { color: var(--z500); opacity: 1; }
 .fc-prep { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .fc-prep span { font-size: 12px; color: var(--z300); border: 1px solid var(--z800); border-radius: 8px; padding: 4px 8px; }
 .fc-prep b { color: var(--z100); }
+
+/* Scheduled pickup */
+.slot-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
+.slot { height: 44px; border-radius: 10px; border: 1px solid var(--z800); background: var(--z950); color: var(--z100); font-size: 12px; font-weight: 700; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.slot[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+.slot:disabled { color: var(--z600); }
+.slot small { font-size: 9px; font-weight: 600; }
+.later-box { border: 1px dashed var(--z700); border-radius: 12px; padding: 10px 12px; margin-top: 4px; }
+.later-head { font-size: 10px; font-weight: 700; letter-spacing: .14em; color: var(--z500); margin-bottom: 6px; }
+.later-row { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-top: 1px solid var(--z900); }
+.later-row:first-of-type { border-top: 0; }
+.later-row b { display: block; font-size: 12px; color: var(--z100); }
+.later-row span { display: block; font-size: 11px; color: var(--z500); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.later-time { text-align: right; flex: none; }

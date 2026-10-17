@@ -175,6 +175,7 @@
         <div class="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center border-b border-zinc-800 pb-3"><h3 class="font-bold text-lg" data-i18n="your_order">Your Order</h3><button data-action="close-cart" class="text-zinc-400 hover:text-white text-sm" aria-label="Close">✕</button></div>
 
+            <div id="whenBox" style="display:none"></div>
             <div id="cartWaitTimeContainer" class="bg-amber-500/10 border border-amber-500/30 rounded-lg p-2.5 flex items-center justify-between text-xs">
                 <span class="text-amber-400 font-medium" data-i18n="wait_time">⏱️ Wait time:</span>
                 <span id="cartEstimatedWait" class="font-bold text-amber-400 font-mono">0 mins</span>
@@ -254,6 +255,7 @@
                 card_progress: '{n} of {every}', card_more: 'Free item (up to {cap}) after {left} more', card_ready: '🎁 Your free item is ready. Use it at checkout.',
                 card_keep: 'Keep my card on another phone', card_email_ph: 'you@email.com', card_send: 'Send', card_use: 'Use my free item (up to {cap})', card_line: 'Free item',
                 card_stamp_soon: '+1 stamp on your {name} when your order is ready', card_gone: 'Your free item isn’t ready yet.',
+                when: 'When', when_now: 'As soon as possible', when_later: 'Later today', slot_full: 'Full', no_slots: 'No times left today.', pick_time: 'Pick a pickup time.', pickup_at: 'Pickup at {t}',
                 only_left: 'Only {n} left', paced: 'Kitchen’s catching up · ordering opens at {t}',
                 deal_until: 'until {t}', deal_later: '{name} today, {from} – {to}', price_changed_ok: 'Check your cart, then tap Place order again.',
                 wait_now: '⏱ About {n} min wait right now', usual_title: 'Your usual', again_title: 'Order again', alert_chime: '🔔 We’ll chime here when it’s ready. Keep this page open.', usual_add: 'Add to cart', usual_out: '{item} is sold out today.',
@@ -298,6 +300,7 @@
                 card_progress: '{n} de {every}', card_more: 'Producto gratis (hasta {cap}) en {left} más', card_ready: '🎁 Tu producto gratis está listo. Úsalo al pagar.',
                 card_keep: 'Guardar mi tarjeta en otro teléfono', card_email_ph: 'tu@correo.com', card_send: 'Enviar', card_use: 'Usar mi producto gratis (hasta {cap})', card_line: 'Producto gratis',
                 card_stamp_soon: '+1 sello en tu tarjeta cuando tu pedido esté listo', card_gone: 'Tu producto gratis aún no está listo.',
+                when: 'Cuándo', when_now: 'Lo antes posible', when_later: 'Más tarde hoy', slot_full: 'Lleno', no_slots: 'No quedan horarios hoy.', pick_time: 'Elige una hora para recoger.', pickup_at: 'Para recoger a las {t}',
                 only_left: 'Quedan {n}', paced: 'La cocina se está poniendo al día · pedidos a las {t}',
                 deal_until: 'hasta las {t}', deal_later: '{name} hoy, {from} – {to}', price_changed_ok: 'Revisa tu carrito y vuelve a tocar Enviar pedido.',
                 wait_now: '⏱ Espera de unos {n} min ahora', usual_title: 'Lo de siempre', again_title: 'Pedir de nuevo', alert_chime: '🔔 Sonará aquí cuando esté listo. Deja esta página abierta.', usual_add: 'Agregar', usual_out: '{item} está agotado hoy.',
@@ -427,6 +430,7 @@
             updateCartUI();
         }
         setInterval(function () { if (app.vendor) checkDeals(); }, 30000);
+        function fmtClock(ms) { try { return new Date(ms).toLocaleTimeString(lang === 'es' ? 'es' : 'en-US', { hour: 'numeric', minute: '2-digit', timeZone: app.timezone || undefined }); } catch (e) { return new Date(ms).toLocaleTimeString(); } }
         function liveWait() { return app.state.wait && app.state.wait.minutes ? app.state.wait.minutes : 0; }
         function pacedUntil() { var p = app.state.pace; return p && p.until > Date.now() ? p.until : 0; }
         function canOrder() { return !isClosed() && !app.state.paused && !pacedUntil(); }
@@ -695,6 +699,7 @@
             if (!tt.lines.length) { closeCartModal(); return; }
             $('cartEstimatedWait').textContent = t('mins', { n: liveWait() ? Math.max(liveWait(), Math.min(tt.prep, 90)) : tt.prep + (Number(app.state.rush) || 0) });
             renderPayChoice();
+            renderWhen();
             renderRewardRow();
             $('cartModalTotal').textContent = money(Math.max(0, tt.total - rewardCents() / 100));
             $('cartItemsList').innerHTML = tt.lines.map(function (x) {
@@ -767,6 +772,7 @@
             var consent = app.vendor.smsReady && $('smsConsent').checked;
             if (phone && !consent) { setCartError(t('consent_needed')); app.placing = false; btn.disabled = false; renderPayChoice(); return; }
             var payNow = willPayNow();
+            if (app.later && !app.pickupAt) { setCartError(t('pick_time')); app.placing = false; btn.disabled = false; renderPayChoice(); return; }
             // One key per cart: a second tap or a retry after a dropped signal can't create a second order.
             var sig = JSON.stringify(tt.lines.map(function (x) { return [x.line.id, x.line.qty, x.line.meat || '', x.line.option || '']; })) + '|' + name + '|' + notes + '|' + payNow + '|' + $('customerAllergy').value.trim();
             if (!app.orderKey || app.orderKeySig !== sig) {
@@ -786,6 +792,7 @@
                     seenTotal: Math.max(Math.round(tt.total * 100 - rewardCents()) / 100, app.acceptedTotal || 0),
                     cardToken: cardToken() || undefined,
                     useReward: app.useReward && !!rewardCents() || undefined,
+                    pickupAt: app.later && app.pickupAt ? app.pickupAt : undefined,
                     allergy: $('customerAllergy').value.trim() || undefined,
                     payNow: payNow,
                     customerPhone: phone || undefined,
@@ -795,6 +802,7 @@
             }).then(function (r) {
                 return r.json().catch(function () { return {}; }).then(function (body) { return { ok: r.ok, status: r.status, body: body }; });
             }).then(function (res) {
+                if (!res.ok && res.body.slotGone) { setCartError(res.body.error); app.pickupAt = null; loadSlots(); return; }
                 if (!res.ok && res.body.rewardGone) {
                     app.useReward = false; setCartError(res.body.error || t('card_gone'));
                     loadCard(); return;
@@ -835,6 +843,7 @@
                     app.tracked.unshift({
                         token: res.body.token, tag: res.body.tag, ticket: res.body.ticket, name: name || 'Guest', summary: summary, total: res.body.total, status: res.body.status, paid: false,
                         changeAt: res.body.changeUntil ? res.body.changeUntil + skew : 0,
+                        pickupAt: res.body.pickupAt || null,
                         lines: app.cart.map(function (l) { return { key: l.key, id: l.id, meat: l.meat || '', option: l.option || '', qty: l.qty }; }),
                         notes: notes, allergy: $('customerAllergy').value.trim()
                     });
@@ -853,7 +862,8 @@
                 updateCartUI();
                 updateTrackButtons();
                 $('successTicketNum').textContent = '#' + res.body.ticket;
-                $('successWait').textContent = t('est_wait', { n: res.body.estimatedMinutes });
+                $('successWait').textContent = res.body.pickupAt ? t('pickup_at', { t: fmtClock(res.body.pickupAt) }) : t('est_wait', { n: res.body.estimatedMinutes });
+                app.later = false; app.pickupAt = null;
                 $('successPay').textContent = '💵 ' + t('pay_window_short').replace(/^💵\s*/, '');
                 $('successChange').textContent = res.body.changeUntil ? t('change_left', { t: '2:00' }) : '';
                 renderAlertOffer();
@@ -946,6 +956,29 @@
                 .then(function (r) { return r.ok ? r.json() : { on: false }; })
                 .then(function (c) { app.card = c && c.on ? c : null; if (!app.card || !app.card.ready) app.useReward = false; renderCard(); if ($('cartModal').style.display === 'flex') renderCartModal(); })
                 .catch(function () {});
+        }
+        /* ---------- when: now, or a pickup time later today ---------- */
+        function schedOn() { return !!(app.state.sched && app.state.sched.on); }
+        function loadSlots() {
+            return fetch('/api/pickup-slots', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : { on: false }; })
+                .then(function (d) {
+                    app.slots = d.on ? d.slots : [];
+                    if (app.pickupAt && !app.slots.some(function (s) { return s.at === app.pickupAt && !s.full; })) app.pickupAt = null;
+                    renderWhen();
+                }).catch(function () {});
+        }
+        function renderWhen() {
+            var box = $('whenBox');
+            if (!schedOn()) { box.style.display = 'none'; app.later = false; app.pickupAt = null; $('cartWaitTimeContainer').style.display = ''; return; }
+            box.style.display = 'block';
+            var slots = app.slots || [];
+            box.innerHTML = '<div class="theme-seg" role="group" aria-label="' + esc(t('when')) + '">' +
+                '<button data-action="when" data-v="now" aria-pressed="' + !app.later + '">' + esc(t('when_now')) + '</button>' +
+                '<button data-action="when" data-v="later" aria-pressed="' + !!app.later + '">' + esc(t('when_later')) + '</button></div>' +
+                (app.later ? (slots.length ? '<div class="slot-grid">' + slots.map(function (s) {
+                    return '<button data-action="slot" data-at="' + s.at + '" aria-pressed="' + (app.pickupAt === s.at) + '"' + (s.full ? ' disabled' : '') + ' class="slot">' + esc(s.label) + (s.full ? '<small>' + esc(t('slot_full')) + '</small>' : '') + '</button>';
+                }).join('') + '</div>' : '<div class="text-[11px] text-zinc-500 mt-2">' + esc(t('no_slots')) + '</div>') : '');
+            $('cartWaitTimeContainer').style.display = app.later ? 'none' : '';
         }
         function rewardCents() {
             if (!app.useReward || !app.card || !app.card.ready) return 0;
@@ -1102,7 +1135,7 @@
                 var ready = st === 'Ready';
                 return '<div data-order-card><div class="bg-zinc-900 border ' + (ready ? 'border-blue-500/60' : 'border-zinc-800') + ' p-4 ' + (changeLeft(o) ? 'rounded-t-xl' : 'rounded-xl') + ' flex justify-between items-center gap-3"><div class="min-w-0">' +
                     '<span class="text-xs font-mono font-bold">' + esc(t('ticket', { n: o.ticket })) + ' • ' + esc(o.name) + '</span>' +
-                    '<div class="text-[11px] ' + (ready ? 'text-blue-300 font-semibold' : 'text-zinc-400') + ' mt-0.5">' + esc(t('msg_' + st)) + '</div>' +
+                    '<div class="text-[11px] ' + (ready ? 'text-blue-300 font-semibold' : 'text-zinc-400') + ' mt-0.5">' + esc(st === 'Preparing' && o.pickupAt ? t('pickup_at', { t: fmtClock(o.pickupAt) }) : t('msg_' + st)) + '</div>' +
                     '<div class="text-[11px] text-zinc-500 mt-0.5 truncate">' + esc(o.summary) + '</div>' +
                     '<span class="inline-block mt-2 px-2.5 py-1 rounded-full text-xs font-medium border ' + STATUS_STYLE[st] + '">' + esc(t('st_' + st)) + '</span>' +
                     (o.paid ? ' <span class="inline-block mt-2 ml-1 px-2 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">' + esc(t('paid_badge')) + '</span>' : '') +
@@ -1160,6 +1193,7 @@
                             if (o.token !== s.token) return;
                             if (s.payment === 'paid' && !o.paid) o.paid = true;
                             o.changeAt = s.changeUntil ? s.changeUntil + skew : 0;
+                            o.pickupAt = s.pickupAt || null;
                         });
                         saveTracked();
                         applyStatus(function (o) { return o.token === s.token; }, s.status);
@@ -1226,12 +1260,13 @@
                 try { msg = JSON.parse(e.data); } catch (err) { return; }
                 var p = msg.payload || {};
                 switch (msg.type) {
-                    case 'STATE': app.state = { status: p.status, rush: p.rush, location: p.location || '', paused: !!p.paused, wait: p.wait || null, pace: p.pace || null, closedNote: p.closedNote || '' }; renderStatus(); renderLocation(); break;
+                    case 'STATE': app.state = { status: p.status, rush: p.rush, location: p.location || '', paused: !!p.paused, wait: p.wait || null, pace: p.pace || null, closedNote: p.closedNote || '', sched: p.sched || null }; renderStatus(); renderLocation(); break;
                     case 'REWARDS_UPDATE': if (app.vendor) { app.vendor.rewards = p.on ? p : null; loadCard(); } break;
                     case 'DEALS_UPDATE': app.deals = p.deals || []; app.dealSig = null; checkDeals(); break;
                     case 'WAIT': app.state.wait = p; renderStatus(); if ($('cartModal').style.display === 'flex') renderCartModal(); break;
                     case 'STORE_STATUS': app.state.status = p.status; app.state.closedNote = p.note || ''; renderStatus(); break;
                     case 'PACE': app.state.pace = p; renderStatus(); break;
+                    case 'SCHED': app.state.sched = p; if ($('cartModal').style.display === 'flex') renderCartModal(); break;
                     case 'PAUSED': app.state.paused = !!p.paused; renderStatus(); break;
                     case 'RUSH_MODE': app.state.rush = Number(p.minutes) || 0; renderStatus(); break;
                     case 'LOCATION_UPDATE': app.state.location = p.location || ''; renderLocation(); break;
@@ -1327,6 +1362,8 @@
                     break;
                 case 'place-order': placeOrder(); break;
                 case 'add-usual': addUsual(); break;
+                case 'when': app.later = el.getAttribute('data-v') === 'later'; if (app.later) loadSlots(); renderCartModal(); break;
+                case 'slot': app.pickupAt = +el.getAttribute('data-at'); setCartError(''); renderWhen(); break;
                 case 'card-keep': app.cardSaving = true; renderCard(); var ce = $('cardEmail'); if (ce) ce.focus(); break;
                 case 'enable-alert': enableAlert(); break;
                 case 'order-cancel': cancelOrder(el.getAttribute('data-token'), false); break;
