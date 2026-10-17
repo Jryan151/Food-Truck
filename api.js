@@ -18,6 +18,7 @@ const Insights = require('./public/insights-core');
 const schedule = require('./schedule');
 const Deals = require('./public/deals-core');
 const rewards = require('./rewards');
+const inventory = require('./inventory');
 const { run, get, all } = core;
 const { requireVendor, requireRole, getSession, rateLimit } = auth;
 
@@ -25,9 +26,9 @@ const router = express.Router();
 const ACTIVE = ['Preparing', 'Ready'];
 
 /* ---------- shapes sent to browsers ---------- */
-function publicMenu(v) {
-  return core.parseMenu(v.menu_data);
-}
+// The menu as it really is (sold out by hand, out of stock, or missing an ingredient). Owners get counts.
+const publicMenu = (v) => inventory.menuFor(v);
+const ownerMenu = async (vendorId) => inventory.menuFor(await get('SELECT * FROM vendors WHERE id = ?', [vendorId]), { owner: true });
 
 const orderShape = core.orderShape;
 // Who did it, for the service record: the crew member's name when they have their own PIN.
@@ -88,7 +89,7 @@ router.get('/vendor-data', async (req, res) => {
     customDomain: v.custom_domain,
     ownerIG: v.owner_ig || '',
     emoji: v.emoji || '',
-    menu: publicMenu(v),
+    menu: await publicMenu(v),
     state: await core.getState(v.id),
     showBranding: !f.removeBranding,
     pinOnly: !v.password_hash, // older accounts created before email logins existed
@@ -167,7 +168,7 @@ router.post('/orders', limitOrders, requireVendor, async (req, res) => {
   if (state.status === 'closed') return res.status(403).json({ error: 'Sorry, we are closed right now.' });
   if (state.paused) return res.status(403).json({ error: 'Online ordering is paused right now. Please order at the window.' });
 
-  const menu = core.parseMenu(v.menu_data);
+  const menu = await inventory.menuFor(v, { owner: true });
   const byId = new Map(menu.map((m) => [m.id, m]));
   const lines = Array.isArray(b.items) ? b.items.slice(0, 30) : [];
   if (!lines.length) return res.status(400).json({ error: 'Your cart is empty.' });
@@ -182,6 +183,8 @@ router.post('/orders', limitOrders, requireVendor, async (req, res) => {
     if (!item) return res.status(400).json({ error: 'An item in your cart is no longer on the menu.' });
     if (item.soldOut) return res.status(409).json({ error: `${item.name} is sold out.` });
     if (!Number.isInteger(qty) || qty < 1 || qty > 50) return res.status(400).json({ error: 'Invalid quantity.' });
+    const want = lines.reduce((n, x) => n + (parseInt(x && x.id, 10) === item.id ? parseInt(x.qty, 10) || 0 : 0), 0);
+    if (item.left !== null && want > item.left) return res.status(409).json({ error: `Only ${item.left} ${item.name} left. Please lower the amount.`, stock: { itemId: item.id, left: item.left } });
 
     let label = item.name;
     let extra = 0;
@@ -255,6 +258,14 @@ router.post('/orders', limitOrders, requireVendor, async (req, res) => {
   const rw = await rewards.atOrder(v, { cardToken, useReward, items });
   if (rw.error) return res.status(rw.status).json({ error: rw.error, rewardGone: true });
   total = Math.round(items.reduce((sum, it) => sum + Math.round(it.price * 100) * it.qty, 0)) / 100;
+  // Take the stock last, all or nothing. If someone else just got the last one, say so plainly.
+  const st = await inventory.take(v.id, items.map((it) => ({ id: it.id, qty: it.qty })));
+  if (st.error) {
+    await rewards.giveBack(rw.cardId, rw.rewardEvery);
+    const it = byId.get(st.error.itemId);
+    return res.status(409).json({ error: st.error.left ? `Only ${st.error.left} ${it.name} left. Please lower the amount.` : `${it.name} just sold out.`, stock: st.error });
+  }
+  const stockJson = Object.keys(st.taken).length ? JSON.stringify(st.taken) : null;
 
   // Atomic per-vendor ticket counter.
   const row = await get('UPDATE vendors SET next_ticket = COALESCE(next_ticket, 101) + 1 WHERE id = ? RETURNING next_ticket - 1 AS ticket', [v.id]);
@@ -263,18 +274,20 @@ router.post('/orders', limitOrders, requireVendor, async (req, res) => {
   let r;
   try {
     r = await run(
-      `INSERT INTO orders (vendor_id, ticket_no, public_token, customer_name, items_json, notes, total, status, payment_status, customer_phone, client_key, allergy, location, card_id, reward_cents, reward_every, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [v.id, row.ticket, token, name, JSON.stringify(items), notes, total, payNow ? 'Pending' : 'Preparing', payNow ? 'pending' : 'window', phone, clientKey, allergy, state.location || null, rw.cardId || null, rw.rewardCents || 0, rw.rewardEvery || null, now, now]
+      `INSERT INTO orders (vendor_id, ticket_no, public_token, customer_name, items_json, notes, total, status, payment_status, customer_phone, client_key, allergy, location, card_id, reward_cents, reward_every, stock_json, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [v.id, row.ticket, token, name, JSON.stringify(items), notes, total, payNow ? 'Pending' : 'Preparing', payNow ? 'pending' : 'window', phone, clientKey, allergy, state.location || null, rw.cardId || null, rw.rewardCents || 0, rw.rewardEvery || null, stockJson, now, now]
     );
   } catch (err) {
     await rewards.giveBack(rw.cardId, rw.rewardEvery); // the order wasn't saved, so the reward wasn't spent
+    await inventory.giveBack(v.id, st.taken);         // …and neither was the stock
     // Two taps arrived at the same instant: the first one won, so answer with its order.
     if (err.code === 'SQLITE_CONSTRAINT' && clientKey && (await sameOrder())) return;
     throw err;
   }
   const orderRow = await get('SELECT * FROM orders WHERE id = ?', [r.lastID]);
   core.logOrderEvent(v.id, orderRow.id, 'placed', 'customer');
+  if (stockJson) inventory.announce(v.id, Object.keys(st.taken)).catch(() => {});
   const reply = {
     ticket: orderRow.ticket_no,
     token,
@@ -337,7 +350,7 @@ router.post('/orders/:token/cancel', limitOrders, requireVendor, async (req, res
     return res.status(409).json({ error: msg, status: o.status });
   }
   core.logOrderEvent(v.id, row.id, 'canceled', 'customer');
-  await rewards.undo(row.id);
+  await core.orderClosed(v.id, row.id, 'canceled');
   core.broadcast(v.id, 'ORDER_UPDATE', Object.assign(orderShape(row), { byCustomer: true }), true);
   core.broadcast(v.id, 'ORDER_STATUS', { tag: core.orderTag(row.public_token), status: 'Canceled' });
   core.refreshWait(v.id);
@@ -399,8 +412,7 @@ router.patch('/owner/orders/:id', staffOrOwner, async (req, res) => {
   );
   if (!row) return res.status(409).json({ error: 'That order cannot be changed.' });
   core.logOrderEvent(v.id, row.id, next.toLowerCase(), actorOf(req));
-  if (next === 'Canceled') await rewards.undo(row.id);
-  else await rewards.stamp(v.id, row.id);
+  await core.orderClosed(v.id, row.id, next.toLowerCase()); // punch card, stock: one place reacts to every status change
   if (next === 'Ready') sms.notifyReady(v, existing).catch(() => {});
   const order = orderShape(row);
   core.broadcast(v.id, 'ORDER_UPDATE', order, true);
@@ -435,6 +447,11 @@ router.put('/owner/state', staffOrOwner, async (req, res) => {
     // Start of service: a fresh day. Yesterday's lock and pace don't carry over.
     if (b.status === 'open' && before.status !== 'open') {
       await run('UPDATE store_state SET service_started_at = ?, wait_lock = NULL WHERE vendor_id = ?', [Date.now(), v.id]);
+      // Yesterday's "out of" list doesn't carry into a new day: restocked is the default.
+      if (inventory.outList(await get('SELECT out_json FROM vendors WHERE id = ?', [v.id])).length) {
+        await run("UPDATE vendors SET out_json = '[]' WHERE id = ?", [v.id]);
+        await inventory.broadcastMenu(v.id);
+      }
     }
     core.broadcast(v.id, 'STORE_STATUS', { status: b.status });
   }
@@ -526,7 +543,7 @@ router.post('/owner/upload', ownerOnly, express.raw({ type: Object.keys(PHOTO_TY
 
 /* ----- menu ----- */
 router.get('/owner/menu', staffOrOwner, async (req, res) => {
-  res.json({ menu: core.parseMenu(req.tenant.vendor.menu_data), maxItems: core.MAX_ITEMS });
+  res.json({ menu: await ownerMenu(req.tenant.vendor.id), maxItems: core.MAX_ITEMS, out: inventory.outList(req.tenant.vendor) });
 });
 
 router.patch('/owner/menu/:id/soldout', staffOrOwner, async (req, res) => {
@@ -536,8 +553,41 @@ router.patch('/owner/menu/:id/soldout', staffOrOwner, async (req, res) => {
   if (!item) return res.status(404).json({ error: 'Item not found.' });
   item.soldOut = !!(req.body || {}).soldOut;
   await core.saveMenu(v.id, menu);
-  core.broadcast(v.id, 'SOLD_OUT', { itemId: item.id, soldOut: item.soldOut });
-  res.json({ item });
+  await inventory.announce(v.id, [item.id]);
+  res.json({ item: (await ownerMenu(v.id)).find((m) => m.id === item.id) });
+});
+
+// "40 left" (null stops counting). Crew can do this from the kitchen.
+router.put('/owner/stock/:id', staffOrOwner, async (req, res) => {
+  const v = req.tenant.vendor;
+  const id = parseInt(req.params.id, 10);
+  if (!core.parseMenu(v.menu_data).some((m) => m.id === id)) return res.status(404).json({ error: 'Item not found.' });
+  const raw = (req.body || {}).left;
+  if (raw === null || raw === '') {
+    await run('DELETE FROM item_stock WHERE vendor_id = ? AND item_id = ?', [v.id, id]);
+  } else {
+    const n = parseInt(raw, 10);
+    if (!Number.isInteger(n) || n < 0 || n > 9999) return res.status(400).json({ error: 'Enter how many are left (0 to 9999), or leave it blank to stop counting.' });
+    await run('INSERT INTO item_stock (vendor_id, item_id, left_count) VALUES (?, ?, ?) ON CONFLICT (vendor_id, item_id) DO UPDATE SET left_count = excluded.left_count', [v.id, id, n]);
+  }
+  await inventory.announce(v.id, [id]);
+  res.json({ item: (await ownerMenu(v.id)).find((m) => m.id === id) });
+});
+
+// "Out of cilantro": every item with that ingredient sells out until it's back.
+router.put('/owner/out', staffOrOwner, async (req, res) => {
+  const v = await get('SELECT * FROM vendors WHERE id = ?', [req.tenant.vendor.id]);
+  const ing = String((req.body || {}).ingredient || '').trim().slice(0, 30);
+  if (!ing) return res.status(400).json({ error: 'Which ingredient?' });
+  const key = ing.toLowerCase();
+  let out = inventory.outList(v).filter((x) => x.toLowerCase() !== key);
+  if ((req.body || {}).out) out.push(ing);
+  out = out.slice(0, 50);
+  await run('UPDATE vendors SET out_json = ?, updated_at = ? WHERE id = ?', [JSON.stringify(out), Date.now(), v.id]);
+  core.logOrderEvent(v.id, 0, `${(req.body || {}).out ? 'out-of' : 'back-in'}:${ing}`, actorOf(req));
+  await inventory.broadcastMenu(v.id);
+  core.broadcast(v.id, 'OUT_UPDATE', { out }, true);
+  res.json({ out, menu: await ownerMenu(v.id) });
 });
 
 router.post('/owner/menu', ownerOnly, async (req, res) => {
@@ -553,8 +603,8 @@ router.post('/owner/menu', ownerOnly, async (req, res) => {
   const item = core.normalizeItem({ ...b, soldOut: false }, nextId);
   menu.push(item);
   await core.saveMenu(v.id, menu);
-  core.broadcast(v.id, 'MENU_UPDATE', { menu });
-  res.status(201).json({ item, menu });
+  await inventory.broadcastMenu(v.id);
+  res.status(201).json({ item, menu: await ownerMenu(v.id) });
 });
 
 router.put('/owner/menu/:id', ownerOnly, async (req, res) => {
@@ -567,8 +617,9 @@ router.put('/owner/menu/:id', ownerOnly, async (req, res) => {
   if (b.photo && !String(b.photo).startsWith(`/uploads/${v.id}-`)) delete b.photo;
   menu[idx] = core.normalizeItem({ ...menu[idx], ...b, id: menu[idx].id, soldOut: menu[idx].soldOut }, menu[idx].id);
   await core.saveMenu(v.id, menu);
-  core.broadcast(v.id, 'MENU_UPDATE', { menu });
-  res.json({ item: menu[idx], menu });
+  await inventory.broadcastMenu(v.id);
+  const om = await ownerMenu(v.id);
+  res.json({ item: om[idx], menu: om });
   cleanupPhotos(v.id, menu).catch(() => {});
 });
 
@@ -583,8 +634,8 @@ router.put('/owner/menu-order', ownerOnly, async (req, res) => {
   }
   const next = ids.map((id) => byId.get(id));
   await core.saveMenu(v.id, next);
-  core.broadcast(v.id, 'MENU_UPDATE', { menu: next });
-  res.json({ menu: next });
+  await inventory.broadcastMenu(v.id);
+  res.json({ menu: await ownerMenu(v.id) });
 });
 
 router.delete('/owner/menu/:id', ownerOnly, async (req, res) => {
@@ -593,8 +644,9 @@ router.delete('/owner/menu/:id', ownerOnly, async (req, res) => {
   const next = menu.filter((m) => m.id !== parseInt(req.params.id, 10));
   if (next.length === menu.length) return res.status(404).json({ error: 'Item not found.' });
   await core.saveMenu(v.id, next);
-  core.broadcast(v.id, 'MENU_UPDATE', { menu: next });
-  res.json({ menu: next });
+  await run('DELETE FROM item_stock WHERE vendor_id = ? AND item_id = ?', [v.id, parseInt(req.params.id, 10)]);
+  await inventory.broadcastMenu(v.id);
+  res.json({ menu: await ownerMenu(v.id) });
   cleanupPhotos(v.id, next).catch(() => {});
 });
 

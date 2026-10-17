@@ -255,3 +255,4 @@ input::placeholder, textarea::placeholder { color: var(--z500); opacity: 1; }
 .punch.on { background: var(--z100); border-color: var(--z100); }
 .punch-use { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--z100); background: var(--z950); border: 1px solid var(--z300); border-radius: 12px; padding: 12px; }
 .punch-use input { width: 20px; height: 20px; accent-color: var(--ink); }
+.left-tag { font-size: 10px; font-weight: 700; color: var(--warn); }

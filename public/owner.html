@@ -152,6 +152,11 @@
                     <h3 class="font-semibold text-sm text-zinc-400">Live Inventory Control</h3>
                     <button data-action="add-item" data-owner class="bg-zinc-100 text-zinc-950 px-3 py-1.5 rounded-lg text-[11px] font-bold">+ Add Item</button>
                 </div>
+                <div id="outBox" class="bg-zinc-900 border border-zinc-800 rounded-xl p-3" style="display:none">
+                    <div class="text-xs font-bold text-zinc-200">Running out of something?</div>
+                    <div class="text-[10px] text-zinc-500 mb-2">Tap an ingredient and every item that uses it sells out until you tap it again. Clears itself at the next Start service.</div>
+                    <div id="outChips" class="flex flex-wrap gap-1.5"></div>
+                </div>
                 <div id="ownerMenuList" class="space-y-3 relative"></div>
 
                 <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-4" data-owner id="dealsBox">
@@ -535,6 +540,11 @@
             <div>
                 <label class="block text-xs text-zinc-400 mb-1">Upcharge for choices after the first ($)</label>
                 <input type="number" step="0.01" min="0" inputmode="decimal" id="editUpcharge" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200">
+            </div>
+            <div>
+                <label class="block text-xs text-zinc-400 mb-1" for="editIngredients">Key ingredients (comma separated, optional)</label>
+                <input type="text" id="editIngredients" maxlength="300" placeholder="beef, cilantro, onion" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-200">
+                <p class="text-[10px] text-zinc-500 mt-1">Run out of one? “Running out of something?” sells out every item that uses it.</p>
             </div>
             <div>
                 <label class="block text-xs text-zinc-400 mb-1" for="editOptions">Flavor / size options (comma separated, optional, no extra charge)</label>
@@ -987,7 +997,7 @@
         /* ---------- inventory ---------- */
         function loadMenu() {
             return api('GET', '/api/owner/menu').then(function (r) {
-                if (r.ok) { app.menu = r.data.menu || []; renderMenuList(); if (app.tab === 'Orders' && app.orders.length) renderOrders(); } // tickets use menu cook times
+                if (r.ok) { app.menu = r.data.menu || []; app.out = r.data.out || []; renderMenuList(); renderOut(); if (app.tab === 'Orders' && app.orders.length) renderOrders(); } // tickets use menu cook times
             });
         }
         // Same grouping as the customer page: categories in the order they first appear.
@@ -996,8 +1006,40 @@
             app.menu.forEach(function (it) { var k = (it.category || '').trim(); if (!map[k]) { map[k] = []; order.push(k); } map[k].push(it); });
             return order.map(function (k) { return { name: k, items: map[k] }; });
         }
+        /* ---------- running out: ingredients and counts ---------- */
+        function renderOut() {
+            var all = [], seen = {};
+            (app.menu || []).forEach(function (m) { (m.ingredients || []).forEach(function (i) { var k = i.toLowerCase(); if (!seen[k]) { seen[k] = 1; all.push(i); } }); });
+            var out = (app.out || []).map(function (x) { return x.toLowerCase(); });
+            $('outBox').style.display = all.length ? '' : 'none';
+            $('outChips').innerHTML = all.sort(function (a, b) { return a.localeCompare(b); }).map(function (i) {
+                var on = out.indexOf(i.toLowerCase()) >= 0;
+                return '<button data-action="out-toggle" data-ing="' + esc(i) + '" aria-pressed="' + on + '" class="deal-chip">' + (on ? 'Out: ' : '') + esc(i) + '</button>';
+            }).join('');
+        }
+        function toggleOut(ing) {
+            var on = (app.out || []).some(function (x) { return x.toLowerCase() === ing.toLowerCase(); });
+            var hit = (app.menu || []).filter(function (m) { return (m.ingredients || []).some(function (i) { return i.toLowerCase() === ing.toLowerCase(); }); }).map(function (m) { return m.name; });
+            if (!on && !confirm('Out of ' + ing + '? This sells out: ' + hit.join(', ') + '.')) return;
+            api('PUT', '/api/owner/out', { ingredient: ing, out: !on }).then(function (r) {
+                if (!r.ok) { alert(r.data.error || 'Could not update.'); return; }
+                app.out = r.data.out; app.menu = r.data.menu; renderOut(); renderMenuList();
+            });
+        }
+        function setStock(id, val) {
+            api('PUT', '/api/owner/stock/' + id, { left: val === '' ? null : Number(val) }).then(function (r) {
+                if (!r.ok) { alert(r.data.error || 'Could not update.'); loadMenu(); return; }
+                var it = app.menu.find(function (m) { return m.id === id; }); if (it) Object.assign(it, r.data.item);
+                renderMenuList();
+            });
+        }
+
         function renderMenuList() {
             var c = $('ownerMenuList');
+            // Someone is typing a count: don't redraw under their fingers. Catch up when they leave the box.
+            var fe = document.activeElement;
+            if (fe && fe.getAttribute && fe.getAttribute('data-stock') && c.contains(fe)) { app.menuDirty = true; return; }
+            app.menuDirty = false;
             if (!app.menu.length) { c.innerHTML = '<div class="text-center text-zinc-500 py-6 text-xs bg-zinc-900 border border-zinc-800 rounded-xl">No menu items yet.</div>'; return; }
             var gs = menuGroups(), named = gs.some(function (g) { return g.name; });
             c.innerHTML = gs.map(function (g) {
@@ -1017,10 +1059,12 @@
                     : money(item.price);
                 return '<div class="bg-zinc-900 border border-zinc-800 p-3 rounded-xl flex justify-between items-center text-xs gap-3">' + arrows +
                     (item.photo ? '<img src="' + esc(item.photo) + '" alt="" loading="lazy" class="w-10 h-10 rounded-lg object-cover shrink-0">' : '') +
-                    '<div class="min-w-0 flex-1"><div class="font-bold text-zinc-100 truncate">' + esc(item.name) + '</div><div class="text-[11px] mt-0.5 text-zinc-300">' + price + ' • Prep: ' + esc(item.prep) + ' mins</div></div>' +
+                    '<div class="min-w-0 flex-1"><div class="font-bold text-zinc-100 truncate">' + esc(item.name) + '</div><div class="text-[11px] mt-0.5 text-zinc-300">' + price + ' • Prep: ' + esc(item.prep) + ' mins</div>' +
+                    (item.outReason === 'stock' ? '<div class="text-[10px] mt-0.5 font-semibold" style="color:var(--bad)">Out of stock</div>' : item.outReason === 'ingredient' ? '<div class="text-[10px] mt-0.5 font-semibold" style="color:var(--warn)">Out: ' + esc(item.missing) + '</div>' : '') +
+                    '<label class="inline-flex items-center gap-1.5 mt-1.5 text-[10px] text-zinc-500">Left <input type="number" min="0" max="9999" inputmode="numeric" data-stock="' + item.id + '" value="' + (item.left === null || item.left === undefined ? '' : item.left) + '" placeholder="∞" style="width:64px" class="bg-zinc-950 border border-zinc-800 rounded p-1 text-center text-zinc-200 text-[11px]"></label></div>' +
                     '<div class="flex items-center gap-3 shrink-0">' +
                     (isOwner() ? '<button data-action="edit-item" data-id="' + item.id + '" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1.5 rounded-lg text-[10px] font-semibold transition">Edit</button>' : '') +
-                    '<div class="flex flex-col items-center gap-1"><button data-action="toggle-sold" data-id="' + item.id + '" aria-label="Toggle sold out" class="switch ' + (item.soldOut ? 'on' : '') + '"></button><span class="text-[9px] uppercase tracking-wider ' + (item.soldOut ? 'text-rose-400' : 'text-zinc-500') + '">' + (item.soldOut ? 'Sold out' : 'Available') + '</span></div>' +
+                    '<div class="flex flex-col items-center gap-1"><button data-action="toggle-sold" data-id="' + item.id + '" aria-label="Sold out by hand" class="switch ' + (item.manualSoldOut ? 'on' : '') + '"></button><span class="text-[9px] uppercase tracking-wider ' + (item.soldOut ? 'text-rose-400' : 'text-zinc-500') + '">' + (item.soldOut ? 'Sold out' : 'Available') + '</span></div>' +
                     '</div></div>';
             })(item);
         }
@@ -1043,10 +1087,11 @@
         function toggleSold(id) {
             var item = app.menu.find(function (m) { return m.id === id; });
             if (!item) return;
-            var next = !item.soldOut;
-            item.soldOut = next; renderMenuList(); // instant feedback, corrected below if the server disagrees
+            var next = !item.manualSoldOut;
+            item.manualSoldOut = next; renderMenuList(); // instant feedback, corrected below if the server disagrees
             api('PATCH', '/api/owner/menu/' + id + '/soldout', { soldOut: next }).then(function (r) {
-                if (!r.ok) { item.soldOut = !next; renderMenuList(); alert(r.data.error || 'Could not update.'); }
+                if (!r.ok) { item.manualSoldOut = !next; renderMenuList(); alert(r.data.error || 'Could not update.'); return; }
+                Object.assign(item, r.data.item); renderMenuList();
             });
         }
 
@@ -1062,6 +1107,7 @@
             $('editMeats').value = item ? item.meats : '';
             $('editUpcharge').value = item ? (item.premiumSurcharge || 0).toFixed(2) : '';
             $('editOptions').value = item && item.options ? item.options.join(', ') : '';
+            $('editIngredients').value = item && item.ingredients ? item.ingredients.join(', ') : '';
             $('editCategory').value = item ? (item.category || '') : '';
             var cats = []; app.menu.forEach(function (m) { if (m.category && cats.indexOf(m.category) < 0) cats.push(m.category); });
             $('categoryList').innerHTML = cats.map(function (c) { return '<option value="' + esc(c) + '"></option>'; }).join('');
@@ -1083,6 +1129,7 @@
                 meats: $('editMeats').value.trim(),
                 premiumSurcharge: parseFloat($('editUpcharge').value) || 0,
                 options: $('editOptions').value,
+                ingredients: $('editIngredients').value,
                 category: $('editCategory').value.trim(),
                 photo: app.editPhoto || ''
             };
@@ -1607,10 +1654,8 @@
                     case 'STORE_STATUS': app.state.status = p.status; renderSettings(); break;
                     case 'RUSH_MODE': app.state.rush = Number(p.minutes) || 0; renderSettings(); break;
                     case 'LOCATION_UPDATE': app.state.location = p.location || ''; renderSettings(); break;
-                    case 'SOLD_OUT':
-                        app.menu.forEach(function (m) { if (m.id === p.itemId) m.soldOut = !!p.soldOut; });
-                        renderMenuList(); break;
-                    case 'MENU_UPDATE': app.menu = p.menu || []; renderMenuList(); break;
+                    // The kitchen keeps the full picture (counts, why it's out): refetch instead of using the customer version.
+                    case 'SOLD_OUT': case 'MENU_UPDATE': case 'STOCK': case 'OUT_UPDATE': clearTimeout(app.menuT); app.menuT = setTimeout(loadMenu, 150); break;
                 }
             };
         }
@@ -1939,6 +1984,9 @@
         document.addEventListener('DOMContentLoaded', markTheme);
         markTheme();
 
+        document.addEventListener('focusout', function (e) {
+            if (e.target && e.target.getAttribute && e.target.getAttribute('data-stock') && app.menuDirty) setTimeout(renderMenuList, 0);
+        });
         document.addEventListener('change', function (e) {
             var df = e.target && e.target.getAttribute && e.target.getAttribute('data-deal');
             if (df && app.deals) {
@@ -1946,6 +1994,7 @@
                 if (d) { d[df] = df === 'amount' ? Number(e.target.value) : e.target.value; if (df === 'kind' || df === 'amount') renderDeals(); $('dealsMsg').textContent = ''; }
                 return;
             }
+            if (e.target && e.target.getAttribute && e.target.getAttribute('data-stock')) { setStock(+e.target.getAttribute('data-stock'), e.target.value.trim()); return; }
             if (e.target && e.target.id === 'insLocation') { insState().location = e.target.value; loadInsights(); }
             if (e.target && e.target.id === 'schLoc') { $('schLocNew').style.display = e.target.value === '__new' ? 'block' : 'none'; if (e.target.value === '__new') $('schLocNew').focus(); }
         });
@@ -1995,6 +2044,7 @@
                 case 'save-edit': saveEdit(); break;
                 case 'delete-item': deleteItem(); break;
                 case 'toggle-sold': toggleSold(id); break;
+                case 'out-toggle': toggleOut(el.getAttribute('data-ing')); break;
                 case 'deal-add': case 'deal-save': case 'deal-del': case 'deal-toggle': case 'deal-day': case 'deal-scope': case 'deal-cat': case 'deal-item': dealClick(a, el); break;
                 case 'ins-range': case 'ins-step': case 'ins-day': case 'ins-hour': case 'cmp-days': case 'cmp-pick': insClick(a, el); break;
                 case 'set-status':

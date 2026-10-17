@@ -199,6 +199,39 @@
     var DEMO_OFF = 'This is turned off in the demo. Create a free page to use it.';
     var round = function (n) { return Math.round(n * 100) / 100; };
 
+    /* ---------- inventory: the same rules as inventory.js ---------- */
+    var LOW = 5;
+    function demoInv(d) {
+        if (!d.stock) {
+            d.stock = { 4: 6 }; d.out = [];
+            var tags = { 1: ['tortillas', 'cilantro', 'onion'], 2: ['tortillas', 'cheese'], 3: ['rice', 'beans'], 4: ['corn', 'cotija'], 5: ['tortillas'] };
+            d.menu.forEach(function (m) { if (!m.ingredients) m.ingredients = tags[m.id] || []; });
+        }
+    }
+    function menuFor(d, owner) {
+        demoInv(d);
+        var out = d.out.map(function (x) { return x.toLowerCase(); });
+        return d.menu.map(function (m) {
+            var left = m.id in d.stock ? d.stock[m.id] : null;
+            var missing = (m.ingredients || []).filter(function (i) { return out.indexOf(i.toLowerCase()) >= 0; })[0];
+            var reason = m.soldOut ? 'manual' : left !== null && left <= 0 ? 'stock' : missing ? 'ingredient' : null;
+            var it = Object.assign({}, m, { soldOut: !!reason, outReason: reason });
+            if (owner) { it.left = left; it.manualSoldOut = !!m.soldOut; it.missing = missing || null; }
+            else { it.left = left !== null && left <= LOW ? Math.max(0, left) : null; delete it.ingredients; }
+            return it;
+        });
+    }
+    function announceStock(d, ids) {
+        var om = menuFor(d, true);
+        ids.forEach(function (id) { var m = om.filter(function (x) { return x.id === +id; })[0]; if (m) emit('SOLD_OUT', { itemId: m.id, soldOut: m.soldOut, left: m.left !== null && m.left <= LOW ? m.left : null }); });
+    }
+    function restoreStock(d, o) {
+        if (!o.stockTaken || o.stockReturned) return;
+        o.stockReturned = true;
+        Object.keys(o.stockTaken).forEach(function (k) { if (k in d.stock) d.stock[k] += o.stockTaken[k]; });
+        announceStock(d, Object.keys(o.stockTaken));
+    }
+
     function cleanItem(b, id, prev) {
         prev = prev || {};
         var price = parseFloat(b.price), sale = parseFloat(b.salePrice), prep = parseInt(b.prep, 10), up = parseFloat(b.premiumSurcharge);
@@ -213,6 +246,7 @@
             premiumSurcharge: isFinite(up) ? round(Math.max(0, up)) : (prev.premiumSurcharge || 0),
             options: b.options != null ? (Array.isArray(b.options) ? b.options : String(b.options).split(',')).map(function (o) { return String(o).trim().slice(0, 60); }).filter(Boolean).slice(0, 20) : (prev.options || []),
             category: String(b.category != null ? b.category : prev.category || '').trim().slice(0, 40),
+            ingredients: b.ingredients != null ? (Array.isArray(b.ingredients) ? b.ingredients : String(b.ingredients).split(',')).map(function (o) { return String(o).trim().slice(0, 30); }).filter(Boolean).slice(0, 12) : (prev.ingredients || []),
             photo: b.photo != null ? String(b.photo) : (prev.photo || ''),
             soldOut: !!prev.soldOut
         };
@@ -221,7 +255,7 @@
     function vendorPublic(d) {
         return {
             isDemo: false, businessName: d.vendor.businessName, slug: SLUG, customDomain: null,
-            ownerIG: d.vendor.ownerIG, emoji: d.vendor.emoji, menu: d.menu, state: stateOut(d),
+            ownerIG: d.vendor.ownerIG, emoji: d.vendor.emoji, menu: menuFor(d, false), state: stateOut(d),
             showBranding: true, pinOnly: false, hours: d.hours, timezone: d.timezone, payMode: 'window', smsReady: false,
             deals: (d.deals || []).filter(function (x) { return x.on; }),
             rewards: rw(d).on ? { name: rw(d).name, every: rw(d).every, capCents: rw(d).capCents, minCents: rw(d).minCents } : null,
@@ -271,10 +305,12 @@
         var items = [], total = 0, prep = 0;
         for (var i = 0; i < lines.length; i++) {
             var l = lines[i];
-            var item = d.menu.filter(function (m) { return m.id === parseInt(l.id, 10); })[0];
+            var item = menuFor(d, true).filter(function (m) { return m.id === parseInt(l.id, 10); })[0];
             var qty = parseInt(l.qty, 10);
             if (!item) return fail(400, 'An item in your cart is no longer on the menu.');
             if (item.soldOut) return fail(409, item.name + ' is sold out.');
+            var wantQ = (b.items || []).reduce(function (n, x) { return n + (parseInt(x && x.id, 10) === item.id ? parseInt(x.qty, 10) || 0 : 0); }, 0);
+            if (item.left !== null && wantQ > item.left) return fail(409, 'Only ' + item.left + ' ' + item.name + ' left. Please lower the amount.', { stock: { itemId: item.id, left: item.left } });
             if (!(qty >= 1 && qty <= 50)) return fail(400, 'Invalid quantity.');
             var label = item.name, extra = 0;
             if (item.meats) {
@@ -305,14 +341,18 @@
         var newTok = null;
         if (s.on && !card) { newTok = 'demo' + Math.random().toString(36).slice(2) + Date.now().toString(36); card = d.cards[newTok] = { stamps: 3, used: 0 }; tok = newTok; }
         if (rewardCents) { card.stamps -= s.every; card.used++; }
+        var stockTaken = {};
+        items.forEach(function (it) { if (it.id in d.stock) { d.stock[it.id] -= it.qty; stockTaken[it.id] = (stockTaken[it.id] || 0) + it.qty; } });
         var now = Date.now(), id = d.nextOrderId++, ticket = d.nextTicket++;
         var o = {
             id: id, ticket: ticket, token: 'demo-' + id + '-' + Math.random().toString(36).slice(2, 8), name: String(b.customerName || '').trim().slice(0, 40) || 'Guest',
             items: items, summary: items.map(function (x) { return x.qty + 'x ' + x.name; }).join(', '),
             notes: String(b.notes || '').trim().slice(0, 300), total: round(total), status: 'Preparing', createdAt: now, updatedAt: now,
             allergy: String(b.allergy || '').trim().slice(0, 120), allergyAck: false, location: d.state.location || '',
-            cardToken: s.on ? tok : null, rewardCents: rewardCents, rewardEvery: rewardCents ? s.every : null
+            cardToken: s.on ? tok : null, rewardCents: rewardCents, rewardEvery: rewardCents ? s.every : null,
+            stockTaken: Object.keys(stockTaken).length ? stockTaken : null
         };
+        if (o.stockTaken) setTimeout(function () { announceStock(d, Object.keys(stockTaken)); }, 0);
         o.tag = o.token;
         d.orders.push(o); save(d);
         emit('ORDER_NEW', o, true); emitWait(d);
@@ -338,7 +378,7 @@
             if (oc.status === 'Canceled') return ok({ status: 'Canceled' });
             if (oc.status !== 'Preparing') return fail(409, 'Your order is already made.');
             if (Date.now() - oc.createdAt > 120000) return fail(409, 'The kitchen has started on it. Please ask at the window.');
-            oc.status = 'Canceled'; oc.updatedAt = Date.now(); undoDemo(d, oc); save(d);
+            oc.status = 'Canceled'; oc.updatedAt = Date.now(); undoDemo(d, oc); restoreStock(d, oc); save(d);
             emit('ORDER_UPDATE', Object.assign({}, oc, { byCustomer: true }), true);
             emit('ORDER_STATUS', { tag: oc.tag, status: 'Canceled' }); emitWait(d);
             return ok({ status: 'Canceled' });
@@ -375,7 +415,7 @@
             if (!o || from.indexOf(o.status) < 0) return fail(409, 'That order cannot be changed.');
             if (b.action !== 'cancel' && o.allergy && !o.allergyAck) return fail(409, 'Confirm the allergy on this ticket first.');
             o.status = next; o.updatedAt = Date.now(); if (next === 'Ready') o.readyAt = o.updatedAt;
-            if (next === 'Canceled') undoDemo(d, o); else stampDemo(d, o);
+            if (next === 'Canceled') { undoDemo(d, o); restoreStock(d, o); } else stampDemo(d, o);
             save(d);
             emit('ORDER_UPDATE', o, true);
             emit('ORDER_STATUS', { tag: o.tag, status: o.status }); emitWait(d);
@@ -522,14 +562,30 @@
         }
 
         /* menu */
-        if (p === '/api/owner/menu' && method === 'GET') return ok({ menu: d.menu, maxItems: MAX_ITEMS });
+        if (p === '/api/owner/menu' && method === 'GET') return ok({ menu: menuFor(d, true), maxItems: MAX_ITEMS, out: (demoInv(d), d.out) });
+        if ((m = p.match(/^\/api\/owner\/stock\/(\d+)$/)) && method === 'PUT') {
+            demoInv(d); var sid = +m[1];
+            if (!d.menu.some(function (x) { return x.id === sid; })) return fail(404, 'Item not found.');
+            if (b.left === null || b.left === '') delete d.stock[sid];
+            else { var nl = parseInt(b.left, 10); if (!(nl >= 0 && nl <= 9999)) return fail(400, 'Enter how many are left (0 to 9999), or leave it blank to stop counting.'); d.stock[sid] = nl; }
+            save(d); announceStock(d, [sid]);
+            return ok({ item: menuFor(d, true).filter(function (x) { return x.id === sid; })[0] });
+        }
+        if (p === '/api/owner/out' && method === 'PUT') {
+            demoInv(d); var ing = String(b.ingredient || '').trim().slice(0, 30);
+            if (!ing) return fail(400, 'Which ingredient?');
+            d.out = d.out.filter(function (x) { return x.toLowerCase() !== ing.toLowerCase(); });
+            if (b.out) d.out.push(ing);
+            save(d); emit('MENU_UPDATE', { menu: menuFor(d, false) });
+            return ok({ out: d.out, menu: menuFor(d, true) });
+        }
         if (p === '/api/owner/menu-order' && method === 'PUT') {
             var ids = (b.ids || []).map(function (x) { return parseInt(x, 10); });
             var byId = {}; d.menu.forEach(function (x) { byId[x.id] = x; });
             if (ids.length !== d.menu.length || !ids.every(function (x) { return byId[x]; })) return fail(409, 'Your menu changed on another screen. Refresh and try again.');
             d.menu = ids.map(function (x) { return byId[x]; }); save(d);
-            emit('MENU_UPDATE', { menu: d.menu });
-            return ok({ menu: d.menu });
+            emit('MENU_UPDATE', { menu: menuFor(d, false) });
+            return ok({ menu: menuFor(d, true) });
         }
         if (p === '/api/owner/upload') return fail(403, 'Photo uploads are turned off in the demo. Create a free page to add photos.');
         if (p === '/api/owner/hours' && method === 'PUT') {
@@ -551,15 +607,15 @@
             if (!String(b.name || '').trim()) return fail(400, 'Item name is required.');
             id = d.menu.reduce(function (mx, i) { return Math.max(mx, i.id); }, 0) + 1;
             var item = cleanItem(b, id); d.menu.push(item); save(d);
-            emit('MENU_UPDATE', { menu: d.menu });
-            return ok({ item: item, menu: d.menu }, 201);
+            emit('MENU_UPDATE', { menu: menuFor(d, false) });
+            return ok({ item: item, menu: menuFor(d, true) }, 201);
         }
         if ((m = p.match(/^\/api\/owner\/menu\/(\d+)\/soldout$/)) && method === 'PATCH') {
             var it = d.menu.filter(function (x) { return x.id === parseInt(m[1], 10); })[0];
             if (!it) return fail(404, 'Item not found.');
             it.soldOut = !!b.soldOut; save(d);
-            emit('SOLD_OUT', { itemId: it.id, soldOut: it.soldOut });
-            return ok({ item: it });
+            announceStock(d, [it.id]);
+            return ok({ item: menuFor(d, true).filter(function (x) { return x.id === it.id; })[0] });
         }
         if ((m = p.match(/^\/api\/owner\/menu\/(\d+)$/))) {
             id = parseInt(m[1], 10);
@@ -568,9 +624,11 @@
             if (method === 'PUT') d.menu[ix] = cleanItem(b, id, d.menu[ix]);
             else if (method === 'DELETE') d.menu.splice(ix, 1);
             else return fail(405, 'Not allowed.');
+            if (method === 'DELETE') delete (d.stock || {})[id];
             save(d);
-            emit('MENU_UPDATE', { menu: d.menu });
-            return ok({ item: d.menu[ix], menu: d.menu });
+            emit('MENU_UPDATE', { menu: menuFor(d, false) });
+            var omx = menuFor(d, true);
+            return ok({ item: omx[ix], menu: omx });
         }
 
         /* locations */

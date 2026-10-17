@@ -116,6 +116,8 @@ function normalizeItem(i, id) {
     premiumSurcharge: Math.round(Math.max(0, Math.min(1000, num(i.premiumSurcharge ?? i.premiumUpcharge))) * 100) / 100,
     options: normalizeOptions(i.options),
     category: String(i.category || '').trim().slice(0, 40),
+    // Key ingredients ("cilantro, pork"): one tap on "Out of cilantro" sells out every item that has it.
+    ingredients: normalizeOptions(i.ingredients).map((x) => x.slice(0, 30)).slice(0, 12),
     photo: PHOTO_RE.test(String(i.photo || '')) ? String(i.photo) : '',
     soldOut: !!(i.soldOut ?? i.soldout),
   };
@@ -408,7 +410,8 @@ async function ensureSchema() {
     // Followers: when the owner last emailed them (keeps it from becoming spam).
     ['follow_open_at', 'INTEGER'],
     ['deals_json', 'TEXT'],
-    ['rewards_json', 'TEXT'],                     // punch card settings (see rewards.js)                       // happy hour and other timed deals (see public/deals-core.js)
+    ['rewards_json', 'TEXT'],
+    ['out_json', 'TEXT'],                         // ingredients the truck is out of right now (see inventory.js)                     // punch card settings (see rewards.js)                       // happy hour and other timed deals (see public/deals-core.js)
     ['follow_week_at', 'INTEGER'],
   ];
   for (const [c, d] of vendorCols) await addColumn('vendors', c, d);
@@ -466,6 +469,15 @@ async function ensureSchema() {
   for (const [c, d] of [['card_id', 'INTEGER'], ['reward_cents', 'INTEGER NOT NULL DEFAULT 0'], ['reward_every', 'INTEGER'], ['reward_returned', 'INTEGER NOT NULL DEFAULT 0'], ['stamped', 'INTEGER NOT NULL DEFAULT 0']]) {
     await addColumn('orders', c, d);
   }
+  // Stock counts ("40 left"). No row = not counted (unlimited). Orders remember what they took.
+  await exec(`CREATE TABLE IF NOT EXISTS item_stock (
+    vendor_id INTEGER NOT NULL,
+    item_id INTEGER NOT NULL,
+    left_count INTEGER NOT NULL,
+    PRIMARY KEY (vendor_id, item_id)
+  )`);
+  await addColumn('orders', 'stock_json', 'TEXT');
+  await addColumn('orders', 'stock_returned', 'INTEGER NOT NULL DEFAULT 0');
   await exec(`CREATE TABLE IF NOT EXISTS reward_cards (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     vendor_id INTEGER NOT NULL,
